@@ -102,6 +102,8 @@ export default function TestPage() {
           topic: '5 dấu hiệu cần lấy cao răng định kỳ',
           goal: 'Tăng lượt gọi',
           brand_voice: 'chuyên nghiệp, gần gũi',
+          phone: '',
+          extra_info: '',
         }),
       })
 
@@ -117,7 +119,7 @@ export default function TestPage() {
       <h1>Trang Test Local Growth OS</h1>
       <p>Bấm lần lượt từ trên xuống.</p>
 
-      <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
         <button onClick={createClient}>1. Tạo khách hàng</button>
         <button onClick={runAudit}>2. Chạy Audit</button>
         <button onClick={runContent}>3. Viết bài</button>

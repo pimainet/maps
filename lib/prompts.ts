@@ -128,29 +128,39 @@ Yêu cầu: Phân tích ngắn gọn, thực tế, không viết bài, không b�
 export const WRITER_PROMPT = `
 Bạn là nhân viên Local SEO chuyên viết bài Google Business Profile.
 
-Thông tin:
+Thông tin được phép dùng:
 - Tên doanh nghiệp: {{business_name}}
 - Ngành: {{industry}}
 - Khu vực: {{area}}
 - Chủ đề: {{topic}}
 - Mục tiêu: {{goal}}
 - Giọng văn: {{brand_voice}}
+- Số điện thoại: {{phone}}
+- Địa chỉ / ghi chú thêm: {{extra_info}}
 - Phân tích thị trường:
 {{serp_analysis}}
 
 Yêu cầu bắt buộc:
 - Viết 1 bài đăng Google Business Profile hoàn chỉnh (150–280 từ).
-- Phải thể hiện được ít nhất 1 điểm khác biệt đã nêu trong phần phân tích.
-- Có yếu tố địa phương tự nhiên và rõ ràng.
-- Có CTA cụ thể (gọi điện / nhắn tin / chỉ đường…).
+- Phải thể hiện được ít nhất 1 điểm khác biệt từ phần phân tích.
+- Có yếu tố địa phương tự nhiên.
+- Có CTA rõ ràng.
 - Giọng văn tự nhiên, đúng yêu cầu.
-- Tuyệt đối không bịa dịch vụ, thành tích, đánh giá hoặc ưu đãi không có trong thông tin được cung cấp.
+
+CẤM TUYỆT ĐỐI:
+- Không bịa số điện thoại.
+- Không bịa địa chỉ cụ thể.
+- Không bịa ưu đãi, giảm giá, số lượng suất.
+- Không bịa số năm kinh nghiệm, số khách hàng, chứng nhận, giải thưởng.
+- Không bịa dịch vụ hoặc cam kết không có trong thông tin đầu vào.
+- Nếu không có số điện thoại, chỉ CTA kiểu: "Nhắn tin qua Google" hoặc "Liên hệ ngay trên Google Maps".
+- Nếu không có địa chỉ cụ thể, chỉ dùng khu vực chung.
 
 Chỉ trả về nội dung bài viết.
 `
 
 export const CRITIC_PROMPT = `
-Bạn là Critic nội dung Local SEO. Hãy đánh giá bài viết Google Business Profile dưới đây một cách thẳng thắn và cụ thể.
+Bạn là Critic nội dung Local SEO. Hãy đánh giá bài viết Google Business Profile một cách thẳng thắn.
 
 Tiêu chí chấm điểm (thang 10):
 1. Yếu tố địa phương
@@ -158,16 +168,18 @@ Tiêu chí chấm điểm (thang 10):
 3. CTA (lời kêu gọi hành động)
 4. Mức độ khác biệt (không generic)
 5. Khả năng thúc đẩy khách hàng hành động
+6. Mức độ trung thực (không bịa thông tin)
 
 Yêu cầu trả về:
 - Điểm từng tiêu chí
 - Điểm tổng
-- Điểm mạnh (ngắn gọn)
-- Điểm yếu cần sửa (nêu cụ thể đoạn hoặc vấn đề)
-- Kết luận rõ ràng theo 1 trong 3 mức:
-  - Đạt (điểm tổng ≥ 8.0)
-  - Cần chỉnh sửa nhẹ (6.5 – 7.9)
-  - Cần viết lại đáng kể (< 6.5)
+- Điểm mạnh
+- Điểm yếu cần sửa
+- Nếu phát hiện thông tin có dấu hiệu bịa (SĐT, địa chỉ chi tiết, ưu đãi, số liệu không được cung cấp), phải chỉ ra rõ và hạ điểm mục trung thực.
+- Kết luận theo 1 trong 3 mức:
+  - Đạt (điểm tổng ≥ 8.0 và không bịa thông tin)
+  - Cần chỉnh sửa nhẹ
+  - Cần viết lại đáng kể
 
 Bài viết:
 {{ai_content}}
@@ -182,12 +194,24 @@ Bản nháp:
 Nhận xét từ Critic:
 {{critic_feedback}}
 
-Nhiệm vụ:
-Viết lại thành bản cuối cùng, ưu tiên khắc phục các điểm yếu mà Critic đã chỉ ra, giữ nguyên điểm mạnh, làm cho bài tự nhiên và mạnh hơn.
+Thông tin được phép dùng:
+- Tên doanh nghiệp: {{business_name}}
+- Ngành: {{industry}}
+- Khu vực: {{area}}
+- Số điện thoại: {{phone}}
+- Địa chỉ / ghi chú thêm: {{extra_info}}
 
-Yêu cầu bắt buộc:
+Nhiệm vụ:
+Viết lại thành bản cuối cùng, khắc phục điểm yếu Critic chỉ ra, giữ điểm mạnh, và tuyệt đối không thêm thông tin không có thật.
+
+CẤM TUYỆT ĐỐI:
+- Không bịa số điện thoại, địa chỉ, ưu đãi, số liệu, chứng nhận.
+- Không thêm thông tin ngoài dữ liệu được phép dùng.
+- Nếu thiếu SĐT: dùng CTA "Nhắn tin qua Google" hoặc "Liên hệ trên Google Maps".
+- Nếu thiếu địa chỉ chi tiết: chỉ giữ mức khu vực.
+
+Yêu cầu:
 - Độ dài 150–280 từ
-- Giữ đúng thông tin, không bịa đặt
-- Có yếu tố địa phương và CTA rõ ràng
+- Có yếu tố địa phương và CTA rõ
 - Chỉ trả về bản viết lại hoàn chỉnh, không giải thích.
 `

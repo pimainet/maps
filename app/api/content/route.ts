@@ -30,6 +30,8 @@ export async function POST(req: Request) {
       .replaceAll('{{topic}}', body.topic || '')
       .replaceAll('{{goal}}', body.goal || '')
       .replaceAll('{{brand_voice}}', body.brand_voice || 'chuyên nghiệp, gần gũi')
+      .replaceAll('{{phone}}', body.phone || '')
+      .replaceAll('{{extra_info}}', body.extra_info || '')
       .replaceAll('{{serp_analysis}}', serp_analysis)
 
     const ai_content = await askClaude(writerPrompt)
@@ -42,6 +44,11 @@ export async function POST(req: Request) {
     const refinerPrompt = REFINER_PROMPT
       .replaceAll('{{ai_content}}', ai_content)
       .replaceAll('{{critic_feedback}}', critic_feedback)
+      .replaceAll('{{business_name}}', body.business_name || '')
+      .replaceAll('{{industry}}', body.industry || '')
+      .replaceAll('{{area}}', body.area || '')
+      .replaceAll('{{phone}}', body.phone || '')
+      .replaceAll('{{extra_info}}', body.extra_info || '')
 
     const final_content = await askClaude(refinerPrompt)
 
@@ -67,6 +74,9 @@ export async function POST(req: Request) {
       final_content,
     })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(
+      { error: error.message || 'Unknown error' },
+      { status: 500 }
+    )
   }
 }
