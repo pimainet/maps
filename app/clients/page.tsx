@@ -40,44 +40,90 @@ export default function ClientsPage() {
   }, [])
 
   return (
-    <div style={{ maxWidth: 960, margin: '0 auto', padding: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+    <div style={{ maxWidth: 900, margin: '0 auto', padding: '32px 20px' }}>
+      {/* Header */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: 28,
+          gap: 16,
+          flexWrap: 'wrap',
+        }}
+      >
         <div>
-          <h1 style={{ fontSize: 28, marginBottom: 4 }}>Danh sách khách hàng</h1>
-          <p style={{ color: '#666', margin: 0 }}>Các doanh nghiệp đang vận hành Local SEO</p>
+          <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, color: '#111827' }}>
+            Danh sách khách hàng
+          </h1>
+          <p style={{ color: '#6b7280', margin: '6px 0 0', fontSize: 14 }}>
+            Các doanh nghiệp đang vận hành Local SEO
+          </p>
         </div>
+
         <Link
           href="/clients/new"
           style={{
             background: '#2563eb',
             color: 'white',
-            padding: '10px 16px',
+            padding: '10px 18px',
             borderRadius: 8,
             textDecoration: 'none',
             fontWeight: 600,
+            fontSize: 14,
+            whiteSpace: 'nowrap',
           }}
         >
           + Thêm khách hàng
         </Link>
       </div>
 
-      {loading && <p>Đang tải...</p>}
+      {/* Loading */}
+      {loading && (
+        <div style={{ textAlign: 'center', padding: 40, color: '#6b7280' }}>
+          Đang tải danh sách...
+        </div>
+      )}
 
+      {/* Error */}
       {error && (
-        <div style={{ color: '#b91c1c', background: '#fef2f2', padding: 12, borderRadius: 8, marginBottom: 16 }}>
+        <div
+          style={{
+            color: '#b91c1c',
+            background: '#fef2f2',
+            border: '1px solid #fecaca',
+            padding: 14,
+            borderRadius: 10,
+            marginBottom: 20,
+            fontSize: 14,
+          }}
+        >
           {error}
         </div>
       )}
 
+      {/* Empty */}
       {!loading && !error && clients.length === 0 && (
-        <div style={{ padding: 32, textAlign: 'center', background: '#f9fafb', borderRadius: 12 }}>
-          <p style={{ marginBottom: 12 }}>Chưa có khách hàng nào.</p>
-          <Link href="/clients/new" style={{ color: '#2563eb', fontWeight: 600 }}>
+        <div
+          style={{
+            padding: '48px 24px',
+            textAlign: 'center',
+            background: '#f9fafb',
+            borderRadius: 12,
+            border: '1px dashed #d1d5db',
+          }}
+        >
+          <p style={{ margin: '0 0 12px', color: '#6b7280' }}>Chưa có khách hàng nào.</p>
+          <Link
+            href="/clients/new"
+            style={{ color: '#2563eb', fontWeight: 600, textDecoration: 'none' }}
+          >
             Thêm khách hàng đầu tiên →
           </Link>
         </div>
       )}
 
+      {/* List */}
       {!loading && clients.length > 0 && (
         <div style={{ display: 'grid', gap: 12 }}>
           {clients.map((client) => (
@@ -86,20 +132,49 @@ export default function ClientsPage() {
               href={`/clients/${client.id}`}
               style={{
                 display: 'block',
-                padding: 16,
+                padding: '18px 20px',
                 border: '1px solid #e5e7eb',
-                borderRadius: 10,
+                borderRadius: 12,
                 textDecoration: 'none',
                 color: 'inherit',
                 background: 'white',
+                transition: 'border-color 0.15s, box-shadow 0.15s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = '#93c5fd'
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(37, 99, 235, 0.08)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = '#e5e7eb'
+                e.currentTarget.style.boxShadow = 'none'
               }}
             >
-              <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 4 }}>{client.name}</div>
-              <div style={{ color: '#6b7280', fontSize: 14 }}>
-                {[client.industry, client.area].filter(Boolean).join(' · ') || 'Chưa có ngành / khu vực'}
+              <div
+                style={{
+                  fontWeight: 600,
+                  fontSize: 16,
+                  color: '#111827',
+                  marginBottom: 6,
+                }}
+              >
+                {client.name}
               </div>
+
+              <div style={{ color: '#6b7280', fontSize: 14, lineHeight: 1.4 }}>
+                {[client.industry, client.area].filter(Boolean).join(' · ') ||
+                  'Chưa có ngành / khu vực'}
+              </div>
+
               {client.phone && (
-                <div style={{ color: '#6b7280', fontSize: 13, marginTop: 4 }}>{client.phone}</div>
+                <div
+                  style={{
+                    color: '#9ca3af',
+                    fontSize: 13,
+                    marginTop: 6,
+                  }}
+                >
+                  {client.phone}
+                </div>
               )}
             </Link>
           ))}
