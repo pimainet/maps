@@ -104,6 +104,29 @@ Yêu cầu bắt buộc:
 - Viết ngắn gọn, cụ thể, có tính hành động.
 `
 
+export const CONTENT_CALENDAR_PROMPT = `
+Bạn là chuyên gia Local SEO. Nhiệm vụ: chuyển Lộ trình 30 ngày thành một LỊCH NỘI DUNG cụ thể (danh sách chủ đề bài viết Google Business Profile), bám sát phần "Hoạt động nội dung đề xuất" và trọng tâm ưu tiên trong lộ trình.
+
+Thông tin đầu vào:
+- Tên doanh nghiệp: {{business_name}}
+- Ngành nghề: {{industry}}
+- Khu vực: {{area}}
+- Ngày bắt đầu chu kỳ: {{start_date}}
+- Lộ trình 30 ngày:
+{{plan_result}}
+
+Yêu cầu:
+- Đề xuất 6–10 chủ đề bài viết trải đều trong 30 ngày, đúng tần suất đăng bài đã đề xuất trong lộ trình.
+- Mỗi chủ đề phải bám vào trọng tâm/ưu tiên của lộ trình, không lan man, không generic.
+- Ngày đề xuất (scheduled_date) tính từ {{start_date}}, định dạng YYYY-MM-DD, tăng dần hợp lý.
+- goal là mục tiêu ngắn của bài viết đó (ví dụ: "Tăng lượt gọi", "Tăng nhận diện dịch vụ X").
+
+CHỈ trả về đúng một JSON array hợp lệ, không thêm chữ nào khác, không markdown, không giải thích, theo đúng cấu trúc:
+[
+  { "scheduled_date": "YYYY-MM-DD", "topic": "...", "goal": "..." }
+]
+`
+
 export const SERP_AWARE_PROMPT = `
 Bạn là chuyên gia Local SEO thực chiến. Hãy phân tích nhanh trước khi viết nội dung Google Business Profile.
 

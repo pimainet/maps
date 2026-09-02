@@ -1,7 +1,21 @@
 import { NextResponse } from 'next/server'
 import { askClaude } from '@/lib/claude'
-import { savePlan } from '@/lib/db'
+import { savePlan, getLatestPlanByClient } from '@/lib/db'
 import { PLAN_30_DAYS_PROMPT } from '@/lib/prompts'
+
+export async function GET(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url)
+    const clientId = searchParams.get('client_id')
+    if (!clientId) {
+      return NextResponse.json({ error: 'Thiếu client_id' }, { status: 400 })
+    }
+    const data = await getLatestPlanByClient(clientId)
+    return NextResponse.json(data)
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+}
 
 export async function POST(req: Request) {
   try {

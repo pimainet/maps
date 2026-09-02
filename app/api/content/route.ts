@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { askClaude } from '@/lib/claude'
-import { saveContent, getContents } from '@/lib/db'
+import { saveContent, updateContent, getContents } from '@/lib/db'
 import {
   SERP_AWARE_PROMPT,
   WRITER_PROMPT,
@@ -63,19 +63,30 @@ export async function POST(req: Request) {
 
     const final_content = await askClaude(refinerPrompt)
 
-    // 5. Save
-    const saved = await saveContent({
-      client_id: body.client_id,
-      plan_id: body.plan_id,
-      topic: body.topic,
-      goal: body.goal,
-      serp_analysis,
-      ai_content,
-      critic_feedback,
-      final_content,
-      scheduled_date: body.scheduled_date,
-      status: 'waiting_approval',
-    })
+    // 5. Lưu — nếu có content_id (bài viết đang ở trạng thái 'idea' từ lịch
+    // nội dung sinh sẵn) thì cập nhật đúng bản ghi đó, tránh tạo trùng.
+    const saved = body.content_id
+      ? await updateContent(body.content_id, {
+          topic: body.topic,
+          goal: body.goal,
+          serp_analysis,
+          ai_content,
+          critic_feedback,
+          final_content,
+          status: 'waiting_approval',
+        })
+      : await saveContent({
+          client_id: body.client_id,
+          plan_id: body.plan_id,
+          topic: body.topic,
+          goal: body.goal,
+          serp_analysis,
+          ai_content,
+          critic_feedback,
+          final_content,
+          scheduled_date: body.scheduled_date,
+          status: 'waiting_approval',
+        })
 
     return NextResponse.json({
       content: saved,
