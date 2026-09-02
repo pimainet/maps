@@ -305,7 +305,222 @@ function NewClient({ navigate, setToast }: any) {
   )
 }
 function Field({ label, required, placeholder, wide }: any) { return <label className={`field ${wide ? 'wide' : ''}`}><span>{label}{required && <em>*</em>}</span><input placeholder={placeholder} /></label> }
-function ClientDetailAction({ navigate, setToast }: any) { const [done, setDone] = useState<string[]>([]); const toggleTask = (task: string) => { setDone(current => current.includes(task) ? current.filter(item => item !== task) : [...current, task]); setToast(done.includes(task) ? 'Đã mở lại công việc' : 'Đã hoàn thành công việc') }; return <><Card className="client-action-hero"><div className="client-hero-title"><div className="client-avatar hero bg-primary">TA</div><div><div className="title-line"><h2>Nha khoa Tâm An</h2><Badge status="active" /></div><p>Nha khoa · Quận 3, TP.HCM · Chu kỳ tháng 6</p></div></div><div className="hero-actions"><button className="secondary-button" onClick={() => setToast('Đã gửi yêu cầu cập nhật thông tin GBP')}><Sparkles size={16} />Cập nhật GBP</button><button className="secondary-button" onClick={() => navigate('/clients/1/audit')}><ClipboardCheck size={16} />Chạy Audit</button><button className="primary-button" onClick={() => navigate('/clients/1/plan')}><Target size={16} />Tiếp tục lộ trình</button></div></Card><div className="action-grid"><Card className="next-action-card"><div className="section-head"><div><p className="overline">Việc tiếp theo</p><h2>Hoàn thiện tuần 3</h2><p>3 việc đang chờ để giữ đúng nhịp tăng trưởng.</p></div><span className="action-count">{3 - done.length}<small>còn lại</small></span></div><div className="task-checklist">{['Duyệt 3 bài GBP tuần 3','Bổ sung ảnh dịch vụ niềng răng','Phản hồi 6 đánh giá mới'].map((task, index) => <button className={`check-task ${done.includes(task) ? 'completed' : ''}`} key={task} onClick={() => toggleTask(task)}><span className="check-box">{done.includes(task) && <Check size={13} />}</span><span><strong>{task}</strong><small>{index === 0 ? 'Nội dung · Hạn hôm nay' : index === 1 ? 'GBP · Hạn ngày mai' : 'Tương tác · Hạn 20/06'}</small></span><ArrowUpRight size={15} /></button>)}</div><button className="primary-button full" onClick={() => navigate('/tasks')}><ClipboardCheck size={16} />Mở tất cả công việc</button></Card><Card className="quick-actions-card"><div className="section-head"><div><p className="overline">Điều phối nhanh</p><h2>Chọn một hành động</h2></div></div><div className="quick-actions"><button onClick={() => navigate('/contents/1')}><FileText size={18} /><span><strong>Duyệt nội dung</strong><small>7 bài đang chờ</small></span><ArrowUpRight size={15} /></button><button onClick={() => setToast('Đã mở biểu mẫu ghi chú cuộc gọi')}><BriefcaseBusiness size={18} /><span><strong>Ghi chú cuộc gọi</strong><small>Cập nhật thông tin khách hàng</small></span><ArrowUpRight size={15} /></button><button onClick={() => setToast('Đã tạo báo cáo tháng')}><BarChart3 size={18} /><span><strong>Tạo báo cáo tháng</strong><small>Xuất kết quả tháng 6</small></span><ArrowUpRight size={15} /></button></div></Card></div><Card><div className="section-head"><div><h2>Tín hiệu tăng trưởng</h2><p>Những chỉ số giúp bạn biết nên làm gì tiếp theo.</p></div><button className="text-button" onClick={() => navigate('/clients/1/audit')}>Xem audit đầy đủ <ArrowUpRight size={15} /></button></div><div className="signal-grid"><div><span>Điểm audit</span><strong>82 <small>/ 100</small></strong><em className="up">+8 điểm tháng này</em></div><div><span>Lượt gọi từ GBP</span><strong>146</strong><em className="up">+18,4% so với tháng trước</em></div><div><span>Bài cần duyệt</span><strong>7</strong><em className="attention">Xử lý trước 20/06</em></div></div></Card></> }
+function ClientDetailAction({ navigate, setToast }: any) {
+  const [client, setClient] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [done, setDone] = useState<string[]>([])
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const path = window.location.pathname
+        const id = path.split('/clients/')[1]?.split('/')[0]
+        if (!id) throw new Error('Không tìm thấy ID khách hàng')
+
+        const res = await fetch('/api/clients')
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Không tải được dữ liệu')
+
+        const found = (Array.isArray(data) ? data : []).find((c: any) => c.id === id)
+        if (!found) throw new Error('Không tìm thấy khách hàng')
+
+        setClient(found)
+      } catch (err: any) {
+        setError(err.message || 'Có lỗi xảy ra')
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  const toggleTask = (task: string) => {
+    setDone((current) =>
+      current.includes(task) ? current.filter((item) => item !== task) : [...current, task]
+    )
+    setToast(done.includes(task) ? 'Đã mở lại công việc' : 'Đã hoàn thành công việc')
+  }
+
+  if (loading) {
+    return (
+      <Card>
+        <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>
+          Đang tải thông tin khách hàng...
+        </div>
+      </Card>
+    )
+  }
+
+  if (error || !client) {
+    return (
+      <Card>
+        <div style={{ padding: 40, textAlign: 'center', color: '#b91c1c' }}>
+          {error || 'Không tìm thấy khách hàng'}
+        </div>
+      </Card>
+    )
+  }
+
+  const initials = (client.name || '?').substring(0, 2).toUpperCase()
+
+  return (
+    <>
+      <Card className="client-action-hero">
+        <div className="client-hero-title">
+          <div className="client-avatar hero bg-primary">{initials}</div>
+          <div>
+            <div className="title-line">
+              <h2>{client.name}</h2>
+              <Badge status="active" />
+            </div>
+            <p>
+              {[client.industry, client.area].filter(Boolean).join(' · ') || 'Chưa có ngành / khu vực'}
+            </p>
+          </div>
+        </div>
+        <div className="hero-actions">
+          <button
+            className="secondary-button"
+            onClick={() => setToast('Đã gửi yêu cầu cập nhật thông tin GBP')}
+          >
+            <Sparkles size={16} /> Cập nhật GBP
+          </button>
+          <button
+            className="secondary-button"
+            onClick={() => navigate(`/clients/${client.id}/audit`)}
+          >
+            <ClipboardCheck size={16} /> Chạy Audit
+          </button>
+          <button
+            className="primary-button"
+            onClick={() => navigate(`/clients/${client.id}/plan`)}
+          >
+            <Target size={16} /> Tiếp tục lộ trình
+          </button>
+        </div>
+      </Card>
+
+      <div className="action-grid">
+        <Card className="next-action-card">
+          <div className="section-head">
+            <div>
+              <p className="overline">Việc tiếp theo</p>
+              <h2>Hoàn thiện tuần 3</h2>
+              <p>3 việc đang chờ để giữ đúng nhịp tăng trưởng.</p>
+            </div>
+            <span className="action-count">
+              {3 - done.length}
+              <small>còn lại</small>
+            </span>
+          </div>
+          <div className="task-checklist">
+            {['Duyệt 3 bài GBP tuần 3', 'Bổ sung ảnh dịch vụ niềng răng', 'Phản hồi 6 đánh giá mới'].map(
+              (task, index) => (
+                <button
+                  className={`check-task ${done.includes(task) ? 'completed' : ''}`}
+                  key={task}
+                  onClick={() => toggleTask(task)}
+                >
+                  <span className="check-box">{done.includes(task) && <Check size={13} />}</span>
+                  <span>
+                    <strong>{task}</strong>
+                    <small>
+                      {index === 0
+                        ? 'Nội dung · Hạn hôm nay'
+                        : index === 1
+                        ? 'GBP · Hạn ngày mai'
+                        : 'Tương tác · Hạn 20/06'}
+                    </small>
+                  </span>
+                  <ArrowUpRight size={15} />
+                </button>
+              )
+            )}
+          </div>
+          <button className="primary-button full" onClick={() => navigate('/tasks')}>
+            <ClipboardCheck size={16} /> Mở tất cả công việc
+          </button>
+        </Card>
+
+        <Card className="quick-actions-card">
+          <div className="section-head">
+            <div>
+              <p className="overline">Điều phối nhanh</p>
+              <h2>Chọn một hành động</h2>
+            </div>
+          </div>
+          <div className="quick-actions">
+            <button onClick={() => navigate('/contents')}>
+              <FileText size={18} />
+              <span>
+                <strong>Duyệt nội dung</strong>
+                <small>Xem bài đang chờ</small>
+              </span>
+              <ArrowUpRight size={15} />
+            </button>
+            <button onClick={() => setToast('Đã mở biểu mẫu ghi chú cuộc gọi')}>
+              <BriefcaseBusiness size={18} />
+              <span>
+                <strong>Ghi chú cuộc gọi</strong>
+                <small>Cập nhật thông tin khách hàng</small>
+              </span>
+              <ArrowUpRight size={15} />
+            </button>
+            <button onClick={() => setToast('Đã tạo báo cáo tháng')}>
+              <BarChart3 size={18} />
+              <span>
+                <strong>Tạo báo cáo tháng</strong>
+                <small>Xuất kết quả</small>
+              </span>
+              <ArrowUpRight size={15} />
+            </button>
+          </div>
+        </Card>
+      </div>
+
+      <Card>
+        <div className="section-head">
+          <div>
+            <h2>Thông tin khách hàng</h2>
+            <p>Dữ liệu đang lưu trong hệ thống</p>
+          </div>
+        </div>
+        <div className="signal-grid">
+          <div>
+            <span>Số điện thoại</span>
+            <strong>{client.phone || '—'}</strong>
+          </div>
+          <div>
+            <span>Người liên hệ</span>
+            <strong>{client.contact_name || '—'}</strong>
+          </div>
+          <div>
+            <span>Giọng văn</span>
+            <strong>{client.brand_voice || '—'}</strong>
+          </div>
+          <div>
+            <span>Website</span>
+            <strong>{client.website_url || '—'}</strong>
+          </div>
+        </div>
+        {client.gbp_link && (
+          <div style={{ marginTop: 16 }}>
+            <span style={{ color: '#6b7280', fontSize: 13 }}>Link GBP: </span>
+            <a href={client.gbp_link} target="_blank" rel="noreferrer" style={{ color: '#2563eb' }}>
+              {client.gbp_link}
+            </a>
+          </div>
+        )}
+        {client.notes && (
+          <div style={{ marginTop: 12, color: '#6b7280', fontSize: 14 }}>
+            <strong>Ghi chú:</strong> {client.notes}
+          </div>
+        )}
+      </Card>
+    </>
+  )
+}
 
 function ClientDetail({ navigate }: any) { return <><Card className="client-hero"><div className="client-hero-title"><div className="client-avatar hero bg-primary">TA</div><div><div className="title-line"><h2>Nha khoa Tâm An</h2><Badge status="active" /></div><p>Nha khoa · Quận 3, TP.HCM · Đã tham gia 4 tháng</p></div></div><div className="hero-actions"><button className="secondary-button" onClick={() => navigate('/clients/1/audit')}><ClipboardCheck size={16} />Chạy Audit</button><button className="secondary-button" onClick={() => navigate('/clients/1/plan')}><Target size={16} />Xem lộ trình</button><button className="primary-button" onClick={() => navigate('/contents')}><FileText size={16} />Xem nội dung</button></div></Card><div className="detail-grid"><Card><div className="section-head"><div><h2>Chu kỳ hiện tại</h2><p>Ngày 01/06 — 30/06/2025</p></div><Badge status="active" /></div><div className="progress-row"><div><span>Tiến độ task</span><strong>18 / 24</strong></div><div className="progress"><i style={{ width: '75%' }} /></div></div><div className="stats-strip"><div><strong>82</strong><span>Điểm audit</span></div><div><strong>18</strong><span>Task hoàn thành</span></div><div><strong>12</strong><span>Bài đã tạo</span></div><div><strong>7</strong><span>Chờ duyệt</span></div></div></Card><Card><div className="section-head"><div><h2>Việc ưu tiên</h2><p>Cần hoàn thành sớm</p></div><ArrowUpRight size={16} /></div><div className="priority-item"><div className="priority-dot" /><div><strong>Duyệt 3 bài GBP tuần 3</strong><span>Hạn hôm nay · Ưu tiên cao</span></div></div><div className="priority-item"><div className="priority-dot blue" /><div><strong>Bổ sung ảnh dịch vụ</strong><span>Hạn 20/06 · Ưu tiên vừa</span></div></div></Card></div><Card><div className="section-head"><div><h2>Hoạt động gần đây</h2><p>Lịch sử thay đổi trên hồ sơ</p></div></div><div className="timeline"><Timeline title="Đã hoàn thành audit lần 2" time="Hôm nay, 09:42" icon={ClipboardCheck} /><Timeline title="Tạo 4 bài viết từ lộ trình tuần 3" time="Hôm qua, 16:20" icon={Sparkles} /><Timeline title="Duyệt lộ trình 30 ngày" time="12/06/2025, 10:15" icon={Check} /></div></Card></> }
 function Timeline({ title, time, icon: Icon }: any) { return <div className="timeline-item"><div className="timeline-icon"><Icon size={15} /></div><div><strong>{title}</strong><span>{time}</span></div></div> }
