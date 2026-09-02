@@ -931,7 +931,125 @@ function Plan({ setToast }: any) {
   )
 }
 function Tasks() { return <Card><div className="toolbar"><select><option>Tất cả khách hàng</option><option>Nha khoa Tâm An</option></select><select><option>Tất cả trạng thái</option><option>Đang chờ</option><option>Hoàn thành</option></select><select><option>Tất cả ưu tiên</option><option>Cao</option></select></div><div className="table-wrap"><table><thead><tr><th>Việc cần làm</th><th>Khách hàng</th><th>Loại việc</th><th>Ưu tiên</th><th>Hạn</th><th>Trạng thái</th></tr></thead><tbody>{tasks.map(t => <tr key={t[0]}><td><strong>{t[0]}</strong></td><td>{t[1]}</td><td><span className="type-label">{t[2]}</span></td><td><span className={`priority ${t[3] === 'Cao' ? 'high' : ''}`}>{t[3]}</span></td><td className="muted-cell">{t[4]}</td><td><Badge status={t[5]} /></td></tr>)}</tbody></table></div></Card> }
-function Contents({ navigate }: any) { const [filter, setFilter] = useState('waiting_approval'); const pending = contents.filter(c => filter === 'all' || c.status === filter); return <><div className="approval-summary"><div><p className="overline">Cần bạn quyết định</p><h2>{pending.length} bài viết đang chờ duyệt</h2><p>Đọc nhanh, chỉnh sửa nếu cần, rồi duyệt để tiếp tục xuất bản.</p></div><button className="primary-button" onClick={() => navigate('/contents/1')}><Check size={16} />Duyệt bài đầu tiên</button></div><Card><div className="approval-tabs"><button className={filter === 'waiting_approval' ? 'active' : ''} onClick={() => setFilter('waiting_approval')}>Chờ tôi duyệt <b>1</b></button><button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>Tất cả nội dung</button><button className={filter === 'approved' ? 'active' : ''} onClick={() => setFilter('approved')}>Đã duyệt</button></div><div className="toolbar"><div className="search-field"><Search size={16} /><input placeholder="Tìm theo chủ đề..." /></div><select><option>Tất cả khách hàng</option></select></div><div className="table-wrap"><table><thead><tr><th>Chủ đề</th><th>Khách hàng</th><th>Kênh</th><th>Ngày dự kiến</th><th>Trạng thái</th><th /></tr></thead><tbody>{pending.map(c => <tr key={c.topic} onClick={() => navigate('/contents/1')}><td><strong>{c.topic}</strong><small>Mục tiêu: {c.goal}</small></td><td>{c.client}</td><td><span className="channel"><span className="gbp-mark">G</span>GBP post</span></td><td>{c.date}</td><td><Badge status={c.status} /></td><td><button className="icon-button"><ArrowUpRight size={16} /></button></td></tr>)}</tbody></table></div></Card></> }
+function Contents({ navigate }: any) {
+  const [items, setItems] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [filter, setFilter] = useState('waiting_approval')
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch('/api/content')
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Không tải được nội dung')
+        setItems(Array.isArray(data) ? data : [])
+      } catch (err: any) {
+        setError(err.message || 'Có lỗi xảy ra')
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  const pending = items.filter(
+    (c) => filter === 'all' || c.status === filter
+  )
+
+  return (
+    <>
+      <div className="approval-summary">
+        <div>
+          <p className="overline">Nội dung thật từ hệ thống</p>
+          <h2>
+            {loading
+              ? 'Đang tải...'
+              : `${pending.length} bài viết ${filter === 'waiting_approval' ? 'đang chờ duyệt' : ''}`}
+          </h2>
+          <p>Danh sách bài viết đã được AI tạo và lưu trong database.</p>
+        </div>
+      </div>
+
+      <Card>
+        <div className="approval-tabs">
+          <button
+            className={filter === 'waiting_approval' ? 'active' : ''}
+            onClick={() => setFilter('waiting_approval')}
+          >
+            Chờ duyệt
+          </button>
+          <button
+            className={filter === 'all' ? 'active' : ''}
+            onClick={() => setFilter('all')}
+          >
+            Tất cả
+          </button>
+          <button
+            className={filter === 'approved' ? 'active' : ''}
+            onClick={() => setFilter('approved')}
+          >
+            Đã duyệt
+          </button>
+        </div>
+
+        {loading && (
+          <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>
+            Đang tải danh sách bài viết...
+          </div>
+        )}
+
+        {error && (
+          <div style={{ padding: 20, color: '#b91c1c' }}>{error}</div>
+        )}
+
+        {!loading && !error && pending.length === 0 && (
+          <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>
+            Chưa có bài viết nào. Hãy dùng trang test hoặc form viết bài để tạo.
+          </div>
+        )}
+
+        {!loading && pending.length > 0 && (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Chủ đề</th>
+                  <th>Trạng thái</th>
+                  <th>Ngày tạo</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {pending.map((c) => (
+                  <tr key={c.id} onClick={() => navigate(`/contents/${c.id}`)}>
+                    <td>
+                      <strong>{c.topic || 'Không có tiêu đề'}</strong>
+                      <small>Mục tiêu: {c.goal || '—'}</small>
+                    </td>
+                    <td>
+                      <Badge status={c.status || 'drafted'} />
+                    </td>
+                    <td className="muted-cell">
+                      {c.created_at
+                        ? new Date(c.created_at).toLocaleDateString('vi-VN')
+                        : '—'}
+                    </td>
+                    <td>
+                      <button className="icon-button">
+                        <ArrowUpRight size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </>
+  )
+}
 function ContentDetail({ setToast }: any) { const [copy, setCopy] = useState('Bạn có biết? Cao răng không chỉ ảnh hưởng đến thẩm mỹ mà còn là nguyên nhân gây viêm nướu và hôi miệng.\n\nTại Nha khoa Tâm An, quy trình lấy cao răng được thực hiện nhẹ nhàng với công nghệ hiện đại, giúp làm sạch mảng bám và bảo vệ nụ cười khỏe mạnh.\n\nĐặt lịch thăm khám cùng đội ngũ chuyên gia của chúng tôi hôm nay.'); return <><Card className="content-meta"><div><div className="title-line"><div className="doc-icon large"><FileText size={19} /></div><div><p className="overline">GBP POST · Nha khoa Tâm An</p><h2>5 dấu hiệu cần lấy cao răng định kỳ</h2></div></div></div><Badge status="waiting_approval" /></Card><div className="content-review"><Card className="critic-card"><div className="section-head"><div><h2>Nhận xét Critic</h2><p>Kiểm tra chất lượng trước khi xuất bản</p></div><Badge status="approved" /></div><div className="critic-list"><div><Check size={15} /><span>Đúng ý định tìm kiếm và có CTA rõ ràng</span></div><div><Check size={15} /><span>Giọng văn phù hợp với thương hiệu địa phương</span></div><div><Sparkles size={15} /><span>Nên thêm địa chỉ và khung giờ phục vụ ở đoạn cuối</span></div></div></Card><Card><div className="section-head"><div><h2>Phân tích SERP-Aware</h2><p>Góc nhìn từ AI trước khi viết</p></div><Sparkles size={18} /></div><div className="analysis-list"><div><strong>Ý định tìm kiếm</strong><span>Thông tin · dịch vụ</span></div><div><strong>Từ khoá trọng tâm</strong><span>lấy cao răng Quận 3</span></div><div><strong>Góc khác biệt</strong><span>Quy trình nhẹ nhàng, công nghệ hiện đại</span></div></div></Card><Card><div className="section-head"><div><h2>Bản nháp</h2><p>AI Writer v1 · 436 ký tự</p></div><button className="secondary-button" onClick={() => setToast('Đang viết lại bằng AI...')}><Sparkles size={15} />Viết lại bằng AI</button></div><div className="draft-box">{copy}</div></Card><Card><div className="section-head"><div><h2>Bản cuối</h2><p>Chỉnh sửa nội dung trước khi duyệt</p></div><span className="saved-label"><Check size={14} />Đã tự lưu</span></div><textarea className="final-editor" value={copy} onChange={e => setCopy(e.target.value)} /><div className="editor-actions"><button className="secondary-button" onClick={() => setToast('Đã lưu chỉnh sửa')}><Check size={16} />Lưu chỉnh sửa</button><button className="primary-button" onClick={() => setToast('Đã duyệt bài viết')}><Check size={16} />Duyệt bài</button><button className="secondary-button" onClick={() => setToast('Đã đánh dấu nội dung đã đăng')}><Check size={16} />Đánh dấu đã đăng</button></div></Card></div></> }
 function SettingsView() { return <div className="settings-layout"><Card className="settings-nav"><button className="active">Hồ sơ workspace</button><button>API & tích hợp</button><button>Thông báo</button><button>Ngôn ngữ</button></Card><Card className="settings-content"><div className="section-head"><div><h2>Hồ sơ workspace</h2><p>Quản lý thông tin hiển thị của workspace.</p></div></div><div className="form-grid"><Field label="Tên workspace" placeholder="Growth Studio" /><Field label="Email liên hệ" placeholder="hello@growthstudio.vn" /><Field label="Tên người dùng" placeholder="Hải Nguyễn" /></div><button className="primary-button">Lưu thay đổi</button></Card></div> }
 
