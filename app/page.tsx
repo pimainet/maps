@@ -770,7 +770,166 @@ function Audit({ navigate, setToast }: any) {
   )
 }
 function Score({ label, value }: any) { return <div className="score-row"><div><span>{label}</span><strong>{value}/100</strong></div><div className="progress"><i style={{ width: `${value}%` }} /></div></div> }
-function Plan({ setToast }: any) { return <><Card className="plan-summary"><div><p className="overline">01/06/2025 — 30/06/2025</p><div className="title-line"><h2>Lộ trình tăng trưởng Local SEO</h2><Badge status="approved" /></div><p>Trọng tâm: xây dựng độ tin cậy và tăng lượt gọi từ Google Maps cho Nha khoa Tâm An.</p></div><div className="plan-actions"><button className="secondary-button" onClick={() => setToast('Đã duyệt lộ trình 30 ngày')}><Check size={16} />Duyệt lộ trình</button><button className="secondary-button" onClick={() => setToast('Đã đánh dấu đang thực hiện')}><Activity size={16} />Đang thực hiện</button><button className="primary-button" onClick={() => setToast('Đã tạo lịch bài viết')}><Sparkles size={16} />Sinh lịch bài viết</button></div></Card><div className="weeks">{[['Tuần 1', 'Nền tảng & độ chính xác', ['Rà soát thông tin NAP', 'Tối ưu danh mục phụ', 'Bổ sung 10 ảnh dịch vụ']], ['Tuần 2', 'Xây dựng nội dung', ['Đăng 3 bài theo nhóm dịch vụ', 'Viết nội dung niềng răng', 'Khuyến khích khách đánh giá']], ['Tuần 3', 'Tăng tương tác', ['Đăng 4 bài hỏi đáp', 'Cập nhật giờ mở cửa', 'Phản hồi toàn bộ đánh giá']], ['Tuần 4', 'Đo lường & mở rộng', ['Theo dõi lượt gọi', 'Đánh giá từ khoá bản đồ', 'Chuẩn bị chu kỳ audit mới']]].map((w, i) => <Card className={`week-card ${i === 2 ? 'current-week' : ''}`} key={w[0] as string}><div className="week-number">0{i + 1}</div><div className="week-heading"><div><p className="overline">{w[0] as string}</p><h3>{w[1] as string}</h3></div>{i === 2 && <span className="current-label">Đang thực hiện</span>}</div><ul>{(w[2] as string[]).map(x => <li key={x}><span className="check-circle"><Check size={12} /></span>{x}</li>)}</ul></Card>)}</div></> }
+function Plan({ setToast }: any) {
+  const [client, setClient] = useState<any>(null)
+  const [loadingClient, setLoadingClient] = useState(true)
+  const [running, setRunning] = useState(false)
+  const [error, setError] = useState('')
+  const [result, setResult] = useState<string | null>(null)
+  const [auditResult, setAuditResult] = useState('')
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const path = window.location.pathname
+        const id = path.split('/clients/')[1]?.split('/')[0]
+        if (!id) throw new Error('Không tìm thấy ID khách hàng')
+
+        const res = await fetch('/api/clients')
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Không tải được dữ liệu')
+
+        const found = (Array.isArray(data) ? data : []).find((c: any) => c.id === id)
+        if (!found) throw new Error('Không tìm thấy khách hàng')
+
+        setClient(found)
+      } catch (err: any) {
+        setError(err.message || 'Có lỗi xảy ra')
+      } finally {
+        setLoadingClient(false)
+      }
+    }
+    load()
+  }, [])
+
+  async function handleCreatePlan() {
+    if (!client) return
+    setError('')
+    setRunning(true)
+    setResult(null)
+
+    try {
+      const today = new Date()
+      const end = new Date(today)
+      end.setDate(end.getDate() + 30)
+
+      const res = await fetch('/api/plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: client.id,
+          business_name: client.name,
+          industry: client.industry || '',
+          area: client.area || '',
+          audit_result: auditResult || '',
+          start_date: today.toISOString().slice(0, 10),
+          end_date: end.toISOString().slice(0, 10),
+        }),
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Tạo lộ trình thất bại')
+      }
+
+      setResult(data.plan_result || 'Không có kết quả')
+      setToast('Đã tạo lộ trình 30 ngày')
+    } catch (err: any) {
+      setError(err.message || 'Có lỗi xảy ra')
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  if (loadingClient) {
+    return (
+      <Card>
+        <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>
+          Đang tải thông tin khách hàng...
+        </div>
+      </Card>
+    )
+  }
+
+  if (!client) {
+    return (
+      <Card>
+        <div style={{ padding: 40, textAlign: 'center', color: '#b91c1c' }}>
+          {error || 'Không tìm thấy khách hàng'}
+        </div>
+      </Card>
+    )
+  }
+
+  return (
+    <>
+      <Card className="plan-summary">
+        <div>
+          <p className="overline">Lộ trình 30 ngày</p>
+          <div className="title-line">
+            <h2>Lộ trình tăng trưởng Local SEO</h2>
+          </div>
+          <p>
+            Doanh nghiệp: <strong>{client.name}</strong>
+            {client.industry || client.area
+              ? ` · ${[client.industry, client.area].filter(Boolean).join(' · ')}`
+              : ''}
+          </p>
+        </div>
+
+        <div style={{ marginTop: 16 }}>
+          <label className="field">
+            <span>Kết quả Audit (dán vào nếu có, không bắt buộc)</span>
+            <textarea
+              value={auditResult}
+              onChange={(e) => setAuditResult(e.target.value)}
+              placeholder="Dán kết quả audit vừa chạy để AI tạo lộ trình chính xác hơn..."
+              rows={5}
+            />
+          </label>
+        </div>
+
+        {error && (
+          <div style={{ color: '#b91c1c', background: '#fef2f2', padding: 12, borderRadius: 8, marginTop: 12 }}>
+            {error}
+          </div>
+        )}
+
+        <div className="plan-actions" style={{ marginTop: 16 }}>
+          <button
+            className="primary-button"
+            onClick={handleCreatePlan}
+            disabled={running}
+          >
+            {running ? 'Đang tạo lộ trình...' : (<><Sparkles size={16} /> Tạo lộ trình 30 ngày</>)}
+          </button>
+        </div>
+      </Card>
+
+      {running && (
+        <Card>
+          <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>
+            AI đang xây dựng lộ trình 30 ngày... vui lòng đợi.
+          </div>
+        </Card>
+      )}
+
+      {result && (
+        <Card>
+          <div className="section-head">
+            <div>
+              <h2>Lộ trình đã tạo</h2>
+              <p>Kết quả từ AI</p>
+            </div>
+          </div>
+          <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, fontSize: 14 }}>
+            {result}
+          </div>
+        </Card>
+      )}
+    </>
+  )
+}
 function Tasks() { return <Card><div className="toolbar"><select><option>Tất cả khách hàng</option><option>Nha khoa Tâm An</option></select><select><option>Tất cả trạng thái</option><option>Đang chờ</option><option>Hoàn thành</option></select><select><option>Tất cả ưu tiên</option><option>Cao</option></select></div><div className="table-wrap"><table><thead><tr><th>Việc cần làm</th><th>Khách hàng</th><th>Loại việc</th><th>Ưu tiên</th><th>Hạn</th><th>Trạng thái</th></tr></thead><tbody>{tasks.map(t => <tr key={t[0]}><td><strong>{t[0]}</strong></td><td>{t[1]}</td><td><span className="type-label">{t[2]}</span></td><td><span className={`priority ${t[3] === 'Cao' ? 'high' : ''}`}>{t[3]}</span></td><td className="muted-cell">{t[4]}</td><td><Badge status={t[5]} /></td></tr>)}</tbody></table></div></Card> }
 function Contents({ navigate }: any) { const [filter, setFilter] = useState('waiting_approval'); const pending = contents.filter(c => filter === 'all' || c.status === filter); return <><div className="approval-summary"><div><p className="overline">Cần bạn quyết định</p><h2>{pending.length} bài viết đang chờ duyệt</h2><p>Đọc nhanh, chỉnh sửa nếu cần, rồi duyệt để tiếp tục xuất bản.</p></div><button className="primary-button" onClick={() => navigate('/contents/1')}><Check size={16} />Duyệt bài đầu tiên</button></div><Card><div className="approval-tabs"><button className={filter === 'waiting_approval' ? 'active' : ''} onClick={() => setFilter('waiting_approval')}>Chờ tôi duyệt <b>1</b></button><button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>Tất cả nội dung</button><button className={filter === 'approved' ? 'active' : ''} onClick={() => setFilter('approved')}>Đã duyệt</button></div><div className="toolbar"><div className="search-field"><Search size={16} /><input placeholder="Tìm theo chủ đề..." /></div><select><option>Tất cả khách hàng</option></select></div><div className="table-wrap"><table><thead><tr><th>Chủ đề</th><th>Khách hàng</th><th>Kênh</th><th>Ngày dự kiến</th><th>Trạng thái</th><th /></tr></thead><tbody>{pending.map(c => <tr key={c.topic} onClick={() => navigate('/contents/1')}><td><strong>{c.topic}</strong><small>Mục tiêu: {c.goal}</small></td><td>{c.client}</td><td><span className="channel"><span className="gbp-mark">G</span>GBP post</span></td><td>{c.date}</td><td><Badge status={c.status} /></td><td><button className="icon-button"><ArrowUpRight size={16} /></button></td></tr>)}</tbody></table></div></Card></> }
 function ContentDetail({ setToast }: any) { const [copy, setCopy] = useState('Bạn có biết? Cao răng không chỉ ảnh hưởng đến thẩm mỹ mà còn là nguyên nhân gây viêm nướu và hôi miệng.\n\nTại Nha khoa Tâm An, quy trình lấy cao răng được thực hiện nhẹ nhàng với công nghệ hiện đại, giúp làm sạch mảng bám và bảo vệ nụ cười khỏe mạnh.\n\nĐặt lịch thăm khám cùng đội ngũ chuyên gia của chúng tôi hôm nay.'); return <><Card className="content-meta"><div><div className="title-line"><div className="doc-icon large"><FileText size={19} /></div><div><p className="overline">GBP POST · Nha khoa Tâm An</p><h2>5 dấu hiệu cần lấy cao răng định kỳ</h2></div></div></div><Badge status="waiting_approval" /></Card><div className="content-review"><Card className="critic-card"><div className="section-head"><div><h2>Nhận xét Critic</h2><p>Kiểm tra chất lượng trước khi xuất bản</p></div><Badge status="approved" /></div><div className="critic-list"><div><Check size={15} /><span>Đúng ý định tìm kiếm và có CTA rõ ràng</span></div><div><Check size={15} /><span>Giọng văn phù hợp với thương hiệu địa phương</span></div><div><Sparkles size={15} /><span>Nên thêm địa chỉ và khung giờ phục vụ ở đoạn cuối</span></div></div></Card><Card><div className="section-head"><div><h2>Phân tích SERP-Aware</h2><p>Góc nhìn từ AI trước khi viết</p></div><Sparkles size={18} /></div><div className="analysis-list"><div><strong>Ý định tìm kiếm</strong><span>Thông tin · dịch vụ</span></div><div><strong>Từ khoá trọng tâm</strong><span>lấy cao răng Quận 3</span></div><div><strong>Góc khác biệt</strong><span>Quy trình nhẹ nhàng, công nghệ hiện đại</span></div></div></Card><Card><div className="section-head"><div><h2>Bản nháp</h2><p>AI Writer v1 · 436 ký tự</p></div><button className="secondary-button" onClick={() => setToast('Đang viết lại bằng AI...')}><Sparkles size={15} />Viết lại bằng AI</button></div><div className="draft-box">{copy}</div></Card><Card><div className="section-head"><div><h2>Bản cuối</h2><p>Chỉnh sửa nội dung trước khi duyệt</p></div><span className="saved-label"><Check size={14} />Đã tự lưu</span></div><textarea className="final-editor" value={copy} onChange={e => setCopy(e.target.value)} /><div className="editor-actions"><button className="secondary-button" onClick={() => setToast('Đã lưu chỉnh sửa')}><Check size={16} />Lưu chỉnh sửa</button><button className="primary-button" onClick={() => setToast('Đã duyệt bài viết')}><Check size={16} />Duyệt bài</button><button className="secondary-button" onClick={() => setToast('Đã đánh dấu nội dung đã đăng')}><Check size={16} />Đánh dấu đã đăng</button></div></Card></div></> }
