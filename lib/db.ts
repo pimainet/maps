@@ -113,3 +113,19 @@ export async function saveContent(input: {
   if (error) throw error
   return data
 }
+
+export async function getContents(clientId?: string) {
+  let query = supabase
+    .from('contents')
+    .select('*')
+    .order('created_at', { ascending: false })
+
+  if (clientId) {
+    query = query.eq('client_id', clientId)
+  }
+
+  const { data, error } = await query
+
+  if (error) throw error
+  return data
+}
