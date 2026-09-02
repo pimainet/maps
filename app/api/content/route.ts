@@ -1,12 +1,23 @@
 import { NextResponse } from 'next/server'
 import { askClaude } from '@/lib/claude'
-import { saveContent } from '@/lib/db'
+import { saveContent, getContents } from '@/lib/db'
 import {
   SERP_AWARE_PROMPT,
   WRITER_PROMPT,
   CRITIC_PROMPT,
   REFINER_PROMPT,
 } from '@/lib/prompts'
+
+export async function GET(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url)
+    const clientId = searchParams.get('client_id') || undefined
+    const data = await getContents(clientId)
+    return NextResponse.json(data)
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+}
 
 export async function POST(req: Request) {
   try {
