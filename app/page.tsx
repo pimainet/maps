@@ -14,15 +14,18 @@ const contents = [
   { topic: 'Chăm sóc da sau liệu trình laser', client: 'Lumière Clinic', date: '19/06/2025', status: 'drafted', goal: 'Tăng nhận diện' },
   { topic: 'Khi nào nên khám sức khỏe tổng quát?', client: 'Phòng khám An Khang', date: '21/06/2025', status: 'approved', goal: 'Tăng truy cập' },
 ]
-const tasks = [
-  ['Hoàn thiện mô tả dịch vụ niềng răng', 'Nha khoa Tâm An', 'GBP', 'Cao', 'Hôm nay', 'pending'],
-  ['Duyệt 3 bài viết tuần 3', 'Lumière Clinic', 'Nội dung', 'Cao', 'Hôm nay', 'pending'],
-  ['Cập nhật bộ ảnh phòng khám', 'Phòng khám An Khang', 'Hình ảnh', 'Vừa', '20/06/2025', 'done'],
-  ['Kiểm tra danh mục phụ', 'Nha khoa Tâm An', 'Audit', 'Thấp', '22/06/2025', 'skipped'],
-]
+
 
 const statusMap: Record<string, { label: string; className: string }> = {
   active: { label: 'Đang hoạt động', className: 'status-success' }, paused: { label: 'Tạm dừng', className: 'status-warning' }, stopped: { label: 'Đã dừng', className: 'status-muted' }, waiting_approval: { label: 'Chờ duyệt', className: 'status-warning' }, drafted: { label: 'Bản nháp', className: 'status-info' }, approved: { label: 'Đã duyệt', className: 'status-success' }, published: { label: 'Đã đăng', className: 'status-success' }, idea: { label: 'Ý tưởng', className: 'status-muted' }, pending: { label: 'Đang chờ', className: 'status-warning' }, done: { label: 'Hoàn thành', className: 'status-success' }, skipped: { label: 'Bỏ qua', className: 'status-muted' },
+}
+
+const TASK_TYPE_LABEL: Record<string, string> = {
+  content: 'Nội dung',
+  profile_update: 'Hồ sơ GBP',
+  photo: 'Hình ảnh',
+  review: 'Đánh giá',
+  other: 'Khác',
 }
 
 function Badge({ status }: { status: string }) { const item = statusMap[status] || { label: status, className: 'status-muted' }; return <span className={`status-badge ${item.className}`}><span className="status-dot" />{item.label}</span> }
@@ -782,9 +785,9 @@ function Plan({ setToast }: any) {
   const [loadingAudit, setLoadingAudit] = useState(true)
   const [auditResult, setAuditResult] = useState('')
 
-  const [generatingTopics, setGeneratingTopics] = useState(false)
-  const [topicsCreated, setTopicsCreated] = useState<any[] | null>(null)
-  const [topicsError, setTopicsError] = useState('')
+  const [generatingTasks, setGeneratingTasks] = useState(false)
+  const [tasksCreated, setTasksCreated] = useState<any[] | null>(null)
+  const [tasksError, setTasksError] = useState('')
 
   useEffect(() => {
     async function load() {
@@ -832,8 +835,8 @@ function Plan({ setToast }: any) {
     setRunning(true)
     setResult(null)
     setSavedPlan(null)
-    setTopicsCreated(null)
-    setTopicsError('')
+    setTasksCreated(null)
+    setTasksError('')
 
     try {
       const today = new Date()
@@ -870,14 +873,14 @@ function Plan({ setToast }: any) {
     }
   }
 
-  async function handleGenerateTopics() {
+  async function handleGenerateTasks() {
     if (!client || !result) return
-    setGeneratingTopics(true)
-    setTopicsError('')
-    setTopicsCreated(null)
+    setGeneratingTasks(true)
+    setTasksError('')
+    setTasksCreated(null)
 
     try {
-      const res = await fetch('/api/content/generate-topics', {
+      const res = await fetch('/api/tasks/generate-from-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -887,21 +890,20 @@ function Plan({ setToast }: any) {
           industry: client.industry || '',
           area: client.area || '',
           plan_result: result,
-          start_date: savedPlan?.start_date || new Date().toISOString().slice(0, 10),
         }),
       })
       const data = await res.json()
 
       if (!res.ok) {
-        throw new Error(data.error || 'Sinh lịch nội dung thất bại')
+        throw new Error(data.error || 'Sinh danh sách việc thất bại')
       }
 
-      setTopicsCreated(data.items || [])
-      setToast(`Đã tạo ${data.items?.length || 0} chủ đề nội dung từ lộ trình`)
+      setTasksCreated(data.items || [])
+      setToast(`Đã tạo ${data.items?.length || 0} việc cần làm từ lộ trình`)
     } catch (err: any) {
-      setTopicsError(err.message || 'Có lỗi xảy ra')
+      setTasksError(err.message || 'Có lỗi xảy ra')
     } finally {
-      setGeneratingTopics(false)
+      setGeneratingTasks(false)
     }
   }
 
@@ -1002,42 +1004,45 @@ function Plan({ setToast }: any) {
         <Card>
           <div className="section-head">
             <div>
-              <h2>Sinh lịch nội dung từ lộ trình</h2>
-              <p>Tạo sẵn danh sách chủ đề bài viết theo đúng lộ trình vừa lập</p>
+              <h2>Sinh lịch việc từ lộ trình</h2>
+              <p>Tạo sẵn danh sách việc cần làm (bao gồm bài viết) theo đúng lộ trình vừa lập</p>
             </div>
             <button
               className="secondary-button"
-              onClick={handleGenerateTopics}
-              disabled={generatingTopics}
+              onClick={handleGenerateTasks}
+              disabled={generatingTasks}
             >
-              {generatingTopics ? 'Đang sinh lịch...' : (<><Sparkles size={15} />Sinh lịch nội dung</>)}
+              {generatingTasks ? 'Đang sinh lịch...' : (<><Sparkles size={15} />Sinh lịch việc</>)}
             </button>
           </div>
 
-          {topicsError && (
+          {tasksError && (
             <div style={{ color: '#b91c1c', background: '#fef2f2', padding: 12, borderRadius: 8 }}>
-              {topicsError}
+              {tasksError}
             </div>
           )}
 
-          {topicsCreated && topicsCreated.length > 0 && (
+          {tasksCreated && tasksCreated.length > 0 && (
             <div className="table-wrap">
               <table>
                 <thead>
-                  <tr><th>Ngày dự kiến</th><th>Chủ đề</th><th>Mục tiêu</th></tr>
+                  <tr><th>Việc cần làm</th><th>Loại</th><th>Ưu tiên</th></tr>
                 </thead>
                 <tbody>
-                  {topicsCreated.map((t: any) => (
+                  {tasksCreated.map((t: any) => (
                     <tr key={t.id}>
-                      <td className="muted-cell">{t.scheduled_date || '—'}</td>
-                      <td><strong>{t.topic}</strong></td>
-                      <td>{t.goal || '—'}</td>
+                      <td>
+                        <strong>{t.title}</strong>
+                        {t.description && <small style={{ display: 'block', color: '#6b7280' }}>{t.description}</small>}
+                      </td>
+                      <td className="muted-cell">{TASK_TYPE_LABEL[t.task_type] || t.task_type}</td>
+                      <td><span className={`priority ${t.priority === 'Cao' ? 'high' : ''}`}>{t.priority}</span></td>
                     </tr>
                   ))}
                 </tbody>
               </table>
               <p style={{ marginTop: 12, fontSize: 13, color: '#6b7280' }}>
-                Vào mục "Nội dung" → tab "Ý tưởng" để cho AI viết bài từng chủ đề.
+                Vào mục "Việc cần làm" để theo dõi, hoặc mục "Nội dung" → tab "Ý tưởng" để cho AI viết các bài đăng.
               </p>
             </div>
           )}
@@ -1046,40 +1051,36 @@ function Plan({ setToast }: any) {
     </>
   )
 }
-function Tasks() { return <Card><div className="toolbar"><select><option>Tất cả khách hàng</option><option>Nha khoa Tâm An</option></select><select><option>Tất cả trạng thái</option><option>Đang chờ</option><option>Hoàn thành</option></select><select><option>Tất cả ưu tiên</option><option>Cao</option></select></div><div className="table-wrap"><table><thead><tr><th>Việc cần làm</th><th>Khách hàng</th><th>Loại việc</th><th>Ưu tiên</th><th>Hạn</th><th>Trạng thái</th></tr></thead><tbody>{tasks.map(t => <tr key={t[0]}><td><strong>{t[0]}</strong></td><td>{t[1]}</td><td><span className="type-label">{t[2]}</span></td><td><span className={`priority ${t[3] === 'Cao' ? 'high' : ''}`}>{t[3]}</span></td><td className="muted-cell">{t[4]}</td><td><Badge status={t[5]} /></td></tr>)}</tbody></table></div></Card> }
-function Contents({ navigate, setToast }: any) {
+function Tasks() {
   const [items, setItems] = useState<any[]>([])
   const [clients, setClients] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [filter, setFilter] = useState('waiting_approval')
-  const [writingId, setWritingId] = useState<string | null>(null)
-
-  async function loadItems() {
-    try {
-      const res = await fetch('/api/content')
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Không tải được nội dung')
-      setItems(Array.isArray(data) ? data : [])
-    } catch (err: any) {
-      setError(err.message || 'Có lỗi xảy ra')
-    } finally {
-      setLoading(false)
-    }
-  }
+  const [clientFilter, setClientFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [priorityFilter, setPriorityFilter] = useState('all')
+  const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [migrationWarning, setMigrationWarning] = useState(false)
 
   useEffect(() => {
-    async function loadAll() {
-      await loadItems()
+    async function load() {
       try {
-        const res = await fetch('/api/clients')
-        const data = await res.json()
-        if (res.ok) setClients(Array.isArray(data) ? data : [])
-      } catch {
-        // Không chặn trang nội dung nếu tải danh sách khách hàng lỗi
+        const [taskRes, clientRes] = await Promise.all([
+          fetch('/api/tasks'),
+          fetch('/api/clients'),
+        ])
+        const taskData = await taskRes.json()
+        const clientData = await clientRes.json()
+        if (!taskRes.ok) throw new Error(taskData.error || 'Không tải được danh sách việc')
+        setItems(Array.isArray(taskData) ? taskData : [])
+        if (clientRes.ok) setClients(Array.isArray(clientData) ? clientData : [])
+      } catch (err: any) {
+        setError(err.message || 'Có lỗi xảy ra')
+      } finally {
+        setLoading(false)
       }
     }
-    loadAll()
+    load()
   }, [])
 
   const clientMap = useMemo(() => {
@@ -1088,9 +1089,184 @@ function Contents({ navigate, setToast }: any) {
     return map
   }, [clients])
 
-  const pending = items.filter(
-    (c) => filter === 'all' || c.status === filter
+  const filtered = items.filter((t) => {
+    if (clientFilter !== 'all' && t.client_id !== clientFilter) return false
+    if (statusFilter !== 'all' && (t.status || 'pending') !== statusFilter) return false
+    if (priorityFilter !== 'all' && t.priority !== priorityFilter) return false
+    return true
+  })
+
+  async function toggleStatus(task: any) {
+    const next = task.status === 'done' ? 'pending' : 'done'
+    setUpdatingId(task.id)
+    try {
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: next }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        if (String(data.error || '').includes('status')) setMigrationWarning(true)
+        throw new Error(data.error || 'Cập nhật thất bại')
+      }
+      setItems((prev) => prev.map((t) => (t.id === task.id ? data : t)))
+    } catch {
+      // migrationWarning đã set ở trên nếu đúng nguyên nhân; không chặn UI
+    } finally {
+      setUpdatingId(null)
+    }
+  }
+
+  return (
+    <Card>
+      {migrationWarning && (
+        <div style={{ color: '#b91c1c', background: '#fef2f2', padding: 12, borderRadius: 8, marginBottom: 16 }}>
+          Chưa cập nhật được trạng thái: bảng <code>tasks</code> trong Supabase chưa có cột <code>status</code>. Cần chạy migration: <code>ALTER TABLE tasks ADD COLUMN status text NOT NULL DEFAULT 'pending';</code>
+        </div>
+      )}
+      <div className="toolbar">
+        <select value={clientFilter} onChange={(e) => setClientFilter(e.target.value)}>
+          <option value="all">Tất cả khách hàng</option>
+          {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+          <option value="all">Tất cả trạng thái</option>
+          <option value="pending">Đang chờ</option>
+          <option value="done">Hoàn thành</option>
+          <option value="skipped">Bỏ qua</option>
+        </select>
+        <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}>
+          <option value="all">Tất cả ưu tiên</option>
+          <option value="Cao">Cao</option>
+          <option value="Trung bình">Trung bình</option>
+          <option value="Thấp">Thấp</option>
+        </select>
+      </div>
+
+      {loading && (
+        <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>
+          Đang tải danh sách việc...
+        </div>
+      )}
+      {error && <div style={{ padding: 20, color: '#b91c1c' }}>{error}</div>}
+
+      {!loading && !error && filtered.length === 0 && (
+        <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>
+          Chưa có việc nào. Vào trang Lộ trình của một khách hàng và bấm "Sinh lịch việc".
+        </div>
+      )}
+
+      {!loading && filtered.length > 0 && (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Việc cần làm</th><th>Khách hàng</th><th>Loại việc</th><th>Ưu tiên</th><th>Trạng thái</th></tr>
+            </thead>
+            <tbody>
+              {filtered.map((t) => (
+                <tr key={t.id}>
+                  <td>
+                    <strong>{t.title}</strong>
+                    {t.description && <small style={{ display: 'block', color: '#6b7280' }}>{t.description}</small>}
+                  </td>
+                  <td>{clientMap[t.client_id]?.name || '—'}</td>
+                  <td><span className="type-label">{TASK_TYPE_LABEL[t.task_type] || t.task_type}</span></td>
+                  <td><span className={`priority ${t.priority === 'Cao' ? 'high' : ''}`}>{t.priority}</span></td>
+                  <td>
+                    <button
+                      className="icon-button"
+                      disabled={updatingId === t.id}
+                      onClick={() => toggleStatus(t)}
+                      title="Bấm để đổi trạng thái hoàn thành"
+                    >
+                      <Badge status={t.status || 'pending'} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
   )
+}
+function Contents({ navigate, setToast }: any) {
+  const [contentItems, setContentItems] = useState<any[]>([])
+  const [contentTasks, setContentTasks] = useState<any[]>([])
+  const [clients, setClients] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [filter, setFilter] = useState('waiting_approval')
+  const [writingId, setWritingId] = useState<string | null>(null)
+
+  async function loadAll() {
+    try {
+      const [contentRes, taskRes, clientRes] = await Promise.all([
+        fetch('/api/content'),
+        fetch('/api/tasks'),
+        fetch('/api/clients'),
+      ])
+      const contentData = await contentRes.json()
+      const taskData = await taskRes.json()
+      const clientData = await clientRes.json()
+
+      if (!contentRes.ok) throw new Error(contentData.error || 'Không tải được nội dung')
+
+      setContentItems(Array.isArray(contentData) ? contentData : [])
+      setContentTasks(
+        taskRes.ok
+          ? (Array.isArray(taskData) ? taskData : []).filter((t: any) => t.task_type === 'content')
+          : []
+      )
+      if (clientRes.ok) setClients(Array.isArray(clientData) ? clientData : [])
+    } catch (err: any) {
+      setError(err.message || 'Có lỗi xảy ra')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { loadAll() }, [])
+
+  const clientMap = useMemo(() => {
+    const map: Record<string, any> = {}
+    clients.forEach((c) => { map[c.id] = c })
+    return map
+  }, [clients])
+
+  // Ghép: mỗi task loại "content" đã có bài viết (contents.task_id) thì
+  // hiển thị bài viết thật; task nào chưa có bài viết thì hiển thị như
+  // 1 "ý tưởng" chưa viết, cho phép bấm "Viết bài bằng AI".
+  const combined = useMemo(() => {
+    const contentByTaskId: Record<string, any> = {}
+    contentItems.forEach((c) => { if (c.task_id) contentByTaskId[c.task_id] = c })
+
+    const fromTasks = contentTasks.map((t) => {
+      const linked = contentByTaskId[t.id]
+      if (linked) return linked
+      return {
+        id: `task-${t.id}`,
+        task_id: t.id,
+        client_id: t.client_id,
+        topic: t.title,
+        goal: t.description,
+        status: 'idea',
+        created_at: t.created_at,
+        isTaskOnly: true,
+      }
+    })
+
+    // Nội dung ad-hoc (không gắn task) vẫn hiển thị bình thường
+    const adhoc = contentItems.filter((c) => !c.task_id)
+
+    return [...fromTasks, ...adhoc].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    )
+  }, [contentItems, contentTasks])
+
+  const pending = combined.filter((c) => filter === 'all' || c.status === filter)
 
   async function handleWriteContent(item: any) {
     const client = clientMap[item.client_id]
@@ -1104,11 +1280,7 @@ function Contents({ navigate, setToast }: any) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          content_id: item.id,
-          client_id: item.client_id,
-          plan_id: item.plan_id,
-          topic: item.topic,
-          goal: item.goal,
+          task_id: item.task_id,
           business_name: client.name,
           industry: client.industry || '',
           area: client.area || '',
@@ -1121,8 +1293,8 @@ function Contents({ navigate, setToast }: any) {
       if (!res.ok) throw new Error(data.error || 'Viết bài thất bại')
 
       setToast('Đã viết bài bằng AI, sẵn sàng để duyệt')
-      await loadItems()
-      navigate(`/contents/${item.id}`)
+      await loadAll()
+      navigate(`/contents/${data.content.id}`)
     } catch (err: any) {
       setToast(err.message || 'Có lỗi xảy ra')
     } finally {
@@ -1185,8 +1357,8 @@ function Contents({ navigate, setToast }: any) {
         {!loading && !error && pending.length === 0 && (
           <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>
             {filter === 'idea'
-              ? 'Chưa có ý tưởng nào. Vào trang Lộ trình của một khách hàng và bấm "Sinh lịch nội dung".'
-              : 'Chưa có bài viết nào. Hãy dùng trang test hoặc form viết bài để tạo.'}
+              ? 'Chưa có ý tưởng nào. Vào trang Lộ trình của một khách hàng và bấm "Sinh lịch việc".'
+              : 'Chưa có bài viết nào ở trạng thái này.'}
           </div>
         )}
 
@@ -1204,10 +1376,10 @@ function Contents({ navigate, setToast }: any) {
               </thead>
               <tbody>
                 {pending.map((c) => (
-                  <tr key={c.id} onClick={() => c.status !== 'idea' && navigate(`/contents/${c.id}`)}>
+                  <tr key={c.id} onClick={() => !c.isTaskOnly && navigate(`/contents/${c.id}`)}>
                     <td>
                       <strong>{c.topic || 'Không có tiêu đề'}</strong>
-                      <small>Mục tiêu: {c.goal || '—'}</small>
+                      {c.goal && <small>{c.goal}</small>}
                     </td>
                     <td className="muted-cell">{clientMap[c.client_id]?.name || '—'}</td>
                     <td>
@@ -1219,7 +1391,7 @@ function Contents({ navigate, setToast }: any) {
                         : '—'}
                     </td>
                     <td>
-                      {c.status === 'idea' ? (
+                      {c.isTaskOnly ? (
                         <button
                           className="secondary-button"
                           disabled={writingId === c.id}

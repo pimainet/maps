@@ -104,26 +104,31 @@ Yêu cầu bắt buộc:
 - Viết ngắn gọn, cụ thể, có tính hành động.
 `
 
-export const CONTENT_CALENDAR_PROMPT = `
-Bạn là chuyên gia Local SEO. Nhiệm vụ: chuyển Lộ trình 30 ngày thành một LỊCH NỘI DUNG cụ thể (danh sách chủ đề bài viết Google Business Profile), bám sát phần "Hoạt động nội dung đề xuất" và trọng tâm ưu tiên trong lộ trình.
+export const TASKS_FROM_PLAN_PROMPT = `
+Bạn là chuyên gia Local SEO. Nhiệm vụ: chuyển Lộ trình 30 ngày thành một DANH SÁCH VIỆC CẦN LÀM cụ thể, bám sát các tuần và hoạt động đã đề xuất trong lộ trình.
 
 Thông tin đầu vào:
 - Tên doanh nghiệp: {{business_name}}
 - Ngành nghề: {{industry}}
 - Khu vực: {{area}}
-- Ngày bắt đầu chu kỳ: {{start_date}}
 - Lộ trình 30 ngày:
 {{plan_result}}
 
 Yêu cầu:
-- Đề xuất 6–10 chủ đề bài viết trải đều trong 30 ngày, đúng tần suất đăng bài đã đề xuất trong lộ trình.
-- Mỗi chủ đề phải bám vào trọng tâm/ưu tiên của lộ trình, không lan man, không generic.
-- Ngày đề xuất (scheduled_date) tính từ {{start_date}}, định dạng YYYY-MM-DD, tăng dần hợp lý.
-- goal là mục tiêu ngắn của bài viết đó (ví dụ: "Tăng lượt gọi", "Tăng nhận diện dịch vụ X").
+- Liệt kê 8–15 việc cụ thể, khả thi, bám sát đúng nội dung lộ trình — không thêm việc không có trong lộ trình.
+- Phân loại mỗi việc vào đúng 1 trong các task_type sau:
+  - "content": việc viết bài đăng Google Business Profile (mỗi bài đăng là 1 task riêng)
+  - "profile_update": cập nhật hồ sơ (mô tả, danh mục, giờ mở cửa...)
+  - "photo": việc liên quan ảnh
+  - "review": việc liên quan đánh giá/review khách hàng
+  - "other": việc khác không thuộc các loại trên
+- priority là một trong: "Cao", "Trung bình", "Thấp" — theo đúng mức ưu tiên nêu trong lộ trình.
+- title ngắn gọn, hành động rõ ràng (ví dụ: "Đăng bài: 5 dấu hiệu cần lấy cao răng định kỳ"). Với task_type "content", title PHẢI là chủ đề bài viết cụ thể, không viết chung chung như "Đăng bài tuần 1".
+- description giải thích ngắn gọn lý do/nội dung chi tiết của việc đó.
 
 CHỈ trả về đúng một JSON array hợp lệ, không thêm chữ nào khác, không markdown, không giải thích, theo đúng cấu trúc:
 [
-  { "scheduled_date": "YYYY-MM-DD", "topic": "...", "goal": "..." }
+  { "title": "...", "description": "...", "task_type": "content", "priority": "Cao" }
 ]
 `
 

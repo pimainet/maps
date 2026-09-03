@@ -1,10 +1,23 @@
 import { supabase } from './supabase'
 
+// ── Clients ─────────────────────────────────────────────────────────
+
 export async function getClients() {
   const { data, error } = await supabase
     .from('clients')
     .select('*')
     .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return data
+}
+
+export async function getClientById(id: string) {
+  const { data, error } = await supabase
+    .from('clients')
+    .select('*')
+    .eq('id', id)
+    .single()
 
   if (error) throw error
   return data
@@ -31,6 +44,8 @@ export async function createClient(client: {
   return data
 }
 
+// ── Audits ──────────────────────────────────────────────────────────
+
 export async function saveAudit(input: {
   client_id: string
   audit_result: string
@@ -53,6 +68,21 @@ export async function saveAudit(input: {
   if (error) throw error
   return data
 }
+
+export async function getLatestAuditByClient(clientId: string) {
+  const { data, error } = await supabase
+    .from('audits')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) throw error
+  return data
+}
+
+// ── Plans ───────────────────────────────────────────────────────────
 
 export async function savePlan(input: {
   client_id: string
@@ -79,36 +109,148 @@ export async function savePlan(input: {
   return data
 }
 
-export async function saveContent(input: {
+export async function getLatestPlanByClient(clientId: string) {
+  const { data, error } = await supabase
+    .from('plans')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) throw error
+  return data
+}
+
+// ── Tasks ───────────────────────────────────────────────────────────
+// Bảng tasks thật: id, created_at, client_id, plan_id, module_key,
+// title, description, task_type, priority [+ status — cần chạy migration
+// `ALTER TABLE tasks ADD COLUMN status text NOT NULL DEFAULT 'pending';`
+// trước khi dùng các hàm cập nhật trạng thái bên dưới]
+
+export async function createTasks(
+  items: Array<{
+    client_id: string
+    plan_id?: string
+    title: string
+    description?: string
+    task_type: string
+    priority?: string
+  }>
+) {
+  const rows = items.map((item) => ({
+    client_id: item.client_id,
+    plan_id: item.plan_id ?? null,
+    module_key: 'maps_seo',
+    title: item.title,
+    description: item.description ?? null,
+    task_type: item.task_type,
+    priority: item.priority ?? 'Trung bình',
+    status: 'pending',
+  }))
+
+  const { data, error } = await supabase.from('tasks').insert(rows).select()
+
+  if (error) throw error
+  return data
+}
+
+export async function getTasks(filters?: { clientId?: string; planId?: string }) {
+  let query = supabase
+    .from('tasks')
+    .select('*')
+    .order('created_at', { ascending: false })
+
+  if (filters?.clientId) query = query.eq('client_id', filters.clientId)
+  if (filters?.planId) query = query.eq('plan_id', filters.planId)
+
+  const { data, error } = await query
+  if (error) throw error
+  return data
+}
+
+export async function getTaskById(id: string) {
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('id', id)
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function updateTaskStatus(id: string, status: string) {
+  const { data, error } = await supabase
+    .from('tasks')
+    .update({ status })
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+// ── Contents ────────────────────────────────────────────────────────
+// Bảng contents thật: id, created_at, client_id, plan_id, task_id,
+// module_key, channel, topic, status — KHÔNG có cột lưu văn bản AI.
+// Toàn bộ văn bản (SERP-Aware, bản nháp, Critic, bản cuối) lưu trong
+// content_history, xem các hàm bên dưới.
+
+export async function createContentForTask(task: {
+  id: string
   client_id: string
   plan_id?: string
-  topic?: string
-  goal?: string
-  serp_analysis?: string
-  ai_content?: string
-  critic_feedback?: string
-  final_content?: string
-  scheduled_date?: string
-  status?: string
+  title: string
+}) {
+  const { data, error } = await supabase
+    .from('contents')
+    .insert({
+      client_id: task.client_id,
+      plan_id: task.plan_id ?? null,
+      task_id: task.id,
+      module_key: 'maps_seo',
+      channel: 'gbp_post',
+      topic: task.title,
+      status: 'drafted',
+    })
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function createAdHocContent(input: {
+  client_id: string
+  plan_id?: string
+  topic: string
 }) {
   const { data, error } = await supabase
     .from('contents')
     .insert({
       client_id: input.client_id,
       plan_id: input.plan_id ?? null,
-      topic: input.topic ?? null,
-      goal: input.goal ?? null,
-      serp_analysis: input.serp_analysis ?? null,
-      ai_content: input.ai_content ?? null,
-      critic_feedback: input.critic_feedback ?? null,
-      final_content: input.final_content ?? null,
-      scheduled_date: input.scheduled_date ?? null,
-      channel: 'gbp_post',
+      task_id: null,
       module_key: 'maps_seo',
-      status: input.status ?? 'drafted',
+      channel: 'gbp_post',
+      topic: input.topic,
+      status: 'drafted',
     })
     .select()
     .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function getContentByTaskId(taskId: string) {
+  const { data, error } = await supabase
+    .from('contents')
+    .select('*')
+    .eq('task_id', taskId)
+    .maybeSingle()
 
   if (error) throw error
   return data
@@ -141,36 +283,10 @@ export async function getContentById(id: string) {
   return data
 }
 
-export async function updateContent(
-  id: string,
-  input: {
-    topic?: string
-    goal?: string
-    serp_analysis?: string
-    ai_content?: string
-    critic_feedback?: string
-    final_content?: string
-    scheduled_date?: string
-    status?: string
-  }
-) {
-  const patch: Record<string, any> = {}
-  for (const key of [
-    'topic',
-    'goal',
-    'serp_analysis',
-    'ai_content',
-    'critic_feedback',
-    'final_content',
-    'scheduled_date',
-    'status',
-  ] as const) {
-    if (input[key] !== undefined) patch[key] = input[key]
-  }
-
+export async function updateContentStatus(id: string, status: string) {
   const { data, error } = await supabase
     .from('contents')
-    .update(patch)
+    .update({ status })
     .eq('id', id)
     .select()
     .single()
@@ -179,60 +295,17 @@ export async function updateContent(
   return data
 }
 
-export async function getLatestAuditByClient(clientId: string) {
-  const { data, error } = await supabase
-    .from('audits')
-    .select('*')
-    .eq('client_id', clientId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  if (error) throw error
-  return data
-}
-
-export async function getLatestPlanByClient(clientId: string) {
-  const { data, error } = await supabase
-    .from('plans')
-    .select('*')
-    .eq('client_id', clientId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  if (error) throw error
-  return data
-}
-
-export async function createContentIdeas(
-  items: Array<{
-    client_id: string
-    plan_id?: string
-    topic: string
-    goal?: string
-    scheduled_date?: string
-  }>
-) {
-  const rows = items.map((item) => ({
-    client_id: item.client_id,
-    plan_id: item.plan_id ?? null,
-    topic: item.topic,
-    goal: item.goal ?? null,
-    scheduled_date: item.scheduled_date ?? null,
-    channel: 'gbp_post',
-    module_key: 'maps_seo',
-    status: 'idea',
-  }))
-
-  const { data, error } = await supabase
-    .from('contents')
-    .insert(rows)
-    .select()
-
-  if (error) throw error
-  return data
-}
+// ── Content history ─────────────────────────────────────────────────
+// Schema thật: id, created_at, content_id, client_id, ai_version,
+// human_edited_version, edit_note.
+// Quy ước dùng trong hệ thống:
+// - Lần AI viết xong (SERP-Aware→Writer→Critic→Refiner): ai_version =
+//   bản cuối do AI tạo; edit_note = JSON.stringify({ serp_analysis,
+//   ai_draft, critic_feedback }) để không mất dữ liệu trung gian mà
+//   không cần thêm cột trong contents.
+// - Mỗi lần người dùng lưu chỉnh sửa: thêm 1 dòng mới với
+//   human_edited_version = bản đã sửa, ai_version giữ nguyên bản AI gốc
+//   gần nhất, edit_note mô tả ngắn hành động.
 
 export async function saveContentHistory(input: {
   content_id: string
@@ -253,11 +326,30 @@ export async function saveContentHistory(input: {
     .select()
     .single()
 
-  // content_history chỉ để lưu vết chỉnh sửa; ghi thất bại không chặn
-  // luồng chính (duyệt/lưu bài vẫn phải thành công).
-  if (error) {
-    console.error('saveContentHistory error:', error.message)
-    return null
-  }
+  if (error) throw error
+  return data
+}
+
+export async function getLatestContentHistory(contentId: string) {
+  const { data, error } = await supabase
+    .from('content_history')
+    .select('*')
+    .eq('content_id', contentId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) throw error
+  return data
+}
+
+export async function getContentHistoryList(contentId: string) {
+  const { data, error } = await supabase
+    .from('content_history')
+    .select('*')
+    .eq('content_id', contentId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
   return data
 }

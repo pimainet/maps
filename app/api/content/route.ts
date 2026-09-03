@@ -1,6 +1,14 @@
 import { NextResponse } from 'next/server'
 import { askClaude } from '@/lib/claude'
-import { saveContent, updateContent, getContents } from '@/lib/db'
+import {
+  getContents,
+  getTaskById,
+  createContentForTask,
+  createAdHocContent,
+  getContentByTaskId,
+  updateContentStatus,
+  saveContentHistory,
+} from '@/lib/db'
 import {
   SERP_AWARE_PROMPT,
   WRITER_PROMPT,
@@ -19,16 +27,55 @@ export async function GET(req: Request) {
   }
 }
 
+// POST: chạy pipeline AI viết 1 bài GBP post.
+// Có 2 cách gọi:
+// 1) { task_id, business_name, industry, area, brand_voice, phone, extra_info }
+//    -> viết bài cho 1 task loại "content" đã có sẵn (từ lịch việc sinh từ lộ trình).
+//    Nếu task đó chưa có content liên kết thì tự tạo mới, tránh tạo trùng
+//    nếu gọi lại nhiều lần.
+// 2) { client_id, plan_id?, topic, ...client info } -> viết bài ad-hoc,
+//    không gắn task (dùng cho trang /test hoặc viết nhanh không qua lộ trình).
 export async function POST(req: Request) {
   try {
     const body = await req.json()
+
+    let contentRow: any
+    let topic = body.topic
+    let goal = body.goal
+
+    if (body.task_id) {
+      const task = await getTaskById(body.task_id)
+      if (task.task_type !== 'content') {
+        return NextResponse.json(
+          { error: 'Task này không phải loại "content", không thể viết bài AI cho việc này' },
+          { status: 400 }
+        )
+      }
+      topic = task.title
+      goal = task.description
+
+      const existing = await getContentByTaskId(task.id)
+      contentRow = existing || (await createContentForTask(task))
+    } else {
+      if (!body.client_id || !topic) {
+        return NextResponse.json(
+          { error: 'Thiếu client_id hoặc topic' },
+          { status: 400 }
+        )
+      }
+      contentRow = await createAdHocContent({
+        client_id: body.client_id,
+        plan_id: body.plan_id,
+        topic,
+      })
+    }
 
     // 1. SERP-Aware
     const serpPrompt = SERP_AWARE_PROMPT
       .replaceAll('{{industry}}', body.industry || '')
       .replaceAll('{{area}}', body.area || '')
-      .replaceAll('{{topic}}', body.topic || '')
-      .replaceAll('{{goal}}', body.goal || '')
+      .replaceAll('{{topic}}', topic || '')
+      .replaceAll('{{goal}}', goal || '')
       .replaceAll('{{business_name}}', body.business_name || '')
 
     const serp_analysis = await askClaude(serpPrompt)
@@ -38,8 +85,8 @@ export async function POST(req: Request) {
       .replaceAll('{{business_name}}', body.business_name || '')
       .replaceAll('{{industry}}', body.industry || '')
       .replaceAll('{{area}}', body.area || '')
-      .replaceAll('{{topic}}', body.topic || '')
-      .replaceAll('{{goal}}', body.goal || '')
+      .replaceAll('{{topic}}', topic || '')
+      .replaceAll('{{goal}}', goal || '')
       .replaceAll('{{brand_voice}}', body.brand_voice || 'chuyên nghiệp, gần gũi')
       .replaceAll('{{phone}}', body.phone || '')
       .replaceAll('{{extra_info}}', body.extra_info || '')
@@ -63,33 +110,20 @@ export async function POST(req: Request) {
 
     const final_content = await askClaude(refinerPrompt)
 
-    // 5. Lưu — nếu có content_id (bài viết đang ở trạng thái 'idea' từ lịch
-    // nội dung sinh sẵn) thì cập nhật đúng bản ghi đó, tránh tạo trùng.
-    const saved = body.content_id
-      ? await updateContent(body.content_id, {
-          topic: body.topic,
-          goal: body.goal,
-          serp_analysis,
-          ai_content,
-          critic_feedback,
-          final_content,
-          status: 'waiting_approval',
-        })
-      : await saveContent({
-          client_id: body.client_id,
-          plan_id: body.plan_id,
-          topic: body.topic,
-          goal: body.goal,
-          serp_analysis,
-          ai_content,
-          critic_feedback,
-          final_content,
-          scheduled_date: body.scheduled_date,
-          status: 'waiting_approval',
-        })
+    // 5. Lưu: contents.status = waiting_approval; toàn bộ văn bản AI lưu
+    // vào 1 dòng content_history mới (ai_version = bản cuối AI, edit_note
+    // giữ serp_analysis + bản nháp + critic_feedback dạng JSON).
+    const updatedContent = await updateContentStatus(contentRow.id, 'waiting_approval')
+
+    await saveContentHistory({
+      content_id: contentRow.id,
+      client_id: contentRow.client_id,
+      ai_version: final_content,
+      edit_note: JSON.stringify({ serp_analysis, ai_draft: ai_content, critic_feedback }),
+    })
 
     return NextResponse.json({
-      content: saved,
+      content: updatedContent,
       serp_analysis,
       ai_content,
       critic_feedback,
