@@ -20,16 +20,18 @@ function parseTasksJson(raw: string) {
     description?: string
     task_type?: string
     priority?: string
+    due_date?: string
   }>
 }
 
 const VALID_TYPES = ['content', 'profile_update', 'photo', 'review', 'other']
-const VALID_PRIORITIES = ['Cao', 'Trung bình', 'Thấp']
+const VALID_PRIORITIES = ['low', 'medium', 'high']
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { client_id, plan_id, business_name, industry, area, plan_result } = body
+    const { client_id, plan_id, business_name, industry, area, plan_result, start_date } = body
 
     if (!client_id || !plan_result) {
       return NextResponse.json(
@@ -38,14 +40,23 @@ export async function POST(req: Request) {
       )
     }
 
+    const effectiveStartDate = start_date || new Date().toISOString().slice(0, 10)
+
     const prompt = TASKS_FROM_PLAN_PROMPT.replaceAll('{{business_name}}', business_name || '')
       .replaceAll('{{industry}}', industry || '')
       .replaceAll('{{area}}', area || '')
+      .replaceAll('{{start_date}}', effectiveStartDate)
       .replaceAll('{{plan_result}}', plan_result)
 
     const raw = await askClaude(prompt)
 
-    let tasks: Array<{ title?: string; description?: string; task_type?: string; priority?: string }>
+    let tasks: Array<{
+      title?: string
+      description?: string
+      task_type?: string
+      priority?: string
+      due_date?: string
+    }>
     try {
       tasks = parseTasksJson(raw)
     } catch {
@@ -64,7 +75,8 @@ export async function POST(req: Request) {
         title: t.title!.trim(),
         description: t.description?.trim(),
         task_type: VALID_TYPES.includes(t.task_type || '') ? t.task_type! : 'other',
-        priority: VALID_PRIORITIES.includes(t.priority || '') ? t.priority! : 'Trung bình',
+        priority: VALID_PRIORITIES.includes(t.priority || '') ? t.priority! : 'medium',
+        due_date: DATE_RE.test(t.due_date || '') ? t.due_date : undefined,
       }))
 
     if (validTasks.length === 0) {
@@ -82,6 +94,7 @@ export async function POST(req: Request) {
         description: t.description,
         task_type: t.task_type,
         priority: t.priority,
+        due_date: t.due_date,
       }))
     )
 

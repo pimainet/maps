@@ -19,6 +19,12 @@ const TASK_TYPE_LABEL: Record<string, string> = {
   other: 'Khác',
 }
 
+const PRIORITY_LABEL: Record<string, string> = {
+  high: 'Cao',
+  medium: 'Trung bình',
+  low: 'Thấp',
+}
+
 function Badge({ status }: { status: string }) { const item = statusMap[status] || { label: status, className: 'status-muted' }; return <span className={`status-badge ${item.className}`}><span className="status-dot" />{item.label}</span> }
 function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) { return <section className={`panel ${className}`}>{children}</section> }
 function Metric({ icon: Icon, label, value, note, tone = 'blue' }: any) { return <Card className="metric"><div className={`metric-icon ${tone}`}><Icon size={18} /></div><div><p className="eyebrow">{label}</p><p className="metric-value">{value}</p><p className="metric-note">{note}</p></div></Card> }
@@ -598,7 +604,7 @@ function ClientDetailAction({ navigate, setToast }: any) {
                 <span className="check-box" />
                 <span>
                   <strong>{task.title}</strong>
-                  <small>{TASK_TYPE_LABEL[task.task_type] || task.task_type} · Ưu tiên {task.priority}</small>
+                  <small>{TASK_TYPE_LABEL[task.task_type] || task.task_type} · Ưu tiên {PRIORITY_LABEL[task.priority] || task.priority}{task.due_date ? ` · Hạn ${task.due_date}` : ''}</small>
                 </span>
                 <ArrowUpRight size={15} />
               </button>
@@ -1037,6 +1043,7 @@ function Plan({ setToast }: any) {
           industry: client.industry || '',
           area: client.area || '',
           plan_result: result,
+          start_date: savedPlan?.start_date || new Date().toISOString().slice(0, 10),
         }),
       })
       const data = await res.json()
@@ -1173,7 +1180,7 @@ function Plan({ setToast }: any) {
             <div className="table-wrap">
               <table>
                 <thead>
-                  <tr><th>Việc cần làm</th><th>Loại</th><th>Ưu tiên</th></tr>
+                  <tr><th>Việc cần làm</th><th>Loại</th><th>Ưu tiên</th><th>Hạn</th></tr>
                 </thead>
                 <tbody>
                   {tasksCreated.map((t: any) => (
@@ -1183,7 +1190,8 @@ function Plan({ setToast }: any) {
                         {t.description && <small style={{ display: 'block', color: '#6b7280' }}>{t.description}</small>}
                       </td>
                       <td className="muted-cell">{TASK_TYPE_LABEL[t.task_type] || t.task_type}</td>
-                      <td><span className={`priority ${t.priority === 'Cao' ? 'high' : ''}`}>{t.priority}</span></td>
+                      <td><span className={`priority ${t.priority === 'high' ? 'high' : ''}`}>{PRIORITY_LABEL[t.priority] || t.priority}</span></td>
+                      <td className="muted-cell">{t.due_date || '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1207,7 +1215,6 @@ function Tasks() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [priorityFilter, setPriorityFilter] = useState('all')
   const [updatingId, setUpdatingId] = useState<string | null>(null)
-  const [migrationWarning, setMigrationWarning] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -1253,13 +1260,10 @@ function Tasks() {
         body: JSON.stringify({ status: next }),
       })
       const data = await res.json()
-      if (!res.ok) {
-        if (String(data.error || '').includes('status')) setMigrationWarning(true)
-        throw new Error(data.error || 'Cập nhật thất bại')
-      }
+      if (!res.ok) throw new Error(data.error || 'Cập nhật thất bại')
       setItems((prev) => prev.map((t) => (t.id === task.id ? data : t)))
-    } catch {
-      // migrationWarning đã set ở trên nếu đúng nguyên nhân; không chặn UI
+    } catch (err: any) {
+      setError(err.message || 'Cập nhật thất bại')
     } finally {
       setUpdatingId(null)
     }
@@ -1267,11 +1271,6 @@ function Tasks() {
 
   return (
     <Card>
-      {migrationWarning && (
-        <div style={{ color: '#b91c1c', background: '#fef2f2', padding: 12, borderRadius: 8, marginBottom: 16 }}>
-          Chưa cập nhật được trạng thái: bảng <code>tasks</code> trong Supabase chưa có cột <code>status</code>. Cần chạy migration: <code>ALTER TABLE tasks ADD COLUMN status text NOT NULL DEFAULT 'pending';</code>
-        </div>
-      )}
       <div className="toolbar">
         <select value={clientFilter} onChange={(e) => setClientFilter(e.target.value)}>
           <option value="all">Tất cả khách hàng</option>
@@ -1285,9 +1284,9 @@ function Tasks() {
         </select>
         <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}>
           <option value="all">Tất cả ưu tiên</option>
-          <option value="Cao">Cao</option>
-          <option value="Trung bình">Trung bình</option>
-          <option value="Thấp">Thấp</option>
+          <option value="high">Cao</option>
+          <option value="medium">Trung bình</option>
+          <option value="low">Thấp</option>
         </select>
       </div>
 
@@ -1308,7 +1307,7 @@ function Tasks() {
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>Việc cần làm</th><th>Khách hàng</th><th>Loại việc</th><th>Ưu tiên</th><th>Trạng thái</th></tr>
+              <tr><th>Việc cần làm</th><th>Khách hàng</th><th>Loại việc</th><th>Ưu tiên</th><th>Hạn</th><th>Trạng thái</th></tr>
             </thead>
             <tbody>
               {filtered.map((t) => (
@@ -1319,7 +1318,8 @@ function Tasks() {
                   </td>
                   <td>{clientMap[t.client_id]?.name || '—'}</td>
                   <td><span className="type-label">{TASK_TYPE_LABEL[t.task_type] || t.task_type}</span></td>
-                  <td><span className={`priority ${t.priority === 'Cao' ? 'high' : ''}`}>{t.priority}</span></td>
+                  <td><span className={`priority ${t.priority === 'high' ? 'high' : ''}`}>{PRIORITY_LABEL[t.priority] || t.priority}</span></td>
+                  <td className="muted-cell">{t.due_date || '—'}</td>
                   <td>
                     <button
                       className="icon-button"

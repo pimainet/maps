@@ -156,6 +156,7 @@ export async function createTasks(
     description?: string
     task_type: string
     priority?: string
+    due_date?: string
   }>
 ) {
   const rows = items.map((item) => ({
@@ -165,7 +166,8 @@ export async function createTasks(
     title: item.title,
     description: item.description ?? null,
     task_type: item.task_type,
-    priority: item.priority ?? 'Trung bình',
+    priority: item.priority ?? 'medium',
+    due_date: item.due_date ?? null,
     status: 'pending',
   }))
 
