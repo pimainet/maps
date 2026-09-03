@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { askClaude } from '@/lib/claude'
-import { savePlan, getLatestPlanByClient } from '@/lib/db'
+import { savePlan, getLatestPlanByClient, getAllPlans } from '@/lib/db'
 import { PLAN_30_DAYS_PROMPT } from '@/lib/prompts'
 
 export async function GET(req: Request) {
@@ -8,7 +8,8 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url)
     const clientId = searchParams.get('client_id')
     if (!clientId) {
-      return NextResponse.json({ error: 'Thiếu client_id' }, { status: 400 })
+      const all = await getAllPlans()
+      return NextResponse.json(all)
     }
     const data = await getLatestPlanByClient(clientId)
     return NextResponse.json(data)

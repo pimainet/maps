@@ -82,6 +82,16 @@ export async function getLatestAuditByClient(clientId: string) {
   return data
 }
 
+export async function getAllAudits() {
+  const { data, error } = await supabase
+    .from('audits')
+    .select('id, client_id, created_at')
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return data
+}
+
 // ── Plans ───────────────────────────────────────────────────────────
 
 export async function savePlan(input: {
@@ -117,6 +127,16 @@ export async function getLatestPlanByClient(clientId: string) {
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
+
+  if (error) throw error
+  return data
+}
+
+export async function getAllPlans() {
+  const { data, error } = await supabase
+    .from('plans')
+    .select('id, client_id, created_at, status')
+    .order('created_at', { ascending: false })
 
   if (error) throw error
   return data

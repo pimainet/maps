@@ -4,16 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { Activity, ArrowUpRight, BarChart3, Bell, BriefcaseBusiness, CalendarDays, Check, ChevronDown, CircleHelp, ClipboardCheck, FileText, Gauge, LayoutDashboard, Menu, MoreHorizontal, Plus, Search, Settings, Sparkles, Target, Users, X } from 'lucide-react'
 
-const clients = [
-  { name: 'Nha khoa Tâm An', industry: 'Nha khoa', area: 'Quận 3, TP.HCM', status: 'active', stage: 'Đang chạy plan', update: '12 phút trước', score: 82, initials: 'TA', color: 'bg-primary' },
-  { name: 'Lumière Clinic', industry: 'Thẩm mỹ', area: 'Hải Châu, Đà Nẵng', status: 'active', stage: 'Cần duyệt bài', update: '2 giờ trước', score: 74, initials: 'LC', color: 'bg-accent' },
-  { name: 'Phòng khám An Khang', industry: 'Phòng khám', area: 'Cầu Giấy, Hà Nội', status: 'paused', stage: 'Cần audit lại', update: '3 ngày trước', score: 68, initials: 'AK', color: 'bg-chart-3' },
-]
-const contents = [
-  { topic: '5 dấu hiệu cần lấy cao răng định kỳ', client: 'Nha khoa Tâm An', date: '18/06/2025', status: 'waiting_approval', goal: 'Tăng lượt gọi' },
-  { topic: 'Chăm sóc da sau liệu trình laser', client: 'Lumière Clinic', date: '19/06/2025', status: 'drafted', goal: 'Tăng nhận diện' },
-  { topic: 'Khi nào nên khám sức khỏe tổng quát?', client: 'Phòng khám An Khang', date: '21/06/2025', status: 'approved', goal: 'Tăng truy cập' },
-]
+
 
 
 const statusMap: Record<string, { label: string; className: string }> = {
@@ -34,15 +25,173 @@ function Metric({ icon: Icon, label, value, note, tone = 'blue' }: any) { return
 
 export default function Page() {
   const routerPath = usePathname(); const [pathname, setPathname] = useState(routerPath); const [mobileOpen, setMobileOpen] = useState(false); const [toast, setToast] = useState(''); const [query, setQuery] = useState('');
+  const [clientName, setClientName] = useState('')
+  const [pendingCount, setPendingCount] = useState<number | null>(null)
   useEffect(() => { setPathname(routerPath) }, [routerPath]);
   const navigate = (path: string) => { window.history.pushState({}, '', path); setPathname(path); setMobileOpen(false) }
   const page = pathname.startsWith('/clients/new') ? 'new-client' : pathname.startsWith('/clients/') ? pathname.includes('/audit') ? 'audit' : pathname.includes('/plan') ? 'plan' : 'client-detail' : pathname.startsWith('/clients') ? 'clients' : pathname.startsWith('/tasks') ? 'tasks' : pathname.startsWith('/contents/') ? 'content-detail' : pathname.startsWith('/contents') ? 'contents' : pathname.startsWith('/settings') ? 'settings' : 'dashboard'
-  const title = page === 'dashboard' ? 'Tổng quan' : page === 'clients' ? 'Khách hàng' : page === 'tasks' ? 'Công việc' : page === 'contents' ? 'Nội dung' : page === 'settings' ? 'Cài đặt' : page === 'new-client' ? 'Thêm khách hàng' : page === 'client-detail' ? 'Nha khoa Tâm An' : page === 'audit' ? 'Audit Google Business Profile' : page === 'plan' ? 'Lộ trình 30 ngày' : 'Duyệt nội dung'
-  return <div className="app-shell"><aside className={`sidebar ${mobileOpen ? 'open' : ''}`}><div className="brand"><div className="brand-mark"><Sparkles size={16} /></div><span>local growth <strong>os</strong></span><button className="close-mobile" onClick={() => setMobileOpen(false)}><X size={18} /></button></div><div className="workspace"><div className="workspace-avatar">LG</div><div><p className="workspace-name">Growth Studio</p><p className="workspace-plan">Agency workspace</p></div><ChevronDown size={15} /></div><nav><p className="nav-label">Làm việc hôm nay</p><NavItem icon={LayoutDashboard} label="Tổng quan" active={page === 'dashboard'} onClick={() => navigate('/')} /><NavItem icon={Users} label="Khách hàng" active={['clients','new-client','client-detail','audit','plan'].includes(page)} onClick={() => navigate('/clients')} /><NavItem icon={ClipboardCheck} label="Việc cần làm" active={page === 'tasks'} onClick={() => navigate('/tasks')} /><NavItem icon={FileText} label="Nội dung" active={['contents','content-detail'].includes(page)} count="3" onClick={() => navigate('/contents')} /><p className="nav-label secondary">Hệ thống</p><NavItem icon={Settings} label="Cài đặt" active={page === 'settings'} onClick={() => navigate('/settings')} /></nav><div className="sidebar-footer"><div className="help-card"><CircleHelp size={17} /><div><strong>Cần trợ giúp?</strong><span>Xem hướng dẫn sử dụng</span></div></div><div className="user-row"><div className="user-avatar">HN</div><div><strong>Hải Nguyễn</strong><span>Admin</span></div><MoreHorizontal size={17} /></div></div></aside>{mobileOpen && <div className="mobile-overlay" onClick={() => setMobileOpen(false)} />}
-    <main className="main"><header className="topbar"><button className="mobile-menu" onClick={() => setMobileOpen(true)}><Menu size={20} /></button><div className="breadcrumbs"><span>Workspace</span><span>/</span><strong>{title}</strong></div><div className="top-actions"><div className="top-search"><Search size={16} /><input placeholder="Tìm kiếm..." /><kbd>⌘ K</kbd></div><button className="icon-button" aria-label="Thông báo"><Bell size={18} /><i /></button><div className="mini-avatar">HN</div></div></header><div className="content"><div className="page-heading"><div><p className="overline">Thứ Tư, 18 tháng 6, 2025</p><h1>{title}</h1><p className="subheading">Theo dõi và điều phối toàn bộ chu kỳ Local SEO của bạn.</p></div>{page === 'dashboard' && <button className="primary-button" onClick={() => navigate('/clients/new')}><Plus size={17} />Thêm khách hàng</button>}{page === 'clients' && <button className="primary-button" onClick={() => navigate('/clients/new')}><Plus size={17} />Thêm khách hàng</button>}</div>{page === 'dashboard' && <Dashboard navigate={navigate} setToast={setToast} />}{page === 'clients' && <Clients navigate={navigate} query={query} setQuery={setQuery} />}{page === 'new-client' && <NewClient navigate={navigate} setToast={setToast} />}{page === 'client-detail' && <ClientDetailAction navigate={navigate} setToast={setToast} />}{page === 'audit' && <Audit navigate={navigate} setToast={setToast} />}{page === 'plan' && <Plan setToast={setToast} />}{page === 'tasks' && <Tasks />}{page === 'contents' && <Contents navigate={navigate} setToast={setToast} />}{page === 'content-detail' && <ContentDetail setToast={setToast} />}{page === 'settings' && <SettingsView />}</div>{toast && <div className="toast"><Check size={16} />{toast}<button onClick={() => setToast('')}><X size={14} /></button></div>}</main></div>
+
+  useEffect(() => {
+    if (page !== 'client-detail' && page !== 'audit' && page !== 'plan') return
+    const id = pathname.split('/clients/')[1]?.split('/')[0]
+    if (!id) return
+    fetch('/api/clients')
+      .then((r) => r.json())
+      .then((data) => {
+        const found = (Array.isArray(data) ? data : []).find((c: any) => c.id === id)
+        setClientName(found?.name || '')
+      })
+      .catch(() => {})
+  }, [page, pathname])
+
+  useEffect(() => {
+    fetch('/api/content')
+      .then((r) => r.json())
+      .then((data) => {
+        const list = Array.isArray(data) ? data : []
+        setPendingCount(list.filter((c: any) => c.status === 'waiting_approval').length)
+      })
+      .catch(() => setPendingCount(null))
+  }, [pathname])
+
+  const today = new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
+
+  const title = page === 'dashboard' ? 'Tổng quan' : page === 'clients' ? 'Khách hàng' : page === 'tasks' ? 'Công việc' : page === 'contents' ? 'Nội dung' : page === 'settings' ? 'Cài đặt' : page === 'new-client' ? 'Thêm khách hàng' : page === 'client-detail' ? (clientName || 'Chi tiết khách hàng') : page === 'audit' ? 'Audit Google Business Profile' : page === 'plan' ? 'Lộ trình 30 ngày' : 'Duyệt nội dung'
+  return <div className="app-shell"><aside className={`sidebar ${mobileOpen ? 'open' : ''}`}><div className="brand"><div className="brand-mark"><Sparkles size={16} /></div><span>local growth <strong>os</strong></span><button className="close-mobile" onClick={() => setMobileOpen(false)}><X size={18} /></button></div><div className="workspace"><div className="workspace-avatar">LG</div><div><p className="workspace-name">Growth Studio</p><p className="workspace-plan">Agency workspace</p></div><ChevronDown size={15} /></div><nav><p className="nav-label">Làm việc hôm nay</p><NavItem icon={LayoutDashboard} label="Tổng quan" active={page === 'dashboard'} onClick={() => navigate('/')} /><NavItem icon={Users} label="Khách hàng" active={['clients','new-client','client-detail','audit','plan'].includes(page)} onClick={() => navigate('/clients')} /><NavItem icon={ClipboardCheck} label="Việc cần làm" active={page === 'tasks'} onClick={() => navigate('/tasks')} /><NavItem icon={FileText} label="Nội dung" active={['contents','content-detail'].includes(page)} count={pendingCount ? String(pendingCount) : undefined} onClick={() => navigate('/contents')} /><p className="nav-label secondary">Hệ thống</p><NavItem icon={Settings} label="Cài đặt" active={page === 'settings'} onClick={() => navigate('/settings')} /></nav><div className="sidebar-footer"><div className="help-card"><CircleHelp size={17} /><div><strong>Cần trợ giúp?</strong><span>Xem hướng dẫn sử dụng</span></div></div><div className="user-row"><div className="user-avatar">HN</div><div><strong>Hải Nguyễn</strong><span>Admin</span></div><MoreHorizontal size={17} /></div></div></aside>{mobileOpen && <div className="mobile-overlay" onClick={() => setMobileOpen(false)} />}
+    <main className="main"><header className="topbar"><button className="mobile-menu" onClick={() => setMobileOpen(true)}><Menu size={20} /></button><div className="breadcrumbs"><span>Workspace</span><span>/</span><strong>{title}</strong></div><div className="top-actions"><div className="top-search"><Search size={16} /><input placeholder="Tìm kiếm..." /><kbd>⌘ K</kbd></div><button className="icon-button" aria-label="Thông báo"><Bell size={18} /><i /></button><div className="mini-avatar">HN</div></div></header><div className="content"><div className="page-heading"><div><p className="overline">{today}</p><h1>{title}</h1><p className="subheading">Theo dõi và điều phối toàn bộ chu kỳ Local SEO của bạn.</p></div>{page === 'dashboard' && <button className="primary-button" onClick={() => navigate('/clients/new')}><Plus size={17} />Thêm khách hàng</button>}{page === 'clients' && <button className="primary-button" onClick={() => navigate('/clients/new')}><Plus size={17} />Thêm khách hàng</button>}</div>{page === 'dashboard' && <Dashboard navigate={navigate} setToast={setToast} />}{page === 'clients' && <Clients navigate={navigate} query={query} setQuery={setQuery} />}{page === 'new-client' && <NewClient navigate={navigate} setToast={setToast} />}{page === 'client-detail' && <ClientDetailAction navigate={navigate} setToast={setToast} />}{page === 'audit' && <Audit navigate={navigate} setToast={setToast} />}{page === 'plan' && <Plan setToast={setToast} />}{page === 'tasks' && <Tasks />}{page === 'contents' && <Contents navigate={navigate} setToast={setToast} />}{page === 'content-detail' && <ContentDetail setToast={setToast} />}{page === 'settings' && <SettingsView />}</div>{toast && <div className="toast"><Check size={16} />{toast}<button onClick={() => setToast('')}><X size={14} /></button></div>}</main></div>
 }
 function NavItem({ icon: Icon, label, active, onClick, count }: any) { return <button className={`nav-item ${active ? 'active' : ''}`} onClick={onClick}><Icon size={18} /><span>{label}</span>{count && <b>{count}</b>}</button> }
-function Dashboard({ navigate, setToast }: any) { return <><div className="metrics-grid"><Metric icon={Users} label="Tổng khách hàng" value="12" note="↑ 2 khách hàng tháng này" /><Metric icon={Activity} label="Đang chạy lộ trình" value="8" note="66,7% tổng khách hàng" tone="green" /><Metric icon={FileText} label="Bài viết chờ duyệt" value="7" note="Cần xử lý trong tuần này" tone="orange" /><Metric icon={CalendarDays} label="Cần audit lại" value="2" note="Chu kỳ đã hoàn tất" tone="red" /></div><div className="grid-2"><Card><div className="section-head"><div><h2>Khách hàng gần đây</h2><p>Trạng thái hoạt động mới nhất</p></div><button className="text-button" onClick={() => navigate('/clients')}>Xem tất cả <ArrowUpRight size={15} /></button></div><div className="client-list">{clients.map(c => <button className="client-row" key={c.name} onClick={() => navigate('/clients/1')}><div className={`client-avatar ${c.color}`}>{c.initials}</div><div className="row-main"><strong>{c.name}</strong><span>{c.industry} · {c.area}</span></div><Badge status={c.status} /><span className="row-time">{c.update}</span><ArrowUpRight size={15} /></button>)}</div></Card><Card><div className="section-head"><div><h2>Cần duyệt nội dung</h2><p>Những bài viết cần bạn xem qua</p></div><button className="text-button" onClick={() => navigate('/contents')}>Xem tất cả <ArrowUpRight size={15} /></button></div><div className="approval-list">{contents.slice(0, 3).map(c => <button className="approval-row" key={c.topic} onClick={() => navigate('/contents/1')}><div className="doc-icon"><FileText size={16} /></div><div className="row-main"><strong>{c.topic}</strong><span>{c.client} · {c.date}</span></div><Badge status={c.status} /></button>)}</div></Card></div><Card className="workflow-card"><div className="section-head"><div><h2>Chu kỳ Local SEO</h2><p>Quy trình rõ ràng, kết quả đo được</p></div><button className="secondary-button" onClick={() => setToast('Đã mở hướng dẫn quy trình')}><CircleHelp size={16} />Tìm hiểu quy trình</button></div><div className="workflow"><Step icon={ClipboardCheck} label="Audit GBP" done /><Step icon={Target} label="Lộ trình 30 ngày" done /><Step icon={Sparkles} label="Sinh nội dung" active /><Step icon={Check} label="Duyệt & đăng" /><Step icon={BarChart3} label="Đo lường & audit lại" /></div></Card></> }
+function Dashboard({ navigate, setToast }: any) {
+  const [clientsData, setClientsData] = useState<any[]>([])
+  const [contentsData, setContentsData] = useState<any[]>([])
+  const [plansData, setPlansData] = useState<any[]>([])
+  const [auditsData, setAuditsData] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const [c, ct, p, a] = await Promise.all([
+          fetch('/api/clients').then((r) => r.json()),
+          fetch('/api/content').then((r) => r.json()),
+          fetch('/api/plan').then((r) => r.json()),
+          fetch('/api/audit').then((r) => r.json()),
+        ])
+        setClientsData(Array.isArray(c) ? c : [])
+        setContentsData(Array.isArray(ct) ? ct : [])
+        setPlansData(Array.isArray(p) ? p : [])
+        setAuditsData(Array.isArray(a) ? a : [])
+      } catch {
+        // Dashboard không chặn app nếu 1 API lỗi — chỉ hiện số 0
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  const totalClients = clientsData.length
+
+  const clientsWithPlan = new Set(plansData.map((p) => p.client_id)).size
+
+  const waitingApproval = contentsData.filter((c) => c.status === 'waiting_approval').length
+
+  const latestAuditByClient: Record<string, string> = {}
+  auditsData.forEach((a) => {
+    if (!latestAuditByClient[a.client_id]) latestAuditByClient[a.client_id] = a.created_at
+  })
+  const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000
+  const needsAudit = clientsData.filter((c) => {
+    const last = latestAuditByClient[c.id]
+    if (!last) return true
+    return Date.now() - new Date(last).getTime() > THIRTY_DAYS
+  }).length
+
+  const recentClients = [...clientsData]
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 3)
+
+  const clientMap: Record<string, any> = {}
+  clientsData.forEach((c) => { clientMap[c.id] = c })
+
+  const recentWaitingContent = contentsData
+    .filter((c) => c.status === 'waiting_approval')
+    .slice(0, 3)
+
+  return (
+    <>
+      <div className="metrics-grid">
+        <Metric icon={Users} label="Tổng khách hàng" value={loading ? '—' : String(totalClients)} note="Trong hệ thống" />
+        <Metric icon={Activity} label="Đang chạy lộ trình" value={loading ? '—' : String(clientsWithPlan)} note={loading || totalClients === 0 ? '—' : `${Math.round((clientsWithPlan / totalClients) * 100)}% tổng khách hàng`} tone="green" />
+        <Metric icon={FileText} label="Bài viết chờ duyệt" value={loading ? '—' : String(waitingApproval)} note="Cần xử lý" tone="orange" />
+        <Metric icon={CalendarDays} label="Cần audit lại" value={loading ? '—' : String(needsAudit)} note="Chưa audit hoặc > 30 ngày" tone="red" />
+      </div>
+
+      <div className="grid-2">
+        <Card>
+          <div className="section-head">
+            <div><h2>Khách hàng gần đây</h2><p>Thêm mới gần nhất</p></div>
+            <button className="text-button" onClick={() => navigate('/clients')}>Xem tất cả <ArrowUpRight size={15} /></button>
+          </div>
+          <div className="client-list">
+            {!loading && recentClients.length === 0 && (
+              <div style={{ padding: 24, textAlign: 'center', color: '#6b7280' }}>
+                Chưa có khách hàng nào. <button className="text-button" onClick={() => navigate('/clients/new')}>Thêm khách hàng đầu tiên</button>
+              </div>
+            )}
+            {recentClients.map((c) => (
+              <button className="client-row" key={c.id} onClick={() => navigate(`/clients/${c.id}`)}>
+                <div className="client-avatar bg-primary">{(c.name || '?').substring(0, 2).toUpperCase()}</div>
+                <div className="row-main">
+                  <strong>{c.name}</strong>
+                  <span>{[c.industry, c.area].filter(Boolean).join(' · ') || 'Chưa có thông tin'}</span>
+                </div>
+                <ArrowUpRight size={15} />
+              </button>
+            ))}
+          </div>
+        </Card>
+
+        <Card>
+          <div className="section-head">
+            <div><h2>Cần duyệt nội dung</h2><p>Những bài viết cần bạn xem qua</p></div>
+            <button className="text-button" onClick={() => navigate('/contents')}>Xem tất cả <ArrowUpRight size={15} /></button>
+          </div>
+          <div className="approval-list">
+            {!loading && recentWaitingContent.length === 0 && (
+              <div style={{ padding: 24, textAlign: 'center', color: '#6b7280' }}>
+                Chưa có bài viết nào chờ duyệt.
+              </div>
+            )}
+            {recentWaitingContent.map((c) => (
+              <button className="approval-row" key={c.id} onClick={() => navigate(`/contents/${c.id}`)}>
+                <div className="doc-icon"><FileText size={16} /></div>
+                <div className="row-main">
+                  <strong>{c.topic}</strong>
+                  <span>{clientMap[c.client_id]?.name || '—'}</span>
+                </div>
+                <Badge status={c.status} />
+              </button>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      <Card className="workflow-card">
+        <div className="section-head">
+          <div><h2>Chu kỳ Local SEO</h2><p>Quy trình chuẩn của hệ thống — không gắn với 1 khách hàng cụ thể</p></div>
+        </div>
+        <div className="workflow">
+          <Step icon={ClipboardCheck} label="Audit GBP" />
+          <Step icon={Target} label="Lộ trình 30 ngày" />
+          <Step icon={Sparkles} label="Sinh nội dung" />
+          <Step icon={Check} label="Duyệt & đăng" />
+          <Step icon={BarChart3} label="Đo lường & audit lại" />
+        </div>
+      </Card>
+    </>
+  )
+}
 function Step({ icon: Icon, label, done, active }: any) { return <div className={`step ${done ? 'done' : ''} ${active ? 'current' : ''}`}><div className="step-icon">{done ? <Check size={16} /> : <Icon size={16} />}</div><span>{label}</span></div> }
 function Clients({ navigate, query, setQuery }: any) {
   const [realClients, setRealClients] = useState<any[]>([])
@@ -312,7 +461,8 @@ function ClientDetailAction({ navigate, setToast }: any) {
   const [client, setClient] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [done, setDone] = useState<string[]>([])
+  const [pendingTasks, setPendingTasks] = useState<any[]>([])
+  const [updatingId, setUpdatingId] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -329,6 +479,16 @@ function ClientDetailAction({ navigate, setToast }: any) {
         if (!found) throw new Error('Không tìm thấy khách hàng')
 
         setClient(found)
+
+        try {
+          const taskRes = await fetch(`/api/tasks?client_id=${id}`)
+          const taskData = await taskRes.json()
+          if (taskRes.ok) {
+            setPendingTasks((Array.isArray(taskData) ? taskData : []).filter((t: any) => (t.status || 'pending') === 'pending'))
+          }
+        } catch {
+          // Không chặn trang chi tiết nếu tải việc lỗi
+        }
       } catch (err: any) {
         setError(err.message || 'Có lỗi xảy ra')
       } finally {
@@ -338,11 +498,23 @@ function ClientDetailAction({ navigate, setToast }: any) {
     load()
   }, [])
 
-  const toggleTask = (task: string) => {
-    setDone((current) =>
-      current.includes(task) ? current.filter((item) => item !== task) : [...current, task]
-    )
-    setToast(done.includes(task) ? 'Đã mở lại công việc' : 'Đã hoàn thành công việc')
+  async function markDone(taskId: string) {
+    setUpdatingId(taskId)
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'done' }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Cập nhật thất bại')
+      setPendingTasks((prev) => prev.filter((t) => t.id !== taskId))
+      setToast('Đã hoàn thành công việc')
+    } catch (err: any) {
+      setToast(err.message || 'Có lỗi xảy ra')
+    } finally {
+      setUpdatingId(null)
+    }
   }
 
   if (loading) {
@@ -375,7 +547,6 @@ function ClientDetailAction({ navigate, setToast }: any) {
           <div>
             <div className="title-line">
               <h2>{client.name}</h2>
-              <Badge status="active" />
             </div>
             <p>
               {[client.industry, client.area].filter(Boolean).join(' · ') || 'Chưa có ngành / khu vực'}
@@ -383,12 +554,6 @@ function ClientDetailAction({ navigate, setToast }: any) {
           </div>
         </div>
         <div className="hero-actions">
-          <button
-            className="secondary-button"
-            onClick={() => setToast('Đã gửi yêu cầu cập nhật thông tin GBP')}
-          >
-            <Sparkles size={16} /> Cập nhật GBP
-          </button>
           <button
             className="secondary-button"
             onClick={() => navigate(`/clients/${client.id}/audit`)}
@@ -409,37 +574,35 @@ function ClientDetailAction({ navigate, setToast }: any) {
           <div className="section-head">
             <div>
               <p className="overline">Việc tiếp theo</p>
-              <h2>Hoàn thiện tuần 3</h2>
-              <p>3 việc đang chờ để giữ đúng nhịp tăng trưởng.</p>
+              <h2>Việc đang chờ</h2>
+              <p>Các việc chưa hoàn thành của khách hàng này.</p>
             </div>
             <span className="action-count">
-              {3 - done.length}
+              {pendingTasks.length}
               <small>còn lại</small>
             </span>
           </div>
           <div className="task-checklist">
-            {['Duyệt 3 bài GBP tuần 3', 'Bổ sung ảnh dịch vụ niềng răng', 'Phản hồi 6 đánh giá mới'].map(
-              (task, index) => (
-                <button
-                  className={`check-task ${done.includes(task) ? 'completed' : ''}`}
-                  key={task}
-                  onClick={() => toggleTask(task)}
-                >
-                  <span className="check-box">{done.includes(task) && <Check size={13} />}</span>
-                  <span>
-                    <strong>{task}</strong>
-                    <small>
-                      {index === 0
-                        ? 'Nội dung · Hạn hôm nay'
-                        : index === 1
-                        ? 'GBP · Hạn ngày mai'
-                        : 'Tương tác · Hạn 20/06'}
-                    </small>
-                  </span>
-                  <ArrowUpRight size={15} />
-                </button>
-              )
+            {pendingTasks.length === 0 && (
+              <div style={{ padding: 16, textAlign: 'center', color: '#6b7280' }}>
+                Không còn việc nào đang chờ. Vào trang Lộ trình để sinh thêm việc mới.
+              </div>
             )}
+            {pendingTasks.slice(0, 5).map((task) => (
+              <button
+                className="check-task"
+                key={task.id}
+                disabled={updatingId === task.id}
+                onClick={() => markDone(task.id)}
+              >
+                <span className="check-box" />
+                <span>
+                  <strong>{task.title}</strong>
+                  <small>{TASK_TYPE_LABEL[task.task_type] || task.task_type} · Ưu tiên {task.priority}</small>
+                </span>
+                <ArrowUpRight size={15} />
+              </button>
+            ))}
           </div>
           <button className="primary-button full" onClick={() => navigate('/tasks')}>
             <ClipboardCheck size={16} /> Mở tất cả công việc
@@ -459,22 +622,6 @@ function ClientDetailAction({ navigate, setToast }: any) {
               <span>
                 <strong>Duyệt nội dung</strong>
                 <small>Xem bài đang chờ</small>
-              </span>
-              <ArrowUpRight size={15} />
-            </button>
-            <button onClick={() => setToast('Đã mở biểu mẫu ghi chú cuộc gọi')}>
-              <BriefcaseBusiness size={18} />
-              <span>
-                <strong>Ghi chú cuộc gọi</strong>
-                <small>Cập nhật thông tin khách hàng</small>
-              </span>
-              <ArrowUpRight size={15} />
-            </button>
-            <button onClick={() => setToast('Đã tạo báo cáo tháng')}>
-              <BarChart3 size={18} />
-              <span>
-                <strong>Tạo báo cáo tháng</strong>
-                <small>Xuất kết quả</small>
               </span>
               <ArrowUpRight size={15} />
             </button>

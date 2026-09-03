@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { askClaude } from '@/lib/claude'
-import { saveAudit, getLatestAuditByClient } from '@/lib/db'
+import { saveAudit, getLatestAuditByClient, getAllAudits } from '@/lib/db'
 import { AUDIT_PROMPT } from '@/lib/prompts'
 
 export async function GET(req: Request) {
@@ -8,7 +8,8 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url)
     const clientId = searchParams.get('client_id')
     if (!clientId) {
-      return NextResponse.json({ error: 'Thiếu client_id' }, { status: 400 })
+      const all = await getAllAudits()
+      return NextResponse.json(all)
     }
     const data = await getLatestAuditByClient(clientId)
     return NextResponse.json(data)
