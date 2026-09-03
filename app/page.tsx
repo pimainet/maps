@@ -11,6 +11,8 @@ const statusMap: Record<string, { label: string; className: string }> = {
   active: { label: 'Đang hoạt động', className: 'status-success' }, paused: { label: 'Tạm dừng', className: 'status-warning' }, stopped: { label: 'Đã dừng', className: 'status-muted' }, waiting_approval: { label: 'Chờ duyệt', className: 'status-warning' }, drafted: { label: 'Bản nháp', className: 'status-info' }, approved: { label: 'Đã duyệt', className: 'status-success' }, published: { label: 'Đã đăng', className: 'status-success' }, idea: { label: 'Ý tưởng', className: 'status-muted' }, pending: { label: 'Đang chờ', className: 'status-warning' }, done: { label: 'Hoàn thành', className: 'status-success' }, skipped: { label: 'Bỏ qua', className: 'status-muted' },
 }
 
+const PRESET_LANGUAGES = ['Tiếng Việt', 'English', '日本語', '한국어', 'ภาษาไทย', 'Bahasa Indonesia', '中文']
+
 const TASK_TYPE_LABEL: Record<string, string> = {
   content: 'Nội dung',
   profile_update: 'Hồ sơ GBP',
@@ -688,6 +690,7 @@ function Audit({ navigate, setToast }: any) {
   const [result, setResult] = useState<string | null>(null)
 
   const [form, setForm] = useState({
+    output_language: 'Tiếng Việt',
     description: '',
     primary_category: '',
     additional_categories: '',
@@ -793,6 +796,28 @@ function Audit({ navigate, setToast }: any) {
             <p>Điền thêm thông tin GBP để AI phân tích chính xác hơn.</p>
           </div>
         </div>
+
+        <label className="field">
+          <span>Ngôn ngữ đầu ra</span>
+          <select
+            value={PRESET_LANGUAGES.includes(form.output_language) ? form.output_language : 'custom'}
+            onChange={(e) => update('output_language', e.target.value === 'custom' ? '' : e.target.value)}
+          >
+            {PRESET_LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
+            <option value="custom">Khác (tự nhập)...</option>
+          </select>
+          {!PRESET_LANGUAGES.includes(form.output_language) && (
+            <input
+              style={{ marginTop: 8 }}
+              value={form.output_language}
+              onChange={(e) => update('output_language', e.target.value)}
+              placeholder="Nhập tên ngôn ngữ, ví dụ: Tiếng Séc, Tiếng Đức, Tiếng Ả Rập..."
+            />
+          )}
+          <small style={{ color: '#6b7280', fontSize: 12 }}>
+            AI có thể viết hầu hết ngôn ngữ phổ biến — không giới hạn ở danh sách trên. Áp dụng cho toàn bộ chu kỳ: Audit → Lộ trình → Việc cần làm → Bài viết.
+          </small>
+        </label>
 
         <label className="field">
           <span>Mô tả hiện tại trên GBP</span>

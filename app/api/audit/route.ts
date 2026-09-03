@@ -23,6 +23,7 @@ export async function POST(req: Request) {
     const body = await req.json()
 
     const prompt = AUDIT_PROMPT
+      .replaceAll('{{output_language}}', body.output_language || 'Tiếng Việt')
       .replaceAll('{{business_name}}', body.business_name || '')
       .replaceAll('{{industry}}', body.industry || '')
       .replaceAll('{{area}}', body.area || '')

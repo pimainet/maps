@@ -5,6 +5,8 @@ Bạn là chuyên gia Local SEO thực chiến, chuyên đánh giá Google Busin
 
 Nhiệm vụ: Đánh giá tổng thể Google Business Profile dựa trên thông tin được cung cấp. Nếu thông tin nào không được cung cấp, phải ghi rõ là “Chưa đủ dữ liệu để đánh giá”.
 
+NGÔN NGỮ ĐẦU RA: {{output_language}}. Viết TOÀN BỘ kết quả (kể cả tiêu đề mục) bằng đúng ngôn ngữ này. Nếu để trống, mặc định dùng Tiếng Việt.
+
 Thông tin đầu vào:
 - Tên doanh nghiệp: {{business_name}}
 - Ngành nghề: {{industry}}
@@ -59,6 +61,8 @@ Yêu cầu bắt buộc:
 export const PLAN_30_DAYS_PROMPT = `
 Bạn là chuyên gia Local SEO thực chiến. Nhiệm vụ của bạn là chuyển kết quả Audit Google Business Profile thành kế hoạch 30 ngày cụ thể, khả thi và có trọng tâm rõ ràng.
 
+NGÔN NGỮ ĐẦU RA: viết TOÀN BỘ kế hoạch bằng đúng ngôn ngữ đang được dùng trong phần "Kết quả Audit" bên dưới. Không tự ý đổi sang ngôn ngữ khác.
+
 Thông tin đầu vào:
 - Tên doanh nghiệp: {{business_name}}
 - Ngành nghề: {{industry}}
@@ -107,6 +111,8 @@ Yêu cầu bắt buộc:
 export const TASKS_FROM_PLAN_PROMPT = `
 Bạn là chuyên gia Local SEO. Nhiệm vụ: chuyển Lộ trình 30 ngày thành một DANH SÁCH VIỆC CẦN LÀM cụ thể, bám sát các tuần và hoạt động đã đề xuất trong lộ trình.
 
+NGÔN NGỮ ĐẦU RA: viết TOÀN BỘ title/description bằng đúng ngôn ngữ đang được dùng trong phần "Lộ trình 30 ngày" bên dưới. Không tự ý đổi sang ngôn ngữ khác.
+
 Thông tin đầu vào:
 - Tên doanh nghiệp: {{business_name}}
 - Ngành nghề: {{industry}}
@@ -137,6 +143,8 @@ CHỈ trả về đúng một JSON array hợp lệ, không thêm chữ nào kh�
 export const SERP_AWARE_PROMPT = `
 Bạn là chuyên gia Local SEO thực chiến. Hãy phân tích nhanh trước khi viết nội dung Google Business Profile.
 
+NGÔN NGỮ ĐẦU RA: viết TOÀN BỘ phân tích bằng đúng ngôn ngữ đang được dùng ở "Chủ đề" bên dưới. Không tự ý đổi sang ngôn ngữ khác.
+
 Thông tin:
 - Ngành: {{industry}}
 - Khu vực: {{area}}
@@ -157,6 +165,8 @@ Yêu cầu: Phân tích ngắn gọn, thực tế, không viết bài, không b�
 
 export const WRITER_PROMPT = `
 Bạn là nhân viên Local SEO chuyên viết bài Google Business Profile.
+
+NGÔN NGỮ ĐẦU RA: viết TOÀN BỘ bài đăng bằng đúng ngôn ngữ đang được dùng ở "Chủ đề" bên dưới. Không tự ý đổi sang ngôn ngữ khác, kể cả khi tên doanh nghiệp hoặc thông tin khác dùng ngôn ngữ khác.
 
 Thông tin được phép dùng:
 - Tên doanh nghiệp: {{business_name}}
@@ -192,6 +202,8 @@ Chỉ trả về nội dung bài viết.
 export const CRITIC_PROMPT = `
 Bạn là Critic nội dung Local SEO. Hãy đánh giá bài viết Google Business Profile một cách thẳng thắn.
 
+NGÔN NGỮ ĐẦU RA: viết nhận xét bằng đúng ngôn ngữ của "Bài viết" bên dưới.
+
 Tiêu chí chấm điểm (thang 10):
 1. Yếu tố địa phương
 2. Sự tự nhiên & giọng văn
@@ -217,6 +229,8 @@ Bài viết:
 
 export const REFINER_PROMPT = `
 Bạn là người hoàn thiện bài viết Google Business Profile.
+
+NGÔN NGỮ ĐẦU RA: viết bản cuối bằng đúng ngôn ngữ của "Bản nháp" bên dưới. Không tự ý đổi sang ngôn ngữ khác.
 
 Bản nháp:
 {{ai_content}}
