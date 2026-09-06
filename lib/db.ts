@@ -2,23 +2,29 @@ import { supabase } from './supabase'
 
 // ── Clients ─────────────────────────────────────────────────────────
 
-export async function getClients() {
-  const { data, error } = await supabase
+export async function getClients(workspaceId?: string) {
+  let query = supabase
     .from('clients')
     .select('*')
     .order('created_at', { ascending: false })
 
+  if (workspaceId) {
+    query = query.eq('workspace_id', workspaceId)
+  }
+
+  const { data, error } = await query
   if (error) throw error
   return data
 }
 
-export async function getClientById(id: string) {
-  const { data, error } = await supabase
-    .from('clients')
-    .select('*')
-    .eq('id', id)
-    .single()
+export async function getClientById(id: string, workspaceId?: string) {
+  let query = supabase.from('clients').select('*').eq('id', id)
 
+  if (workspaceId) {
+    query = query.eq('workspace_id', workspaceId)
+  }
+
+  const { data, error } = await query.single()
   if (error) throw error
   return data
 }
@@ -33,6 +39,7 @@ export async function createClient(client: {
   gbp_link?: string
   website_url?: string
   notes?: string
+  workspace_id: string
 }) {
   const { data, error } = await supabase
     .from('clients')
@@ -51,6 +58,7 @@ export async function saveAudit(input: {
   audit_result: string
   raw_input?: any
   score_overview?: number
+  workspace_id: string
 }) {
   const { data, error } = await supabase
     .from('audits')
@@ -61,6 +69,7 @@ export async function saveAudit(input: {
       score_overview: input.score_overview ?? null,
       module_key: 'maps_seo',
       status: 'finalized',
+      workspace_id: input.workspace_id,
     })
     .select()
     .single()
@@ -69,25 +78,34 @@ export async function saveAudit(input: {
   return data
 }
 
-export async function getLatestAuditByClient(clientId: string) {
-  const { data, error } = await supabase
+export async function getLatestAuditByClient(clientId: string, workspaceId?: string) {
+  let query = supabase
     .from('audits')
     .select('*')
     .eq('client_id', clientId)
     .order('created_at', { ascending: false })
     .limit(1)
-    .maybeSingle()
 
+  if (workspaceId) {
+    query = query.eq('workspace_id', workspaceId)
+  }
+
+  const { data, error } = await query.maybeSingle()
   if (error) throw error
   return data
 }
 
-export async function getAllAudits() {
-  const { data, error } = await supabase
+export async function getAllAudits(workspaceId?: string) {
+  let query = supabase
     .from('audits')
-    .select('id, client_id, created_at')
+    .select('id, client_id, created_at, workspace_id')
     .order('created_at', { ascending: false })
 
+  if (workspaceId) {
+    query = query.eq('workspace_id', workspaceId)
+  }
+
+  const { data, error } = await query
   if (error) throw error
   return data
 }
@@ -100,6 +118,7 @@ export async function savePlan(input: {
   plan_result: string
   start_date?: string
   end_date?: string
+  workspace_id: string
 }) {
   const { data, error } = await supabase
     .from('plans')
@@ -111,6 +130,7 @@ export async function savePlan(input: {
       end_date: input.end_date ?? null,
       module_key: 'maps_seo',
       status: 'draft',
+      workspace_id: input.workspace_id,
     })
     .select()
     .single()
@@ -119,25 +139,34 @@ export async function savePlan(input: {
   return data
 }
 
-export async function getLatestPlanByClient(clientId: string) {
-  const { data, error } = await supabase
+export async function getLatestPlanByClient(clientId: string, workspaceId?: string) {
+  let query = supabase
     .from('plans')
     .select('*')
     .eq('client_id', clientId)
     .order('created_at', { ascending: false })
     .limit(1)
-    .maybeSingle()
 
+  if (workspaceId) {
+    query = query.eq('workspace_id', workspaceId)
+  }
+
+  const { data, error } = await query.maybeSingle()
   if (error) throw error
   return data
 }
 
-export async function getAllPlans() {
-  const { data, error } = await supabase
+export async function getAllPlans(workspaceId?: string) {
+  let query = supabase
     .from('plans')
-    .select('id, client_id, created_at, status')
+    .select('id, client_id, created_at, status, workspace_id')
     .order('created_at', { ascending: false })
 
+  if (workspaceId) {
+    query = query.eq('workspace_id', workspaceId)
+  }
+
+  const { data, error } = await query
   if (error) throw error
   return data
 }
@@ -157,6 +186,7 @@ export async function createTasks(
     task_type: string
     priority?: string
     due_date?: string
+    workspace_id: string
   }>
 ) {
   const rows = items.map((item) => ({
@@ -169,6 +199,7 @@ export async function createTasks(
     priority: item.priority ?? 'medium',
     due_date: item.due_date ?? null,
     status: 'pending',
+    workspace_id: item.workspace_id,
   }))
 
   const { data, error } = await supabase.from('tasks').insert(rows).select()
@@ -177,7 +208,11 @@ export async function createTasks(
   return data
 }
 
-export async function getTasks(filters?: { clientId?: string; planId?: string }) {
+export async function getTasks(filters?: {
+  clientId?: string
+  planId?: string
+  workspaceId?: string
+}) {
   let query = supabase
     .from('tasks')
     .select('*')
@@ -185,19 +220,21 @@ export async function getTasks(filters?: { clientId?: string; planId?: string })
 
   if (filters?.clientId) query = query.eq('client_id', filters.clientId)
   if (filters?.planId) query = query.eq('plan_id', filters.planId)
+  if (filters?.workspaceId) query = query.eq('workspace_id', filters.workspaceId)
 
   const { data, error } = await query
   if (error) throw error
   return data
 }
 
-export async function getTaskById(id: string) {
-  const { data, error } = await supabase
-    .from('tasks')
-    .select('*')
-    .eq('id', id)
-    .single()
+export async function getTaskById(id: string, workspaceId?: string) {
+  let query = supabase.from('tasks').select('*').eq('id', id)
 
+  if (workspaceId) {
+    query = query.eq('workspace_id', workspaceId)
+  }
+
+  const { data, error } = await query.single()
   if (error) throw error
   return data
 }
@@ -225,6 +262,7 @@ export async function createContentForTask(task: {
   client_id: string
   plan_id?: string
   title: string
+  workspace_id: string
 }) {
   const { data, error } = await supabase
     .from('contents')
@@ -236,6 +274,7 @@ export async function createContentForTask(task: {
       channel: 'gbp_post',
       topic: task.title,
       status: 'drafted',
+      workspace_id: task.workspace_id,
     })
     .select()
     .single()
@@ -248,6 +287,7 @@ export async function createAdHocContent(input: {
   client_id: string
   plan_id?: string
   topic: string
+  workspace_id: string
 }) {
   const { data, error } = await supabase
     .from('contents')
@@ -259,6 +299,7 @@ export async function createAdHocContent(input: {
       channel: 'gbp_post',
       topic: input.topic,
       status: 'drafted',
+      workspace_id: input.workspace_id,
     })
     .select()
     .single()
@@ -278,7 +319,7 @@ export async function getContentByTaskId(taskId: string) {
   return data
 }
 
-export async function getContents(clientId?: string) {
+export async function getContents(clientId?: string, workspaceId?: string) {
   let query = supabase
     .from('contents')
     .select('*')
@@ -287,6 +328,9 @@ export async function getContents(clientId?: string) {
   if (clientId) {
     query = query.eq('client_id', clientId)
   }
+  if (workspaceId) {
+    query = query.eq('workspace_id', workspaceId)
+  }
 
   const { data, error } = await query
 
@@ -294,13 +338,14 @@ export async function getContents(clientId?: string) {
   return data
 }
 
-export async function getContentById(id: string) {
-  const { data, error } = await supabase
-    .from('contents')
-    .select('*')
-    .eq('id', id)
-    .single()
+export async function getContentById(id: string, workspaceId?: string) {
+  let query = supabase.from('contents').select('*').eq('id', id)
 
+  if (workspaceId) {
+    query = query.eq('workspace_id', workspaceId)
+  }
+
+  const { data, error } = await query.single()
   if (error) throw error
   return data
 }
@@ -335,6 +380,7 @@ export async function saveContentHistory(input: {
   ai_version?: string
   human_edited_version?: string
   edit_note?: string
+  workspace_id: string
 }) {
   const { data, error } = await supabase
     .from('content_history')
@@ -344,6 +390,7 @@ export async function saveContentHistory(input: {
       ai_version: input.ai_version ?? null,
       human_edited_version: input.human_edited_version ?? null,
       edit_note: input.edit_note ?? null,
+      workspace_id: input.workspace_id,
     })
     .select()
     .single()

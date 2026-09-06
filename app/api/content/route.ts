@@ -15,15 +15,18 @@ import {
   CRITIC_PROMPT,
   REFINER_PROMPT,
 } from '@/lib/prompts'
+import { requireWorkspaceId } from '@/lib/auth'
 
 export async function GET(req: Request) {
   try {
+    const workspaceId = await requireWorkspaceId()
     const { searchParams } = new URL(req.url)
     const clientId = searchParams.get('client_id') || undefined
-    const data = await getContents(clientId)
+    const data = await getContents(clientId, workspaceId)
     return NextResponse.json(data)
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    const status = error.message?.includes('Unauthorized') ? 401 : 500
+    return NextResponse.json({ error: error.message }, { status })
   }
 }
 
@@ -37,6 +40,7 @@ export async function GET(req: Request) {
 //    không gắn task (dùng cho trang /test hoặc viết nhanh không qua lộ trình).
 export async function POST(req: Request) {
   try {
+    const workspaceId = await requireWorkspaceId()
     const body = await req.json()
 
     let contentRow: any
@@ -44,7 +48,7 @@ export async function POST(req: Request) {
     let goal = body.goal
 
     if (body.task_id) {
-      const task = await getTaskById(body.task_id)
+      const task = await getTaskById(body.task_id, workspaceId)
       if (task.task_type !== 'content') {
         return NextResponse.json(
           { error: 'Task này không phải loại "content", không thể viết bài AI cho việc này' },
@@ -55,7 +59,12 @@ export async function POST(req: Request) {
       goal = task.description
 
       const existing = await getContentByTaskId(task.id)
-      contentRow = existing || (await createContentForTask(task))
+      contentRow =
+        existing ||
+        (await createContentForTask({
+          ...task,
+          workspace_id: workspaceId,
+        }))
     } else {
       if (!body.client_id || !topic) {
         return NextResponse.json(
@@ -67,6 +76,7 @@ export async function POST(req: Request) {
         client_id: body.client_id,
         plan_id: body.plan_id,
         topic,
+        workspace_id: workspaceId,
       })
     }
 
@@ -120,6 +130,7 @@ export async function POST(req: Request) {
       client_id: contentRow.client_id,
       ai_version: final_content,
       edit_note: JSON.stringify({ serp_analysis, ai_draft: ai_content, critic_feedback }),
+      workspace_id: workspaceId,
     })
 
     return NextResponse.json({
@@ -130,9 +141,10 @@ export async function POST(req: Request) {
       final_content,
     })
   } catch (error: any) {
+    const status = error.message?.includes('Unauthorized') ? 401 : 500
     return NextResponse.json(
       { error: error.message || 'Unknown error' },
-      { status: 500 }
+      { status }
     )
   }
 }

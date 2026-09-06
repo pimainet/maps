@@ -5,6 +5,7 @@ import {
   getLatestContentHistory,
   saveContentHistory,
 } from '@/lib/db'
+import { requireWorkspaceId } from '@/lib/auth'
 
 const ALLOWED_STATUS = ['drafted', 'waiting_approval', 'approved', 'published']
 
@@ -26,13 +27,15 @@ function parseEditNote(editNote: string | null | undefined) {
 
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const content = await getContentById(params.id)
-    const history = await getLatestContentHistory(params.id)
+    const workspaceId = await requireWorkspaceId()
+    const { id } = await params
+    const content = await getContentById(id, workspaceId)
+    const history = await getLatestContentHistory(id)
 
-    // Tìm dòng lịch sử GẦN NHẤT có chứa dữ liệu sinh AI (serp_analysis/
+    // Tìm dòng lịch sử GẦN NHẤT có đủ dữ liệu sinh AI (serp_analysis/
     // ai_draft/critic_feedback) để hiển thị, vì dòng mới nhất có thể chỉ
     // là 1 lần "lưu chỉnh sửa" (edit_note dạng text, không có JSON đó).
     const { serp_analysis, ai_draft, critic_feedback } = parseEditNote(history?.edit_note)
@@ -45,15 +48,18 @@ export async function GET(
       critic_feedback,
     })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 404 })
+    const status = error.message?.includes('Unauthorized') ? 401 : 404
+    return NextResponse.json({ error: error.message }, { status })
   }
 }
 
 export async function PATCH(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const workspaceId = await requireWorkspaceId()
+    const { id } = await params
     const body = await req.json()
 
     let updatedStatus = null
@@ -64,12 +70,12 @@ export async function PATCH(
           { status: 400 }
         )
       }
-      updatedStatus = await updateContentStatus(params.id, body.status)
+      updatedStatus = await updateContentStatus(id, body.status)
     }
 
     if (typeof body.final_content === 'string') {
-      const content = updatedStatus || (await getContentById(params.id))
-      const latest = await getLatestContentHistory(params.id)
+      const content = updatedStatus || (await getContentById(id, workspaceId))
+      const latest = await getLatestContentHistory(id)
 
       const note =
         body.status === 'approved'
@@ -77,11 +83,12 @@ export async function PATCH(
           : 'Lưu chỉnh sửa thủ công'
 
       await saveContentHistory({
-        content_id: params.id,
+        content_id: id,
         client_id: content.client_id,
         ai_version: latest?.ai_version ?? '',
         human_edited_version: body.final_content,
         edit_note: note,
+        workspace_id: workspaceId,
       })
     }
 
@@ -92,9 +99,10 @@ export async function PATCH(
       )
     }
 
-    const finalContent = await getContentById(params.id)
+    const finalContent = await getContentById(id, workspaceId)
     return NextResponse.json(finalContent)
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    const status = error.message?.includes('Unauthorized') ? 401 : 500
+    return NextResponse.json({ error: error.message }, { status })
   }
 }

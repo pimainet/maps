@@ -1,25 +1,31 @@
 import { NextResponse } from 'next/server'
 import { getTaskById, updateTaskStatus } from '@/lib/db'
+import { requireWorkspaceId } from '@/lib/auth'
 
 const ALLOWED_STATUS = ['pending', 'done', 'skipped']
 
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const data = await getTaskById(params.id)
+    const workspaceId = await requireWorkspaceId()
+    const { id } = await params
+    const data = await getTaskById(id, workspaceId)
     return NextResponse.json(data)
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 404 })
+    const status = error.message?.includes('Unauthorized') ? 401 : 404
+    return NextResponse.json({ error: error.message }, { status })
   }
 }
 
 export async function PATCH(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await requireWorkspaceId()
+    const { id } = await params
     const body = await req.json()
     if (!ALLOWED_STATUS.includes(body.status)) {
       return NextResponse.json(
@@ -28,14 +34,15 @@ export async function PATCH(
       )
     }
 
-    const updated = await updateTaskStatus(params.id, body.status)
+    const updated = await updateTaskStatus(id, body.status)
     return NextResponse.json(updated)
   } catch (error: any) {
-    // Lỗi phổ biến nhất ở đây: chưa chạy migration thêm cột `status`
-    // vào bảng tasks trong Supabase.
+    const status = error.message?.includes('Unauthorized') ? 401 : 500
     return NextResponse.json(
-      { error: `${error.message} (kiểm tra đã chạy migration thêm cột status vào bảng tasks chưa)` },
-      { status: 500 }
+      {
+        error: `${error.message} (kiểm tra đã chạy migration thêm cột status vào bảng tasks chưa)`,
+      },
+      { status }
     )
   }
 }
