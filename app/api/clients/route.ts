@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getClients, createClient } from '@/lib/db'
+import { getClients, createClient, getWorkspaceClientLimit } from '@/lib/db'
 import { requireActiveWorkspaceId } from '@/lib/auth'
 
 export async function GET() {
@@ -16,6 +16,17 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const workspaceId = await requireActiveWorkspaceId()
+
+    const limit = await getWorkspaceClientLimit(workspaceId)
+    if (!limit.canAddMore) {
+      return NextResponse.json(
+        {
+          error: `Workspace của bạn đã đạt giới hạn ${limit.maxClients} doanh nghiệp. Liên hệ nâng cấp gói để thêm doanh nghiệp mới.`,
+        },
+        { status: 403 }
+      )
+    }
+
     const body = await req.json()
     const data = await createClient({ ...body, workspace_id: workspaceId })
     return NextResponse.json(data)

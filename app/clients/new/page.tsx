@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 export default function NewClientPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [fetching, setFetching] = useState(false)
   const [error, setError] = useState('')
   const [form, setForm] = useState({
     name: '',
@@ -21,6 +22,53 @@ export default function NewClientPage() {
 
   function update(key: string, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }))
+  }
+
+  // Hàm tự lấy thông tin từ Google Maps
+  async function handleAutoFetch() {
+    if (!form.name && !form.gbp_link) {
+      setError('Bạn cần nhập ít nhất Tên doanh nghiệp hoặc Link Google Maps')
+      return
+    }
+
+    setFetching(true)
+    setError('')
+
+    try {
+      const res = await fetch('/api/places/fetch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          gbp_link: form.gbp_link,
+          name: form.name,
+          area: form.area,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Không lấy được dữ liệu từ Google')
+      }
+
+      // Tự động điền vào form
+      setForm((prev) => ({
+        ...prev,
+        name: data.name || prev.name,
+        phone: data.phone || prev.phone,
+        website_url: data.website_url || prev.website_url,
+        gbp_link: data.gbp_link || prev.gbp_link,
+        area: data.area || prev.area,
+        industry: data.industry || prev.industry,
+        notes:
+          prev.notes ||
+          `Đánh giá: ${data.rating || 'N/A'} (${data.review_count || 0} reviews)\n${data.description || ''}`,
+      }))
+    } catch (err: any) {
+      setError(err.message || 'Có lỗi xảy ra khi lấy thông tin')
+    } finally {
+      setFetching(false)
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -127,6 +175,25 @@ export default function NewClientPage() {
             placeholder="https://maps.google.com/..."
             style={inputStyle}
           />
+          {/* Nút tự lấy thông tin */}
+          <button
+            type="button"
+            onClick={handleAutoFetch}
+            disabled={fetching}
+            style={{
+              marginTop: 8,
+              background: fetching ? '#93c5fd' : '#16a34a',
+              color: 'white',
+              border: 'none',
+              borderRadius: 8,
+              padding: '10px 16px',
+              fontWeight: 600,
+              cursor: fetching ? 'not-allowed' : 'pointer',
+              width: '100%',
+            }}
+          >
+            {fetching ? 'Đang lấy thông tin từ Google Maps...' : 'Tự lấy thông tin từ Google Maps'}
+          </button>
         </label>
 
         <label>

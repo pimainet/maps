@@ -38,6 +38,32 @@ export async function getClients(workspaceId?: string) {
   return data
 }
 
+// Thông tin giới hạn số doanh nghiệp (clients) của 1 workspace — dùng
+// để hiện/ẩn nút "Thêm khách hàng" ở frontend trước khi bị RLS chặn.
+export async function getWorkspaceClientLimit(workspaceId: string) {
+  const supabase = await createSupabaseServerClient()
+
+  const [{ data: ws, error: wsError }, { count, error: countError }] = await Promise.all([
+    supabase.from('workspaces').select('max_clients').eq('id', workspaceId).single(),
+    supabase
+      .from('clients')
+      .select('id', { count: 'exact', head: true })
+      .eq('workspace_id', workspaceId),
+  ])
+
+  if (wsError) throw wsError
+  if (countError) throw countError
+
+  const maxClients = ws?.max_clients ?? 1
+  const clientCount = count ?? 0
+
+  return {
+    maxClients,
+    clientCount,
+    canAddMore: clientCount < maxClients,
+  }
+}
+
 export async function getClientById(id: string, workspaceId?: string) {
   const supabase = await createSupabaseServerClient()
   let query = supabase.from('clients').select('*').eq('id', id)

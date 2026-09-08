@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getUserWorkspaces, getActiveWorkspaceId } from '@/lib/auth'
+import { getWorkspaceClientLimit } from '@/lib/db'
 
 export async function GET() {
   try {
@@ -24,6 +25,16 @@ export async function GET() {
     const activeWorkspaceId = await getActiveWorkspaceId()
     const active = memberships.find((m) => m.workspace_id === activeWorkspaceId) || null
 
+    let clientLimit = null
+    if (activeWorkspaceId) {
+      try {
+        clientLimit = await getWorkspaceClientLimit(activeWorkspaceId)
+      } catch {
+        // Không chặn /api/me nếu truy vấn giới hạn lỗi — frontend coi
+        // như chưa biết giới hạn, không ẩn nút (RLS vẫn chặn cứng ở DB)
+      }
+    }
+
     return NextResponse.json({
       user: {
         id: user.id,
@@ -40,6 +51,8 @@ export async function GET() {
       // Workspace đang được chọn làm việc cho session này
       activeWorkspace: active?.workspace || null,
       activeRole: active?.role || null,
+      // Giới hạn số doanh nghiệp (clients) của workspace đang chọn
+      clientLimit,
     })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
