@@ -719,6 +719,7 @@ function Audit({ navigate, setToast }: any) {
   const [client, setClient] = useState<any>(null)
   const [loadingClient, setLoadingClient] = useState(true)
   const [running, setRunning] = useState(false)
+  const [fetching, setFetching] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState<string | null>(null)
 
@@ -766,6 +767,43 @@ function Audit({ navigate, setToast }: any) {
     load()
   }, [])
 
+  // ===== TỰ LẤY TỪ GOOGLE MAPS =====
+  async function handleAutoFetch() {
+    if (!client) return
+    setFetching(true)
+    setError('')
+
+    try {
+      const res = await fetch('/api/places/fetch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: client.name,
+          area: client.area,
+          gbp_link: client.gbp_link,
+        }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Không lấy được dữ liệu')
+
+      setForm((prev) => ({
+        ...prev,
+        description: data.description || prev.description,
+        primary_category: data.primary_category || prev.primary_category,
+        additional_categories: data.additional_categories || prev.additional_categories,
+        review_count: data.review_count || prev.review_count,
+        rating: data.rating || prev.rating,
+      }))
+
+      setToast('Đã lấy thông tin từ Google Maps thành công')
+    } catch (err: any) {
+      setError(err.message || 'Có lỗi khi lấy dữ liệu Google Maps')
+    } finally {
+      setFetching(false)
+    }
+  }
+
   async function handleRunAudit() {
     if (!client) return
     setError('')
@@ -787,9 +825,7 @@ function Audit({ navigate, setToast }: any) {
       })
       const data = await res.json()
 
-      if (!res.ok) {
-        throw new Error(data.error || 'Audit thất bại')
-      }
+      if (!res.ok) throw new Error(data.error || 'Audit thất bại')
 
       setResult(data.audit_result || 'Không có kết quả')
       setToast('Đã chạy audit thành công')
@@ -830,6 +866,27 @@ function Audit({ navigate, setToast }: any) {
           </div>
         </div>
 
+        {/* NÚT TỰ LẤY THÔNG TIN */}
+        <button
+          type="button"
+          onClick={handleAutoFetch}
+          disabled={fetching}
+          style={{
+            width: '100%',
+            marginBottom: 20,
+            background: fetching ? '#93c5fd' : '#16a34a',
+            color: 'white',
+            border: 'none',
+            borderRadius: 8,
+            padding: '12px 16px',
+            fontWeight: 600,
+            cursor: fetching ? 'not-allowed' : 'pointer',
+            fontSize: 15,
+          }}
+        >
+          {fetching ? 'Đang lấy thông tin từ Google Maps...' : 'Tự lấy thông tin từ Google Maps'}
+        </button>
+
         <label className="field">
           <span>Ngôn ngữ đầu ra</span>
           <select
@@ -844,12 +901,9 @@ function Audit({ navigate, setToast }: any) {
               style={{ marginTop: 8 }}
               value={form.output_language}
               onChange={(e) => update('output_language', e.target.value)}
-              placeholder="Nhập tên ngôn ngữ, ví dụ: Tiếng Séc, Tiếng Đức, Tiếng Ả Rập..."
+              placeholder="Nhập tên ngôn ngữ..."
             />
           )}
-          <small style={{ color: '#6b7280', fontSize: 12 }}>
-            AI có thể viết hầu hết ngôn ngữ phổ biến — không giới hạn ở danh sách trên. Áp dụng cho toàn bộ chu kỳ: Audit → Lộ trình → Việc cần làm → Bài viết.
-          </small>
         </label>
 
         <label className="field">
@@ -898,10 +952,7 @@ function Audit({ navigate, setToast }: any) {
 
         <label className="field">
           <span>Tình trạng bài đăng gần đây</span>
-          <select
-            value={form.recent_posts}
-            onChange={(e) => update('recent_posts', e.target.value)}
-          >
+          <select value={form.recent_posts} onChange={(e) => update('recent_posts', e.target.value)}>
             <option>Đăng đều hàng tuần</option>
             <option>Đăng thưa thớt</option>
             <option>Không đăng trong 30 ngày</option>
@@ -910,10 +961,7 @@ function Audit({ navigate, setToast }: any) {
 
         <label className="field">
           <span>Tình trạng hình ảnh</span>
-          <select
-            value={form.photos_status}
-            onChange={(e) => update('photos_status', e.target.value)}
-          >
+          <select value={form.photos_status} onChange={(e) => update('photos_status', e.target.value)}>
             <option>Có ảnh mới trong 3 tháng</option>
             <option>Ảnh cũ hơn 6 tháng</option>
             <option>Chưa cập nhật</option>
@@ -935,11 +983,7 @@ function Audit({ navigate, setToast }: any) {
           </div>
         )}
 
-        <button
-          className="primary-button full"
-          onClick={handleRunAudit}
-          disabled={running}
-        >
+        <button className="primary-button full" onClick={handleRunAudit} disabled={running}>
           {running ? 'Đang chạy audit...' : (<><Sparkles size={17} /> Chạy Audit</>)}
         </button>
       </Card>
