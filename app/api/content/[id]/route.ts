@@ -5,7 +5,7 @@ import {
   getLatestContentHistory,
   saveContentHistory,
 } from '@/lib/db'
-import { requireWorkspaceId } from '@/lib/auth'
+import { requireActiveWorkspaceId } from '@/lib/auth'
 
 const ALLOWED_STATUS = ['drafted', 'waiting_approval', 'approved', 'published']
 
@@ -30,7 +30,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const workspaceId = await requireWorkspaceId()
+    const workspaceId = await requireActiveWorkspaceId()
     const { id } = await params
     const content = await getContentById(id, workspaceId)
     const history = await getLatestContentHistory(id, workspaceId)
@@ -48,7 +48,7 @@ export async function GET(
       critic_feedback,
     })
   } catch (error: any) {
-    const status = error.message?.includes('Unauthorized') ? 401 : 404
+    const status = error.message?.includes('Unauthorized') ? 401 : error.message?.includes('NoWorkspace') ? 409 : 404
     return NextResponse.json({ error: error.message }, { status })
   }
 }
@@ -58,7 +58,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const workspaceId = await requireWorkspaceId()
+    const workspaceId = await requireActiveWorkspaceId()
     const { id } = await params
     const body = await req.json()
 
@@ -102,7 +102,7 @@ export async function PATCH(
     const finalContent = await getContentById(id, workspaceId)
     return NextResponse.json(finalContent)
   } catch (error: any) {
-    const status = error.message?.includes('Unauthorized') ? 401 : 500
+    const status = error.message?.includes('Unauthorized') ? 401 : error.message?.includes('NoWorkspace') ? 409 : 500
     return NextResponse.json({ error: error.message }, { status })
   }
 }

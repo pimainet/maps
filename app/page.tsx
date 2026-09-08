@@ -39,7 +39,7 @@ export default function Page() {
 
   useEffect(() => { setPathname(routerPath) }, [routerPath]);
   const navigate = (path: string) => { window.history.pushState({}, '', path); setPathname(path); setMobileOpen(false) }
-  const page = pathname.startsWith('/clients/new') ? 'new-client' : pathname.startsWith('/clients/') ? pathname.includes('/audit') ? 'audit' : pathname.includes('/plan') ? 'plan' : 'client-detail' : pathname.startsWith('/clients') ? 'clients' : pathname.startsWith('/tasks') ? 'tasks' : pathname.startsWith('/contents/') ? 'content-detail' : pathname.startsWith('/contents') ? 'contents' : pathname.startsWith('/settings') ? 'settings' : 'dashboard'
+  const page = pathname.startsWith('/clients/new') ? 'new-client' : pathname.startsWith('/clients/') ? pathname.includes('/audit') ? 'audit' : pathname.includes('/plan') ? 'plan' : 'client-detail' : pathname.startsWith('/clients') ? 'clients' : pathname.startsWith('/tasks') ? 'tasks' : pathname.startsWith('/contents/') ? 'content-detail' : pathname.startsWith('/contents') ? 'contents' : pathname.startsWith('/workspaces/new') ? 'new-workspace' : pathname.startsWith('/workspaces') ? 'workspaces' : pathname.startsWith('/settings') ? 'settings' : 'dashboard'
 
   useEffect(() => {
     fetch('/api/me')
@@ -55,10 +55,13 @@ export default function Page() {
           .join('') || 'U'
         setCurrentUser({
           fullName: name,
-          role: data.profile.role || 'member',
+          role: data.activeRole || 'member',
           initials,
-          workspaceName: data.workspace?.name || 'Workspace',
+          workspaceName: data.activeWorkspace?.name || 'Chưa có workspace',
         })
+        if (Array.isArray(data.workspaces) && data.workspaces.length === 0) {
+          navigate('/workspaces/new')
+        }
       })
       .catch(() => {})
   }, [])
@@ -93,9 +96,9 @@ export default function Page() {
 
   const today = new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
 
-  const title = page === 'dashboard' ? 'Tổng quan' : page === 'clients' ? 'Khách hàng' : page === 'tasks' ? 'Công việc' : page === 'contents' ? 'Nội dung' : page === 'settings' ? 'Cài đặt' : page === 'new-client' ? 'Thêm khách hàng' : page === 'client-detail' ? (clientName || 'Chi tiết khách hàng') : page === 'audit' ? 'Audit Google Business Profile' : page === 'plan' ? 'Lộ trình 30 ngày' : 'Duyệt nội dung'
-  return <div className="app-shell"><aside className={`sidebar ${mobileOpen ? 'open' : ''}`}><div className="brand"><div className="brand-mark"><Sparkles size={16} /></div><span>local growth <strong>os</strong></span><button className="close-mobile" onClick={() => setMobileOpen(false)}><X size={18} /></button></div><div className="workspace"><div className="workspace-avatar">{(currentUser?.workspaceName || "LG").slice(0,2).toUpperCase()}</div><div><p className="workspace-name">{currentUser?.workspaceName || "Workspace"}</p><p className="workspace-plan">Agency workspace</p></div><ChevronDown size={15} /></div><nav><p className="nav-label">Làm việc hôm nay</p><NavItem icon={LayoutDashboard} label="Tổng quan" active={page === 'dashboard'} onClick={() => navigate('/')} /><NavItem icon={Users} label="Khách hàng" active={['clients','new-client','client-detail','audit','plan'].includes(page)} onClick={() => navigate('/clients')} /><NavItem icon={ClipboardCheck} label="Việc cần làm" active={page === 'tasks'} onClick={() => navigate('/tasks')} /><NavItem icon={FileText} label="Nội dung" active={['contents','content-detail'].includes(page)} count={pendingCount ? String(pendingCount) : undefined} onClick={() => navigate('/contents')} /><p className="nav-label secondary">Hệ thống</p><NavItem icon={Settings} label="Cài đặt" active={page === 'settings'} onClick={() => navigate('/settings')} /></nav><div className="sidebar-footer"><div className="help-card"><CircleHelp size={17} /><div><strong>Cần trợ giúp?</strong><span>Xem hướng dẫn sử dụng</span></div></div><div className="user-row" style={{cursor:"pointer"}} onClick={handleLogout} title="Đăng xuất"><div className="user-avatar">{currentUser?.initials || "U"}</div><div><strong>{currentUser?.fullName || "User"}</strong><span>{currentUser?.role || "member"} · Đăng xuất</span></div><MoreHorizontal size={17} /></div></div></aside>{mobileOpen && <div className="mobile-overlay" onClick={() => setMobileOpen(false)} />}
-    <main className="main"><header className="topbar"><button className="mobile-menu" onClick={() => setMobileOpen(true)}><Menu size={20} /></button><div className="breadcrumbs"><span>Workspace</span><span>/</span><strong>{title}</strong></div><div className="top-actions"><div className="top-search"><Search size={16} /><input placeholder="Tìm kiếm..." /><kbd>⌘ K</kbd></div><button className="icon-button" aria-label="Thông báo"><Bell size={18} /><i /></button><div className="mini-avatar">{currentUser?.initials || "U"}</div></div></header><div className="content"><div className="page-heading"><div><p className="overline">{today}</p><h1>{title}</h1><p className="subheading">Theo dõi và điều phối toàn bộ chu kỳ Local SEO của bạn.</p></div>{page === 'dashboard' && <button className="primary-button" onClick={() => navigate('/clients/new')}><Plus size={17} />Thêm khách hàng</button>}{page === 'clients' && <button className="primary-button" onClick={() => navigate('/clients/new')}><Plus size={17} />Thêm khách hàng</button>}</div>{page === 'dashboard' && <Dashboard navigate={navigate} setToast={setToast} />}{page === 'clients' && <Clients navigate={navigate} query={query} setQuery={setQuery} />}{page === 'new-client' && <NewClient navigate={navigate} setToast={setToast} />}{page === 'client-detail' && <ClientDetailAction navigate={navigate} setToast={setToast} />}{page === 'audit' && <Audit navigate={navigate} setToast={setToast} />}{page === 'plan' && <Plan setToast={setToast} />}{page === 'tasks' && <Tasks />}{page === 'contents' && <Contents navigate={navigate} setToast={setToast} />}{page === 'content-detail' && <ContentDetail setToast={setToast} />}{page === 'settings' && <SettingsView />}</div>{toast && <div className="toast"><Check size={16} />{toast}<button onClick={() => setToast('')}><X size={14} /></button></div>}</main></div>
+  const title = page === 'dashboard' ? 'Tổng quan' : page === 'clients' ? 'Khách hàng' : page === 'tasks' ? 'Công việc' : page === 'contents' ? 'Nội dung' : page === 'settings' ? 'Cài đặt' : page === 'workspaces' ? 'Workspace của bạn' : page === 'new-workspace' ? 'Tạo workspace' : page === 'new-client' ? 'Thêm khách hàng' : page === 'client-detail' ? (clientName || 'Chi tiết khách hàng') : page === 'audit' ? 'Audit Google Business Profile' : page === 'plan' ? 'Lộ trình 30 ngày' : 'Duyệt nội dung'
+  return <div className="app-shell"><aside className={`sidebar ${mobileOpen ? 'open' : ''}`}><div className="brand"><div className="brand-mark"><Sparkles size={16} /></div><span>local growth <strong>os</strong></span><button className="close-mobile" onClick={() => setMobileOpen(false)}><X size={18} /></button></div><div className="workspace" style={{cursor:"pointer"}} onClick={() => navigate('/workspaces')}><div className="workspace-avatar">{(currentUser?.workspaceName || "LG").slice(0,2).toUpperCase()}</div><div><p className="workspace-name">{currentUser?.workspaceName || "Workspace"}</p><p className="workspace-plan">Agency workspace</p></div><ChevronDown size={15} /></div><nav><p className="nav-label">Làm việc hôm nay</p><NavItem icon={LayoutDashboard} label="Tổng quan" active={page === 'dashboard'} onClick={() => navigate('/')} /><NavItem icon={Users} label="Khách hàng" active={['clients','new-client','client-detail','audit','plan'].includes(page)} onClick={() => navigate('/clients')} /><NavItem icon={ClipboardCheck} label="Việc cần làm" active={page === 'tasks'} onClick={() => navigate('/tasks')} /><NavItem icon={FileText} label="Nội dung" active={['contents','content-detail'].includes(page)} count={pendingCount ? String(pendingCount) : undefined} onClick={() => navigate('/contents')} /><p className="nav-label secondary">Hệ thống</p><NavItem icon={Settings} label="Cài đặt" active={page === 'settings'} onClick={() => navigate('/settings')} /></nav><div className="sidebar-footer"><div className="help-card"><CircleHelp size={17} /><div><strong>Cần trợ giúp?</strong><span>Xem hướng dẫn sử dụng</span></div></div><div className="user-row" style={{cursor:"pointer"}} onClick={handleLogout} title="Đăng xuất"><div className="user-avatar">{currentUser?.initials || "U"}</div><div><strong>{currentUser?.fullName || "User"}</strong><span>{currentUser?.role || "member"} · Đăng xuất</span></div><MoreHorizontal size={17} /></div></div></aside>{mobileOpen && <div className="mobile-overlay" onClick={() => setMobileOpen(false)} />}
+    <main className="main"><header className="topbar"><button className="mobile-menu" onClick={() => setMobileOpen(true)}><Menu size={20} /></button><div className="breadcrumbs"><span>Workspace</span><span>/</span><strong>{title}</strong></div><div className="top-actions"><div className="top-search"><Search size={16} /><input placeholder="Tìm kiếm..." /><kbd>⌘ K</kbd></div><button className="icon-button" aria-label="Thông báo"><Bell size={18} /><i /></button><div className="mini-avatar">{currentUser?.initials || "U"}</div></div></header><div className="content"><div className="page-heading"><div><p className="overline">{today}</p><h1>{title}</h1><p className="subheading">Theo dõi và điều phối toàn bộ chu kỳ Local SEO của bạn.</p></div>{page === 'dashboard' && <button className="primary-button" onClick={() => navigate('/clients/new')}><Plus size={17} />Thêm khách hàng</button>}{page === 'clients' && <button className="primary-button" onClick={() => navigate('/clients/new')}><Plus size={17} />Thêm khách hàng</button>}</div>{page === 'dashboard' && <Dashboard navigate={navigate} setToast={setToast} />}{page === 'clients' && <Clients navigate={navigate} query={query} setQuery={setQuery} />}{page === 'new-client' && <NewClient navigate={navigate} setToast={setToast} />}{page === 'client-detail' && <ClientDetailAction navigate={navigate} setToast={setToast} />}{page === 'audit' && <Audit navigate={navigate} setToast={setToast} />}{page === 'plan' && <Plan setToast={setToast} />}{page === 'tasks' && <Tasks />}{page === 'contents' && <Contents navigate={navigate} setToast={setToast} />}{page === 'content-detail' && <ContentDetail setToast={setToast} />}{page === 'workspaces' && <Workspaces navigate={navigate} setToast={setToast} />}{page === 'new-workspace' && <NewWorkspace navigate={navigate} setToast={setToast} />}{page === 'settings' && <SettingsView />}</div>{toast && <div className="toast"><Check size={16} />{toast}<button onClick={() => setToast('')}><X size={14} /></button></div>}</main></div>
 }
 function NavItem({ icon: Icon, label, active, onClick, count }: any) { return <button className={`nav-item ${active ? 'active' : ''}`} onClick={onClick}><Icon size={18} /><span>{label}</span>{count && <b>{count}</b>}</button> }
 function Dashboard({ navigate, setToast }: any) {
@@ -1766,5 +1769,359 @@ function ContentDetail({ setToast }: any) {
     </>
   )
 }
-function SettingsView() { return <div className="settings-layout"><Card className="settings-nav"><button className="active">Hồ sơ workspace</button><button>API & tích hợp</button><button>Thông báo</button><button>Ngôn ngữ</button></Card><Card className="settings-content"><div className="section-head"><div><h2>Hồ sơ workspace</h2><p>Quản lý thông tin hiển thị của workspace.</p></div></div><div className="form-grid"><Field label="Tên workspace" placeholder="Growth Studio" /><Field label="Email liên hệ" placeholder="hello@growthstudio.vn" /><Field label="Tên người dùng" placeholder="Hải Nguyễn" /></div><button className="primary-button">Lưu thay đổi</button></Card></div> }
+function Workspaces({ navigate, setToast }: any) {
+  const [items, setItems] = useState<any[]>([])
+  const [activeId, setActiveId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [switching, setSwitching] = useState<string | null>(null)
+
+  async function load() {
+    setLoading(true)
+    try {
+      const [wsRes, activeRes] = await Promise.all([
+        fetch('/api/workspaces'),
+        fetch('/api/workspaces/active'),
+      ])
+      const wsData = await wsRes.json()
+      const activeData = await activeRes.json()
+      setItems(Array.isArray(wsData) ? wsData : [])
+      setActiveId(activeData?.activeWorkspaceId || null)
+    } catch {
+      // im lặng — trang vẫn hiện được danh sách rỗng
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, [])
+
+  async function handleSwitch(id: string) {
+    setSwitching(id)
+    try {
+      const res = await fetch('/api/workspaces/active', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace_id: id }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Chuyển workspace thất bại')
+      }
+      setToast('Đã chuyển workspace')
+      navigate('/')
+      window.location.reload()
+    } catch (err: any) {
+      setToast(err.message || 'Có lỗi xảy ra')
+    } finally {
+      setSwitching(null)
+    }
+  }
+
+  return (
+    <Card>
+      <div className="section-head">
+        <div>
+          <h2>Workspace của bạn</h2>
+          <p>Bấm để chuyển sang làm việc trong workspace khác.</p>
+        </div>
+        <button className="primary-button" onClick={() => navigate('/workspaces/new')}>
+          <Plus size={16} /> Tạo workspace mới
+        </button>
+      </div>
+
+      {loading && (
+        <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>Đang tải...</div>
+      )}
+
+      {!loading && items.length === 0 && (
+        <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>
+          Bạn chưa thuộc workspace nào.{' '}
+          <button className="text-button" onClick={() => navigate('/workspaces/new')}>
+            Tạo workspace đầu tiên
+          </button>
+        </div>
+      )}
+
+      <div className="client-list">
+        {items.map((w) => (
+          <button
+            className="client-row"
+            key={w.id}
+            disabled={switching === w.id}
+            onClick={() => w.id !== activeId && handleSwitch(w.id)}
+          >
+            <div className="client-avatar bg-primary">{(w.name || '?').substring(0, 2).toUpperCase()}</div>
+            <div className="row-main">
+              <strong>{w.name}</strong>
+              <span>Vai trò của bạn: {w.role} · Gói {w.plan}</span>
+            </div>
+            {w.id === activeId ? <Badge status="active" /> : (switching === w.id ? <span className="muted-cell">Đang chuyển...</span> : <ArrowUpRight size={15} />)}
+          </button>
+        ))}
+      </div>
+    </Card>
+  )
+}
+
+function NewWorkspace({ navigate, setToast }: any) {
+  const [name, setName] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleCreate() {
+    if (!name.trim()) {
+      setError('Tên workspace là bắt buộc')
+      return
+    }
+    setError('')
+    setLoading(true)
+    try {
+      const res = await fetch('/api/workspaces', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Tạo workspace thất bại')
+      setToast('Đã tạo workspace mới')
+      navigate('/')
+      window.location.reload()
+    } catch (err: any) {
+      setError(err.message || 'Có lỗi xảy ra')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Card className="form-card">
+      <div className="form-intro">
+        <div className="large-icon"><BriefcaseBusiness size={21} /></div>
+        <div>
+          <h2>Tạo workspace mới</h2>
+          <p>Workspace là nơi chứa toàn bộ khách hàng, lộ trình và nội dung của một đội nhóm. Bạn sẽ là owner.</p>
+        </div>
+      </div>
+
+      <label className="field wide">
+        <span>Tên workspace <em>*</em></span>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Ví dụ: Growth Studio"
+        />
+      </label>
+
+      {error && (
+        <div style={{ color: '#b91c1c', background: '#fef2f2', padding: 12, borderRadius: 8, marginTop: 16 }}>
+          {error}
+        </div>
+      )}
+
+      <div className="form-actions">
+        <button className="secondary-button" onClick={() => navigate('/workspaces')} disabled={loading}>
+          Huỷ
+        </button>
+        <button className="primary-button" onClick={handleCreate} disabled={loading}>
+          {loading ? 'Đang tạo...' : (<><Check size={17} /> Tạo workspace</>)}
+        </button>
+      </div>
+    </Card>
+  )
+}
+
+function SettingsView() {
+  const [tab, setTab] = useState<'workspace' | 'members'>('workspace')
+  const [activeWorkspace, setActiveWorkspace] = useState<any>(null)
+  const [activeRole, setActiveRole] = useState<string>('member')
+  const [members, setMembers] = useState<any[]>([])
+  const [loadingMembers, setLoadingMembers] = useState(true)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteRole, setInviteRole] = useState('member')
+  const [inviting, setInviting] = useState(false)
+  const [error, setError] = useState('')
+  const [updatingId, setUpdatingId] = useState<string | null>(null)
+
+  const isAdmin = activeRole === 'owner' || activeRole === 'admin'
+
+  useEffect(() => {
+    fetch('/api/me')
+      .then((r) => r.json())
+      .then((data) => {
+        setActiveWorkspace(data.activeWorkspace || null)
+        setActiveRole(data.activeRole || 'member')
+      })
+      .catch(() => {})
+  }, [])
+
+  function loadMembers() {
+    setLoadingMembers(true)
+    fetch('/api/workspace-members')
+      .then((r) => r.json())
+      .then((data) => setMembers(Array.isArray(data) ? data : []))
+      .catch(() => {})
+      .finally(() => setLoadingMembers(false))
+  }
+
+  useEffect(() => { if (tab === 'members') loadMembers() }, [tab])
+
+  async function handleInvite() {
+    if (!inviteEmail.trim()) return
+    setInviting(true)
+    setError('')
+    try {
+      const res = await fetch('/api/workspace-members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: inviteEmail.trim(), role: inviteRole }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Mời thất bại')
+      setInviteEmail('')
+      loadMembers()
+    } catch (err: any) {
+      setError(err.message || 'Có lỗi xảy ra')
+    } finally {
+      setInviting(false)
+    }
+  }
+
+  async function handleRoleChange(memberId: string, role: string) {
+    setUpdatingId(memberId)
+    try {
+      const res = await fetch(`/api/workspace-members/${memberId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Cập nhật thất bại')
+      loadMembers()
+    } catch (err: any) {
+      setError(err.message || 'Có lỗi xảy ra')
+    } finally {
+      setUpdatingId(null)
+    }
+  }
+
+  async function handleRemove(memberId: string) {
+    setUpdatingId(memberId)
+    try {
+      const res = await fetch(`/api/workspace-members/${memberId}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Xoá thất bại')
+      loadMembers()
+    } catch (err: any) {
+      setError(err.message || 'Có lỗi xảy ra')
+    } finally {
+      setUpdatingId(null)
+    }
+  }
+
+  return (
+    <div className="settings-layout">
+      <Card className="settings-nav">
+        <button className={tab === 'workspace' ? 'active' : ''} onClick={() => setTab('workspace')}>Hồ sơ workspace</button>
+        <button className={tab === 'members' ? 'active' : ''} onClick={() => setTab('members')}>Thành viên</button>
+      </Card>
+
+      {tab === 'workspace' && (
+        <Card className="settings-content">
+          <div className="section-head">
+            <div><h2>Hồ sơ workspace</h2><p>Thông tin workspace đang làm việc.</p></div>
+          </div>
+          <div className="form-grid">
+            <Field label="Tên workspace" placeholder={activeWorkspace?.name || '—'} />
+            <Field label="Gói" placeholder={activeWorkspace?.plan || '—'} />
+            <Field label="Vai trò của bạn" placeholder={activeRole} />
+          </div>
+        </Card>
+      )}
+
+      {tab === 'members' && (
+        <Card className="settings-content">
+          <div className="section-head">
+            <div><h2>Thành viên</h2><p>Quản lý ai được truy cập workspace này.</p></div>
+          </div>
+
+          {isAdmin && (
+            <div className="toolbar">
+              <div className="search-field" style={{ flex: 2 }}>
+                <input
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="Email người muốn mời (phải đã có tài khoản)"
+                />
+              </div>
+              <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}>
+                <option value="member">Member</option>
+                <option value="admin">Admin</option>
+              </select>
+              <button className="primary-button" onClick={handleInvite} disabled={inviting}>
+                {inviting ? 'Đang mời...' : 'Mời thành viên'}
+              </button>
+            </div>
+          )}
+
+          {error && (
+            <div style={{ color: '#b91c1c', background: '#fef2f2', padding: 12, borderRadius: 8, marginBottom: 16 }}>
+              {error}
+            </div>
+          )}
+
+          {loadingMembers && (
+            <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>Đang tải...</div>
+          )}
+
+          {!loadingMembers && members.length > 0 && (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>Thành viên</th><th>Vai trò</th><th /></tr>
+                </thead>
+                <tbody>
+                  {members.map((m) => (
+                    <tr key={m.id}>
+                      <td>
+                        <strong>{m.full_name || m.email || 'Chưa đặt tên'}</strong>
+                        {m.email && <small>{m.email}</small>}
+                      </td>
+                      <td>
+                        {isAdmin ? (
+                          <select
+                            value={m.role}
+                            disabled={updatingId === m.id}
+                            onChange={(e) => handleRoleChange(m.id, e.target.value)}
+                          >
+                            <option value="owner">Owner</option>
+                            <option value="admin">Admin</option>
+                            <option value="member">Member</option>
+                          </select>
+                        ) : (
+                          <span className="type-label">{m.role}</span>
+                        )}
+                      </td>
+                      <td>
+                        {isAdmin && (
+                          <button
+                            className="icon-button"
+                            disabled={updatingId === m.id}
+                            onClick={() => handleRemove(m.id)}
+                            title="Xoá khỏi workspace"
+                          >
+                            <X size={16} />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
+    </div>
+  )
+}
 

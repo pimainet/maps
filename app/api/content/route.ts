@@ -15,17 +15,17 @@ import {
   CRITIC_PROMPT,
   REFINER_PROMPT,
 } from '@/lib/prompts'
-import { requireWorkspaceId } from '@/lib/auth'
+import { requireActiveWorkspaceId } from '@/lib/auth'
 
 export async function GET(req: Request) {
   try {
-    const workspaceId = await requireWorkspaceId()
+    const workspaceId = await requireActiveWorkspaceId()
     const { searchParams } = new URL(req.url)
     const clientId = searchParams.get('client_id') || undefined
     const data = await getContents(clientId, workspaceId)
     return NextResponse.json(data)
   } catch (error: any) {
-    const status = error.message?.includes('Unauthorized') ? 401 : 500
+    const status = error.message?.includes('Unauthorized') ? 401 : error.message?.includes('NoWorkspace') ? 409 : 500
     return NextResponse.json({ error: error.message }, { status })
   }
 }
@@ -40,7 +40,7 @@ export async function GET(req: Request) {
 //    không gắn task (dùng cho trang /test hoặc viết nhanh không qua lộ trình).
 export async function POST(req: Request) {
   try {
-    const workspaceId = await requireWorkspaceId()
+    const workspaceId = await requireActiveWorkspaceId()
     const body = await req.json()
 
     let contentRow: any
@@ -141,7 +141,7 @@ export async function POST(req: Request) {
       final_content,
     })
   } catch (error: any) {
-    const status = error.message?.includes('Unauthorized') ? 401 : 500
+    const status = error.message?.includes('Unauthorized') ? 401 : error.message?.includes('NoWorkspace') ? 409 : 500
     return NextResponse.json(
       { error: error.message || 'Unknown error' },
       { status }

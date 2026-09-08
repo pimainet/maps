@@ -2,11 +2,11 @@ import { NextResponse } from 'next/server'
 import { askClaude } from '@/lib/claude'
 import { saveAudit, getLatestAuditByClient, getAllAudits } from '@/lib/db'
 import { AUDIT_PROMPT } from '@/lib/prompts'
-import { requireWorkspaceId } from '@/lib/auth'
+import { requireActiveWorkspaceId } from '@/lib/auth'
 
 export async function GET(req: Request) {
   try {
-    const workspaceId = await requireWorkspaceId()
+    const workspaceId = await requireActiveWorkspaceId()
     const { searchParams } = new URL(req.url)
     const clientId = searchParams.get('client_id')
     if (!clientId) {
@@ -16,14 +16,14 @@ export async function GET(req: Request) {
     const data = await getLatestAuditByClient(clientId, workspaceId)
     return NextResponse.json(data)
   } catch (error: any) {
-    const status = error.message?.includes('Unauthorized') ? 401 : 500
+    const status = error.message?.includes('Unauthorized') ? 401 : error.message?.includes('NoWorkspace') ? 409 : 500
     return NextResponse.json({ error: error.message }, { status })
   }
 }
 
 export async function POST(req: Request) {
   try {
-    const workspaceId = await requireWorkspaceId()
+    const workspaceId = await requireActiveWorkspaceId()
     const body = await req.json()
 
     const prompt = AUDIT_PROMPT
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
       audit_result,
     })
   } catch (error: any) {
-    const status = error.message?.includes('Unauthorized') ? 401 : 500
+    const status = error.message?.includes('Unauthorized') ? 401 : error.message?.includes('NoWorkspace') ? 409 : 500
     return NextResponse.json({ error: error.message }, { status })
   }
 }

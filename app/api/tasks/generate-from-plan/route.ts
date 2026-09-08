@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { askClaude } from '@/lib/claude'
 import { createTasks } from '@/lib/db'
 import { TASKS_FROM_PLAN_PROMPT } from '@/lib/prompts'
-import { requireWorkspaceId } from '@/lib/auth'
+import { requireActiveWorkspaceId } from '@/lib/auth'
 
 function parseTasksJson(raw: string) {
   const cleaned = raw
@@ -31,7 +31,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 export async function POST(req: Request) {
   try {
-    const workspaceId = await requireWorkspaceId()
+    const workspaceId = await requireActiveWorkspaceId()
     const body = await req.json()
     const { client_id, plan_id, business_name, industry, area, plan_result, start_date } = body
 
@@ -103,7 +103,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ items: created })
   } catch (error: any) {
-    const status = error.message?.includes('Unauthorized') ? 401 : 500
+    const status = error.message?.includes('Unauthorized') ? 401 : error.message?.includes('NoWorkspace') ? 409 : 500
     return NextResponse.json({ error: error.message }, { status })
   }
 }
