@@ -7,6 +7,7 @@ export type Profile = {
   full_name: string | null
   role: string
   avatar_url: string | null
+  is_super_admin: boolean
 }
 
 export type Workspace = {
@@ -36,7 +37,7 @@ export async function getCurrentProfile(): Promise<Profile | null> {
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, workspace_id, full_name, role, avatar_url')
+    .select('id, workspace_id, full_name, role, avatar_url, is_super_admin')
     .eq('id', user.id)
     .single()
 
@@ -66,4 +67,25 @@ export async function requireWorkspaceId(): Promise<string> {
     throw new Error('Unauthorized: chưa đăng nhập hoặc chưa có workspace')
   }
   return profile.workspace_id
+}
+
+/**
+ * true nếu user hiện tại là Super Admin (platform-wide, khác với
+ * role owner/admin trong 1 workspace). Dùng để: (1) quyết định có
+ * gọi query KHÔNG lọc workspace_id hay không (RLS ở DB sẽ tự cho
+ * Super Admin thấy mọi workspace, xem migration 002), (2) chặn truy
+ * cập các trang/route quản trị chỉ dành cho Super Admin.
+ */
+export async function isSuperAdmin(): Promise<boolean> {
+  const profile = await getCurrentProfile()
+  return !!profile?.is_super_admin
+}
+
+/** Throw nếu user hiện tại không phải Super Admin. Dùng ở đầu các
+ * route/trang quản trị (vd: /admin/*, /api/admin/*). */
+export async function requireSuperAdmin(): Promise<void> {
+  const ok = await isSuperAdmin()
+  if (!ok) {
+    throw new Error('Unauthorized: yêu cầu quyền Super Admin')
+  }
 }

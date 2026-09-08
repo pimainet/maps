@@ -33,7 +33,7 @@ export async function GET(
     const workspaceId = await requireWorkspaceId()
     const { id } = await params
     const content = await getContentById(id, workspaceId)
-    const history = await getLatestContentHistory(id)
+    const history = await getLatestContentHistory(id, workspaceId)
 
     // Tìm dòng lịch sử GẦN NHẤT có đủ dữ liệu sinh AI (serp_analysis/
     // ai_draft/critic_feedback) để hiển thị, vì dòng mới nhất có thể chỉ
@@ -70,12 +70,12 @@ export async function PATCH(
           { status: 400 }
         )
       }
-      updatedStatus = await updateContentStatus(id, body.status)
+      updatedStatus = await updateContentStatus(id, body.status, workspaceId)
     }
 
     if (typeof body.final_content === 'string') {
       const content = updatedStatus || (await getContentById(id, workspaceId))
-      const latest = await getLatestContentHistory(id)
+      const latest = await getLatestContentHistory(id, workspaceId)
 
       const note =
         body.status === 'approved'

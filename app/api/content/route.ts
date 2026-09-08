@@ -58,7 +58,7 @@ export async function POST(req: Request) {
       topic = task.title
       goal = task.description
 
-      const existing = await getContentByTaskId(task.id)
+      const existing = await getContentByTaskId(task.id, workspaceId)
       contentRow =
         existing ||
         (await createContentForTask({
@@ -123,7 +123,7 @@ export async function POST(req: Request) {
     // 5. Lưu: contents.status = waiting_approval; toàn bộ văn bản AI lưu
     // vào 1 dòng content_history mới (ai_version = bản cuối AI, edit_note
     // giữ serp_analysis + bản nháp + critic_feedback dạng JSON).
-    const updatedContent = await updateContentStatus(contentRow.id, 'waiting_approval')
+    const updatedContent = await updateContentStatus(contentRow.id, 'waiting_approval', workspaceId)
 
     await saveContentHistory({
       content_id: contentRow.id,

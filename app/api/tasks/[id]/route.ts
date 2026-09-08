@@ -24,7 +24,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireWorkspaceId()
+    const workspaceId = await requireWorkspaceId()
     const { id } = await params
     const body = await req.json()
     if (!ALLOWED_STATUS.includes(body.status)) {
@@ -34,7 +34,7 @@ export async function PATCH(
       )
     }
 
-    const updated = await updateTaskStatus(id, body.status)
+    const updated = await updateTaskStatus(id, body.status, workspaceId)
     return NextResponse.json(updated)
   } catch (error: any) {
     const status = error.message?.includes('Unauthorized') ? 401 : 500
