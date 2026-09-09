@@ -5,38 +5,69 @@ import { TASKS_FROM_PLAN_PROMPT } from '@/lib/prompts'
 import { requireActiveWorkspaceId } from '@/lib/auth'
 import { autoWriteContentBatch } from '@/lib/write-content'
 
-// Vercel: cho phép chạy lâu hơn (Pro tối đa 300s). Hobby thường ~10–60s.
 export const maxDuration = 300
 export const runtime = 'nodejs'
 
-function parseTasksJson(raw: string) {
-  const cleaned = raw
-    .trim()
-    .replace(/^```json/i, '')
-    .replace(/^```/, '')
-    .replace(/```$/, '')
-    .trim()
+type TaskItem = {
+  title?: string
+  description?: string
+  task_type?: string
+  priority?: string
+  due_date?: string
+}
 
-  const parsed = JSON.parse(cleaned)
-  if (!Array.isArray(parsed)) {
-    throw new Error('Kết quả AI không phải là danh sách hợp lệ')
+/** Lấy JSON array từ raw text dù AI có thêm markdown / giải thích. */
+function extractJsonArray(raw: string): string {
+  let s = (raw || '').trim()
+  if (!s) throw new Error('AI trả về chuỗi rỗng')
+
+  // Bỏ code fence ```json ... ```
+  s = s.replace(/^```(?:json|JSON)?\s*/i, '').replace(/\s*```$/i, '').trim()
+
+  // Nếu còn text thừa, cắt từ [ đầu tiên đến ] cuối cùng
+  const start = s.indexOf('[')
+  const end = s.lastIndexOf(']')
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error('Không tìm thấy JSON array trong phản hồi AI')
   }
-  return parsed as Array<{
-    title?: string
-    description?: string
-    task_type?: string
-    priority?: string
-    due_date?: string
-  }>
+  s = s.slice(start, end + 1)
+
+  // Sửa lỗi thường gặp: trailing comma trước ] hoặc }
+  s = s.replace(/,\s*([\]}])/g, '$1')
+
+  return s
+}
+
+function parseTasksJson(raw: string): TaskItem[] {
+  const cleaned = extractJsonArray(raw)
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(cleaned)
+  } catch (e: any) {
+    throw new Error(`JSON.parse thất bại: ${e?.message || e}`)
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error('Kết quả AI không phải là danh sách (array)')
+  }
+  return parsed as TaskItem[]
 }
 
 const VALID_TYPES = ['content', 'profile_update', 'photo', 'review', 'other']
 const VALID_PRIORITIES = ['low', 'medium', 'high']
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
-// Mỗi bài = 4 lần gọi Claude. Trên Vercel nên giữ 1 để tránh timeout;
-// sau khi duyệt bài, hệ thống sẽ tự viết thêm 1 bài tiếp theo.
+// Mỗi bài = 4 lần Claude. Giữ 1 bài để tránh timeout trên Vercel.
 const AUTO_WRITE_COUNT = 1
+
+const REPAIR_PROMPT = `Bạn nhận được phản hồi sau đây từ một model khác. Hãy CHỈ trả về một JSON array hợp lệ chứa các task, không markdown, không giải thích.
+
+Mỗi phần tử phải có đúng các key: title, description, task_type, priority, due_date.
+task_type chỉ được: content | profile_update | photo | review | other
+priority chỉ được: low | medium | high
+due_date dạng YYYY-MM-DD
+
+Phản hồi gốc:
+`
 
 export async function POST(req: Request) {
   try {
@@ -59,25 +90,36 @@ export async function POST(req: Request) {
       .replaceAll('{{start_date}}', effectiveStartDate)
       .replaceAll('{{plan_result}}', plan_result)
 
-    const raw = await askClaude(prompt)
+    // JSON structured → temperature thấp + token cao hơn (8–15 task dễ cắt ở 2000)
+    let raw = await askClaude(prompt, { maxTokens: 4096, temperature: 0.2 })
 
-    let tasks: Array<{
-      title?: string
-      description?: string
-      task_type?: string
-      priority?: string
-      due_date?: string
-    }>
+    let tasks: TaskItem[]
+    let parseError: string | null = null
     try {
       tasks = parseTasksJson(raw)
-    } catch {
-      return NextResponse.json(
-        {
-          error: 'AI trả về dữ liệu không đúng định dạng JSON, không thể tạo danh sách việc tự động.',
-          raw_output: raw,
-        },
-        { status: 502 }
-      )
+    } catch (err: any) {
+      parseError = err?.message || String(err)
+      // Retry 1 lần: nhờ model sửa thành JSON thuần
+      try {
+        const repaired = await askClaude(REPAIR_PROMPT + raw, {
+          maxTokens: 4096,
+          temperature: 0,
+        })
+        raw = repaired
+        tasks = parseTasksJson(repaired)
+        parseError = null
+      } catch (err2: any) {
+        return NextResponse.json(
+          {
+            error:
+              'AI trả về dữ liệu không đúng định dạng JSON, không thể tạo danh sách việc tự động.',
+            detail: parseError,
+            repair_error: err2?.message || String(err2),
+            raw_output: raw,
+          },
+          { status: 502 }
+        )
+      }
     }
 
     const validTasks = tasks
@@ -92,7 +134,7 @@ export async function POST(req: Request) {
 
     if (validTasks.length === 0) {
       return NextResponse.json(
-        { error: 'AI không sinh ra việc nào hợp lệ' },
+        { error: 'AI không sinh ra việc nào hợp lệ', raw_output: raw },
         { status: 502 }
       )
     }
@@ -110,7 +152,6 @@ export async function POST(req: Request) {
       }))
     )
 
-    // ===== TỰ ĐỘNG VIẾT BÀI ĐẦU TIÊN =====
     let autoWritten: any[] = []
     let autoWriteError: string | null = null
     try {
@@ -131,7 +172,6 @@ export async function POST(req: Request) {
         clientInfo
       )
     } catch (err: any) {
-      // Task đã tạo — không fail cả request, nhưng trả lỗi để UI biết
       autoWriteError = err?.message || String(err)
       console.error('Auto write content error:', autoWriteError)
     }

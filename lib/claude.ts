@@ -10,14 +10,21 @@ function getClient() {
   return new Anthropic({ apiKey })
 }
 
-export async function askClaude(prompt: string) {
+export type AskClaudeOptions = {
+  maxTokens?: number
+  temperature?: number
+}
+
+export async function askClaude(prompt: string, options?: AskClaudeOptions) {
   const anthropic = getClient()
+  const max_tokens = options?.maxTokens ?? 2000
+  const temperature = options?.temperature ?? 0.7
 
   try {
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-5',
-      max_tokens: 2000,
-      temperature: 0.7,
+      max_tokens,
+      temperature,
       messages: [{ role: 'user', content: prompt }],
     })
 

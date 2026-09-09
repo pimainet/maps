@@ -132,13 +132,20 @@ Yêu cầu:
 - priority là một trong: "low", "medium", "high" — theo đúng mức ưu tiên nêu trong lộ trình.
 - due_date tính từ {{start_date}}, định dạng YYYY-MM-DD, dựa vào tuần mà việc đó thuộc về trong lộ trình (tuần 1 → due_date trong 7 ngày đầu, tuần 2 → 7 ngày tiếp theo, v.v.), tăng dần hợp lý trong khoảng 30 ngày.
 - title ngắn gọn, hành động rõ ràng (ví dụ: "Đăng bài: 5 dấu hiệu cần lấy cao răng định kỳ"). Với task_type "content", title PHẢI là chủ đề bài viết cụ thể, không viết chung chung như "Đăng bài tuần 1".
-- description giải thích ngắn gọn lý do/nội dung chi tiết của việc đó.
+- description giải thích ngắn gọn lý do/nội dung chi tiết của việc đó. Không dùng dấu xuống dòng trong description; viết 1 câu liền.
 
-CHỈ trả về đúng một JSON array hợp lệ, không thêm chữ nào khác, không markdown, không giải thích, theo đúng cấu trúc:
+ĐỊNH DẠNG ĐẦU RA (BẮT BUỘC):
+- Chỉ trả về đúng 1 JSON array hợp lệ.
+- Không markdown, không code fence (không dùng ```), không giải thích trước/sau.
+- Không comment trong JSON.
+- Dùng dấu nháy kép " cho mọi key và string.
+- Ký tự đặc biệt trong string phải escape đúng JSON (\", \\, \n nếu cần).
+- Phần tử đúng cấu trúc:
 [
-  { "title": "...", "description": "...", "task_type": "content", "priority": "high", "due_date": "YYYY-MM-DD" }
+  {"title":"...","description":"...","task_type":"content","priority":"high","due_date":"YYYY-MM-DD"}
 ]
 `
+
 
 export const SERP_AWARE_PROMPT = `
 Bạn là chuyên gia Local SEO thực chiến. Hãy phân tích nhanh trước khi viết nội dung Google Business Profile.
