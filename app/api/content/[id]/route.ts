@@ -6,6 +6,7 @@ import {
   saveContentHistory,
 } from '@/lib/db'
 import { requireActiveWorkspaceId } from '@/lib/auth'
+import { autoWriteContentBatch } from '@/lib/write-content'
 
 const ALLOWED_STATUS = ['drafted', 'waiting_approval', 'approved', 'published']
 
@@ -19,8 +20,6 @@ function parseEditNote(editNote: string | null | undefined) {
       critic_feedback: parsed.critic_feedback || '',
     }
   } catch {
-    // edit_note của các dòng lịch sử "lưu chỉnh sửa" là text mô tả thường,
-    // không phải JSON — trường hợp này không có dữ liệu trung gian để hiện.
     return { serp_analysis: '', ai_draft: '', critic_feedback: '' }
   }
 }
@@ -35,9 +34,6 @@ export async function GET(
     const content = await getContentById(id, workspaceId)
     const history = await getLatestContentHistory(id, workspaceId)
 
-    // Tìm dòng lịch sử GẦN NHẤT có đủ dữ liệu sinh AI (serp_analysis/
-    // ai_draft/critic_feedback) để hiển thị, vì dòng mới nhất có thể chỉ
-    // là 1 lần "lưu chỉnh sửa" (edit_note dạng text, không có JSON đó).
     const { serp_analysis, ai_draft, critic_feedback } = parseEditNote(history?.edit_note)
 
     return NextResponse.json({
@@ -48,7 +44,11 @@ export async function GET(
       critic_feedback,
     })
   } catch (error: any) {
-    const status = error.message?.includes('Unauthorized') ? 401 : error.message?.includes('NoWorkspace') ? 409 : 404
+    const status = error.message?.includes('Unauthorized')
+      ? 401
+      : error.message?.includes('NoWorkspace')
+        ? 409
+        : 404
     return NextResponse.json({ error: error.message }, { status })
   }
 }
@@ -99,10 +99,26 @@ export async function PATCH(
       )
     }
 
+    // ===== KHI DUYỆT BÀI → TỰ VIẾT THÊM 1 BÀI MỚI =====
+    if (body.status === 'approved') {
+      try {
+        const content = updatedStatus || (await getContentById(id, workspaceId))
+        // Viết đúng 1 bài mới cho cùng khách hàng (nếu còn task content chưa viết)
+        await autoWriteContentBatch(content.client_id, workspaceId, 1)
+      } catch (err: any) {
+        // Không làm fail request duyệt nếu viết bài mới lỗi
+        console.error('Auto write after approve error:', err.message)
+      }
+    }
+
     const finalContent = await getContentById(id, workspaceId)
     return NextResponse.json(finalContent)
   } catch (error: any) {
-    const status = error.message?.includes('Unauthorized') ? 401 : error.message?.includes('NoWorkspace') ? 409 : 500
+    const status = error.message?.includes('Unauthorized')
+      ? 401
+      : error.message?.includes('NoWorkspace')
+        ? 409
+        : 500
     return NextResponse.json({ error: error.message }, { status })
   }
 }

@@ -1155,7 +1155,12 @@ function Plan({ setToast }: any) {
       }
 
       setTasksCreated(data.items || [])
-      setToast(`Đã tạo ${data.items?.length || 0} việc cần làm từ lộ trình`)
+const written = data.auto_written || 0
+setToast(
+  written > 0
+    ? `Đã tạo ${data.items?.length || 0} việc và tự viết ${written} bài vào Chờ duyệt`
+    : `Đã tạo ${data.items?.length || 0} việc cần làm từ lộ trình`
+)
     } catch (err: any) {
       setTasksError(err.message || 'Có lỗi xảy ra')
     } finally {

@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import { askClaude } from '@/lib/claude'
-import { createTasks } from '@/lib/db'
+import { createTasks, getClientById } from '@/lib/db'
 import { TASKS_FROM_PLAN_PROMPT } from '@/lib/prompts'
 import { requireActiveWorkspaceId } from '@/lib/auth'
+import { autoWriteContentBatch } from '@/lib/write-content'
 
 function parseTasksJson(raw: string) {
   const cleaned = raw
@@ -28,6 +29,9 @@ function parseTasksJson(raw: string) {
 const VALID_TYPES = ['content', 'profile_update', 'photo', 'review', 'other']
 const VALID_PRIORITIES = ['low', 'medium', 'high']
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
+// Số bài tự viết ngay sau khi sinh lịch việc
+const AUTO_WRITE_COUNT = 3
 
 export async function POST(req: Request) {
   try {
@@ -101,9 +105,46 @@ export async function POST(req: Request) {
       }))
     )
 
-    return NextResponse.json({ items: created })
+    // ===== TỰ ĐỘNG VIẾT 3 BÀI ĐẦU TIÊN =====
+    let autoWritten: any[] = []
+    try {
+      const client = await getClientById(client_id, workspaceId)
+      const clientInfo = {
+        name: client?.name || business_name,
+        industry: client?.industry || industry,
+        area: client?.area || area,
+        brand_voice: client?.brand_voice,
+        phone: client?.phone,
+        notes: client?.notes,
+      }
+
+      autoWritten = await autoWriteContentBatch(
+        client_id,
+        workspaceId,
+        AUTO_WRITE_COUNT,
+        clientInfo
+      )
+    } catch (err: any) {
+      // Không làm fail cả request nếu viết bài lỗi — task vẫn đã tạo
+      console.error('Auto write content error:', err.message)
+    }
+
+    const writtenCount = autoWritten.filter((r) => !r.skipped).length
+
+    return NextResponse.json({
+      items: created,
+      auto_written: writtenCount,
+      message:
+        writtenCount > 0
+          ? `Đã tạo ${created.length} việc và tự viết ${writtenCount} bài đưa vào Chờ duyệt`
+          : `Đã tạo ${created.length} việc`,
+    })
   } catch (error: any) {
-    const status = error.message?.includes('Unauthorized') ? 401 : error.message?.includes('NoWorkspace') ? 409 : 500
+    const status = error.message?.includes('Unauthorized')
+      ? 401
+      : error.message?.includes('NoWorkspace')
+        ? 409
+        : 500
     return NextResponse.json({ error: error.message }, { status })
   }
 }
