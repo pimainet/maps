@@ -433,6 +433,27 @@ export async function updateContentStatus(id: string, status: string, workspaceI
   return data
 }
 
+/** Xóa content (và history liên quan nếu có RLS/cascade; history xóa thủ công nếu cần). */
+export async function deleteContentById(id: string, workspaceId?: string) {
+  const supabase = await createSupabaseServerClient()
+
+  // Xóa history trước (tránh orphan)
+  let hist = supabase.from('content_history').delete().eq('content_id', id)
+  if (workspaceId) {
+    hist = hist.eq('workspace_id', workspaceId)
+  }
+  const histRes = await hist
+  if (histRes.error) throw histRes.error
+
+  let query = supabase.from('contents').delete().eq('id', id)
+  if (workspaceId) {
+    query = query.eq('workspace_id', workspaceId)
+  }
+  const { error } = await query
+  if (error) throw error
+  return true
+}
+
 // ── Content history ─────────────────────────────────────────────────
 // Schema thật: id, created_at, content_id, client_id, ai_version,
 // human_edited_version, edit_note, workspace_id.

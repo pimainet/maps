@@ -5,6 +5,10 @@ import { TASKS_FROM_PLAN_PROMPT } from '@/lib/prompts'
 import { requireActiveWorkspaceId } from '@/lib/auth'
 import { autoWriteContentBatch } from '@/lib/write-content'
 
+// Vercel: cho phép chạy lâu hơn (Pro tối đa 300s). Hobby thường ~10–60s.
+export const maxDuration = 300
+export const runtime = 'nodejs'
+
 function parseTasksJson(raw: string) {
   const cleaned = raw
     .trim()
@@ -30,8 +34,9 @@ const VALID_TYPES = ['content', 'profile_update', 'photo', 'review', 'other']
 const VALID_PRIORITIES = ['low', 'medium', 'high']
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
-// Số bài tự viết ngay sau khi sinh lịch việc
-const AUTO_WRITE_COUNT = 3
+// Mỗi bài = 4 lần gọi Claude. Trên Vercel nên giữ 1 để tránh timeout;
+// sau khi duyệt bài, hệ thống sẽ tự viết thêm 1 bài tiếp theo.
+const AUTO_WRITE_COUNT = 1
 
 export async function POST(req: Request) {
   try {
@@ -105,8 +110,9 @@ export async function POST(req: Request) {
       }))
     )
 
-    // ===== TỰ ĐỘNG VIẾT 3 BÀI ĐẦU TIÊN =====
+    // ===== TỰ ĐỘNG VIẾT BÀI ĐẦU TIÊN =====
     let autoWritten: any[] = []
+    let autoWriteError: string | null = null
     try {
       const client = await getClientById(client_id, workspaceId)
       const clientInfo = {
@@ -125,19 +131,35 @@ export async function POST(req: Request) {
         clientInfo
       )
     } catch (err: any) {
-      // Không làm fail cả request nếu viết bài lỗi — task vẫn đã tạo
-      console.error('Auto write content error:', err.message)
+      // Task đã tạo — không fail cả request, nhưng trả lỗi để UI biết
+      autoWriteError = err?.message || String(err)
+      console.error('Auto write content error:', autoWriteError)
     }
 
     const writtenCount = autoWritten.filter((r) => !r.skipped).length
+    const writeErrors = autoWritten
+      .filter((r) => r.reason === 'error')
+      .map((r) => ({ task_id: r.task_id, title: r.title, error: r.error }))
+
+    if (writeErrors.length && !autoWriteError) {
+      autoWriteError = writeErrors.map((e) => e.error).join('; ')
+    }
+
+    let message: string
+    if (writtenCount > 0) {
+      message = `Đã tạo ${created.length} việc và tự viết ${writtenCount} bài đưa vào Chờ duyệt`
+    } else if (autoWriteError) {
+      message = `Đã tạo ${created.length} việc, nhưng tự viết bài thất bại: ${autoWriteError}`
+    } else {
+      message = `Đã tạo ${created.length} việc`
+    }
 
     return NextResponse.json({
       items: created,
       auto_written: writtenCount,
-      message:
-        writtenCount > 0
-          ? `Đã tạo ${created.length} việc và tự viết ${writtenCount} bài đưa vào Chờ duyệt`
-          : `Đã tạo ${created.length} việc`,
+      auto_write_error: autoWriteError,
+      auto_write_details: autoWritten,
+      message,
     })
   } catch (error: any) {
     const status = error.message?.includes('Unauthorized')

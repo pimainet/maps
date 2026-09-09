@@ -8,6 +8,9 @@ import {
 import { requireActiveWorkspaceId } from '@/lib/auth'
 import { autoWriteContentBatch } from '@/lib/write-content'
 
+export const maxDuration = 300
+export const runtime = 'nodejs'
+
 const ALLOWED_STATUS = ['drafted', 'waiting_approval', 'approved', 'published']
 
 function parseEditNote(editNote: string | null | undefined) {
@@ -100,19 +103,27 @@ export async function PATCH(
     }
 
     // ===== KHI DUYỆT BÀI → TỰ VIẾT THÊM 1 BÀI MỚI =====
+    let nextAutoWrite: any = null
+    let nextAutoWriteError: string | null = null
     if (body.status === 'approved') {
       try {
         const content = updatedStatus || (await getContentById(id, workspaceId))
-        // Viết đúng 1 bài mới cho cùng khách hàng (nếu còn task content chưa viết)
-        await autoWriteContentBatch(content.client_id, workspaceId, 1)
+        const results = await autoWriteContentBatch(content.client_id, workspaceId, 1)
+        nextAutoWrite = results
+        const failed = results.find((r: any) => r.reason === 'error')
+        if (failed) nextAutoWriteError = failed.error
       } catch (err: any) {
-        // Không làm fail request duyệt nếu viết bài mới lỗi
-        console.error('Auto write after approve error:', err.message)
+        nextAutoWriteError = err?.message || String(err)
+        console.error('Auto write after approve error:', nextAutoWriteError)
       }
     }
 
     const finalContent = await getContentById(id, workspaceId)
-    return NextResponse.json(finalContent)
+    return NextResponse.json({
+      ...finalContent,
+      next_auto_write: nextAutoWrite,
+      next_auto_write_error: nextAutoWriteError,
+    })
   } catch (error: any) {
     const status = error.message?.includes('Unauthorized')
       ? 401

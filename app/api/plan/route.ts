@@ -4,6 +4,9 @@ import { savePlan, getLatestPlanByClient, getAllPlans } from '@/lib/db'
 import { PLAN_30_DAYS_PROMPT } from '@/lib/prompts'
 import { requireActiveWorkspaceId } from '@/lib/auth'
 
+export const maxDuration = 300
+export const runtime = 'nodejs'
+
 export async function GET(req: Request) {
   try {
     const workspaceId = await requireActiveWorkspaceId()

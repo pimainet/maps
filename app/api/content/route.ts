@@ -8,6 +8,8 @@ import {
   getContentByTaskId,
   updateContentStatus,
   saveContentHistory,
+  getLatestContentHistory,
+  deleteContentById,
 } from '@/lib/db'
 import {
   SERP_AWARE_PROMPT,
@@ -16,6 +18,9 @@ import {
   REFINER_PROMPT,
 } from '@/lib/prompts'
 import { requireActiveWorkspaceId } from '@/lib/auth'
+
+export const maxDuration = 300
+export const runtime = 'nodejs'
 
 export async function GET(req: Request) {
   try {
@@ -31,24 +36,19 @@ export async function GET(req: Request) {
 }
 
 // POST: chạy pipeline AI viết 1 bài GBP post.
-// Có 2 cách gọi:
-// 1) { task_id, business_name, industry, area, brand_voice, phone, extra_info }
-//    -> viết bài cho 1 task loại "content" đã có sẵn (từ lịch việc sinh từ lộ trình).
-//    Nếu task đó chưa có content liên kết thì tự tạo mới, tránh tạo trùng
-//    nếu gọi lại nhiều lần.
-// 2) { client_id, plan_id?, topic, ...client info } -> viết bài ad-hoc,
-//    không gắn task (dùng cho trang /test hoặc viết nhanh không qua lộ trình).
+// AI chạy xong mới ghi DB — tránh kẹt drafted trống khi Claude lỗi / timeout.
 export async function POST(req: Request) {
   try {
     const workspaceId = await requireActiveWorkspaceId()
     const body = await req.json()
 
-    let contentRow: any
     let topic = body.topic
     let goal = body.goal
+    let task: any = null
+    let existingContent: any = null
 
     if (body.task_id) {
-      const task = await getTaskById(body.task_id, workspaceId)
+      task = await getTaskById(body.task_id, workspaceId)
       if (task.task_type !== 'content') {
         return NextResponse.json(
           { error: 'Task này không phải loại "content", không thể viết bài AI cho việc này' },
@@ -58,13 +58,31 @@ export async function POST(req: Request) {
       topic = task.title
       goal = task.description
 
-      const existing = await getContentByTaskId(task.id, workspaceId)
-      contentRow =
-        existing ||
-        (await createContentForTask({
-          ...task,
-          workspace_id: workspaceId,
-        }))
+      existingContent = await getContentByTaskId(task.id, workspaceId)
+      if (existingContent) {
+        const history = await getLatestContentHistory(existingContent.id, workspaceId)
+        const hasText =
+          !!(history?.ai_version && history.ai_version.trim()) ||
+          !!(history?.human_edited_version && history.human_edited_version.trim())
+
+        if (
+          hasText ||
+          existingContent.status === 'waiting_approval' ||
+          existingContent.status === 'approved' ||
+          existingContent.status === 'published'
+        ) {
+          return NextResponse.json(
+            {
+              error: 'Task này đã có bài viết',
+              content: existingContent,
+            },
+            { status: 409 }
+          )
+        }
+        // drafted trống → xóa để viết lại
+        await deleteContentById(existingContent.id, workspaceId)
+        existingContent = null
+      }
     } else {
       if (!body.client_id || !topic) {
         return NextResponse.json(
@@ -72,12 +90,6 @@ export async function POST(req: Request) {
           { status: 400 }
         )
       }
-      contentRow = await createAdHocContent({
-        client_id: body.client_id,
-        plan_id: body.plan_id,
-        topic,
-        workspace_id: workspaceId,
-      })
     }
 
     // 1. SERP-Aware
@@ -120,9 +132,22 @@ export async function POST(req: Request) {
 
     const final_content = await askClaude(refinerPrompt)
 
-    // 5. Lưu: contents.status = waiting_approval; toàn bộ văn bản AI lưu
-    // vào 1 dòng content_history mới (ai_version = bản cuối AI, edit_note
-    // giữ serp_analysis + bản nháp + critic_feedback dạng JSON).
+    // 5. Lưu DB sau khi AI thành công
+    let contentRow: any
+    if (task) {
+      contentRow = await createContentForTask({
+        ...task,
+        workspace_id: workspaceId,
+      })
+    } else {
+      contentRow = await createAdHocContent({
+        client_id: body.client_id,
+        plan_id: body.plan_id,
+        topic,
+        workspace_id: workspaceId,
+      })
+    }
+
     const updatedContent = await updateContentStatus(contentRow.id, 'waiting_approval', workspaceId)
 
     await saveContentHistory({

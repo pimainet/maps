@@ -4,6 +4,9 @@ import { saveAudit, getLatestAuditByClient, getAllAudits } from '@/lib/db'
 import { AUDIT_PROMPT } from '@/lib/prompts'
 import { requireActiveWorkspaceId } from '@/lib/auth'
 
+export const maxDuration = 300
+export const runtime = 'nodejs'
+
 export async function GET(req: Request) {
   try {
     const workspaceId = await requireActiveWorkspaceId()

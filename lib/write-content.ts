@@ -8,6 +8,8 @@ import {
   getTasks,
   getContents,
   getClientById,
+  getLatestContentHistory,
+  deleteContentById,
 } from '@/lib/db'
 import {
   SERP_AWARE_PROMPT,
@@ -25,9 +27,55 @@ type ClientInfo = {
   notes?: string
 }
 
+async function runAiPipeline(
+  topic: string,
+  goal: string,
+  info: ClientInfo | undefined
+) {
+  const serpPrompt = SERP_AWARE_PROMPT
+    .replaceAll('{{industry}}', info?.industry || '')
+    .replaceAll('{{area}}', info?.area || '')
+    .replaceAll('{{topic}}', topic || '')
+    .replaceAll('{{goal}}', goal || '')
+    .replaceAll('{{business_name}}', info?.name || '')
+
+  const serp_analysis = await askClaude(serpPrompt)
+
+  const writerPrompt = WRITER_PROMPT
+    .replaceAll('{{business_name}}', info?.name || '')
+    .replaceAll('{{industry}}', info?.industry || '')
+    .replaceAll('{{area}}', info?.area || '')
+    .replaceAll('{{topic}}', topic || '')
+    .replaceAll('{{goal}}', goal || '')
+    .replaceAll('{{brand_voice}}', info?.brand_voice || 'chuyên nghiệp, gần gũi')
+    .replaceAll('{{phone}}', info?.phone || '')
+    .replaceAll('{{extra_info}}', info?.notes || '')
+    .replaceAll('{{serp_analysis}}', serp_analysis)
+
+  const ai_content = await askClaude(writerPrompt)
+
+  const criticPrompt = CRITIC_PROMPT.replaceAll('{{ai_content}}', ai_content)
+  const critic_feedback = await askClaude(criticPrompt)
+
+  const refinerPrompt = REFINER_PROMPT
+    .replaceAll('{{ai_content}}', ai_content)
+    .replaceAll('{{critic_feedback}}', critic_feedback)
+    .replaceAll('{{business_name}}', info?.name || '')
+    .replaceAll('{{industry}}', info?.industry || '')
+    .replaceAll('{{area}}', info?.area || '')
+    .replaceAll('{{phone}}', info?.phone || '')
+    .replaceAll('{{extra_info}}', info?.notes || '')
+
+  const final_content = await askClaude(refinerPrompt)
+
+  return { serp_analysis, ai_content, critic_feedback, final_content }
+}
+
 /**
  * Viết 1 bài GBP cho 1 task content và đưa vào trạng thái waiting_approval.
- * Nếu task đã có content rồi thì bỏ qua (không viết trùng).
+ * - Chạy AI xong mới tạo/cập nhật content (tránh kẹt drafted trống khi Claude lỗi).
+ * - Nếu đã có content + history hợp lệ thì bỏ qua.
+ * - Nếu chỉ có bản drafted trống (lỗi lần trước) thì xóa và viết lại.
  */
 export async function writeContentForTask(
   taskId: string,
@@ -41,10 +89,19 @@ export async function writeContentForTask(
 
   const existing = await getContentByTaskId(task.id, workspaceId)
   if (existing) {
-    return { skipped: true, reason: 'already_has_content', content: existing }
+    const history = await getLatestContentHistory(existing.id, workspaceId)
+    const hasText =
+      !!(history?.ai_version && history.ai_version.trim()) ||
+      !!(history?.human_edited_version && history.human_edited_version.trim())
+
+    if (hasText || existing.status === 'waiting_approval' || existing.status === 'approved' || existing.status === 'published') {
+      return { skipped: true, reason: 'already_has_content', content: existing }
+    }
+
+    // Bản drafted trống từ lần fail trước → xóa để viết lại
+    await deleteContentById(existing.id, workspaceId)
   }
 
-  // Lấy thông tin khách nếu chưa truyền vào
   let info = clientInfo
   if (!info) {
     const client = await getClientById(task.client_id, workspaceId)
@@ -61,52 +118,16 @@ export async function writeContentForTask(
   const topic = task.title
   const goal = task.description || ''
 
+  // 1–4. AI pipeline TRƯỚC khi ghi DB
+  const { serp_analysis, ai_content, critic_feedback, final_content } =
+    await runAiPipeline(topic, goal, info)
+
+  // 5. Lưu DB sau khi AI thành công
   const contentRow = await createContentForTask({
     ...task,
     workspace_id: workspaceId,
   })
 
-  // 1. SERP-Aware
-  const serpPrompt = SERP_AWARE_PROMPT
-    .replaceAll('{{industry}}', info?.industry || '')
-    .replaceAll('{{area}}', info?.area || '')
-    .replaceAll('{{topic}}', topic || '')
-    .replaceAll('{{goal}}', goal || '')
-    .replaceAll('{{business_name}}', info?.name || '')
-
-  const serp_analysis = await askClaude(serpPrompt)
-
-  // 2. Writer
-  const writerPrompt = WRITER_PROMPT
-    .replaceAll('{{business_name}}', info?.name || '')
-    .replaceAll('{{industry}}', info?.industry || '')
-    .replaceAll('{{area}}', info?.area || '')
-    .replaceAll('{{topic}}', topic || '')
-    .replaceAll('{{goal}}', goal || '')
-    .replaceAll('{{brand_voice}}', info?.brand_voice || 'chuyên nghiệp, gần gũi')
-    .replaceAll('{{phone}}', info?.phone || '')
-    .replaceAll('{{extra_info}}', info?.notes || '')
-    .replaceAll('{{serp_analysis}}', serp_analysis)
-
-  const ai_content = await askClaude(writerPrompt)
-
-  // 3. Critic
-  const criticPrompt = CRITIC_PROMPT.replaceAll('{{ai_content}}', ai_content)
-  const critic_feedback = await askClaude(criticPrompt)
-
-  // 4. Refiner
-  const refinerPrompt = REFINER_PROMPT
-    .replaceAll('{{ai_content}}', ai_content)
-    .replaceAll('{{critic_feedback}}', critic_feedback)
-    .replaceAll('{{business_name}}', info?.name || '')
-    .replaceAll('{{industry}}', info?.industry || '')
-    .replaceAll('{{area}}', info?.area || '')
-    .replaceAll('{{phone}}', info?.phone || '')
-    .replaceAll('{{extra_info}}', info?.notes || '')
-
-  const final_content = await askClaude(refinerPrompt)
-
-  // 5. Lưu
   const updatedContent = await updateContentStatus(
     contentRow.id,
     'waiting_approval',
@@ -133,7 +154,9 @@ export async function writeContentForTask(
 }
 
 /**
- * Lấy danh sách task content của 1 khách hàng chưa có bài viết.
+ * Lấy danh sách task content của 1 khách hàng chưa có bài viết hợp lệ.
+ * Bỏ qua task đã có content có text / đang chờ duyệt / đã duyệt / đã đăng.
+ * Task chỉ có drafted trống vẫn được coi là chưa viết.
  */
 export async function getUnwrittenContentTasks(
   clientId: string,
@@ -144,11 +167,29 @@ export async function getUnwrittenContentTasks(
     getContents(clientId, workspaceId),
   ])
 
-  const writtenTaskIds = new Set(
-    (contents || [])
-      .filter((c: any) => c.task_id)
-      .map((c: any) => c.task_id)
-  )
+  const contentTasks = (contents || []).filter((c: any) => c.task_id)
+  const writtenTaskIds = new Set<string>()
+
+  for (const c of contentTasks) {
+    if (
+      c.status === 'waiting_approval' ||
+      c.status === 'approved' ||
+      c.status === 'published'
+    ) {
+      writtenTaskIds.add(c.task_id)
+      continue
+    }
+    // drafted / khác: chỉ coi là đã viết nếu có history có text
+    try {
+      const history = await getLatestContentHistory(c.id, workspaceId)
+      const hasText =
+        !!(history?.ai_version && history.ai_version.trim()) ||
+        !!(history?.human_edited_version && history.human_edited_version.trim())
+      if (hasText) writtenTaskIds.add(c.task_id)
+    } catch {
+      // không có history → vẫn coi là chưa viết
+    }
+  }
 
   return (tasks || [])
     .filter(
@@ -162,6 +203,7 @@ export async function getUnwrittenContentTasks(
 
 /**
  * Tự viết N bài đầu tiên cho các task content chưa viết.
+ * Mỗi bài lỗi được ghi lại, không dừng cả batch.
  */
 export async function autoWriteContentBatch(
   clientId: string,
@@ -176,13 +218,14 @@ export async function autoWriteContentBatch(
   for (const task of toWrite) {
     try {
       const result = await writeContentForTask(task.id, workspaceId, clientInfo)
-      results.push({ task_id: task.id, ...result })
+      results.push({ task_id: task.id, title: task.title, ...result })
     } catch (err: any) {
       results.push({
         task_id: task.id,
+        title: task.title,
         skipped: true,
         reason: 'error',
-        error: err.message,
+        error: err?.message || String(err),
       })
     }
   }
