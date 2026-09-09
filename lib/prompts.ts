@@ -136,7 +136,7 @@ Yêu cầu:
 
 ĐỊNH DẠNG ĐẦU RA (BẮT BUỘC):
 - Chỉ trả về đúng 1 JSON array hợp lệ.
-- Không markdown, không code fence (không dùng ```), không giải thích trước/sau.
+- Không markdown, không code fence (không dùng ba dấu backtick), không giải thích trước/sau.
 - Không comment trong JSON.
 - Dùng dấu nháy kép " cho mọi key và string.
 - Ký tự đặc biệt trong string phải escape đúng JSON (\", \\, \n nếu cần).
