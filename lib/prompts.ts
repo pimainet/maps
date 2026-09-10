@@ -21,6 +21,8 @@ Thông tin đầu vào:
 - Tình trạng hình ảnh: {{photos_status}}
 - Thông tin bổ sung: {{additional_info}}
 
+{{progress_context}}
+
 Hãy trả về đúng cấu trúc sau:
 
 ### 1. Điểm tổng quan (thang 10)
@@ -56,6 +58,7 @@ Yêu cầu bắt buộc:
 - Nếu thiếu dữ liệu ở hạng mục nào thì phải nêu rõ.
 - Ưu tiên tính hành động và khả năng áp dụng thực tế.
 - Không viết lan man.
+- Nếu có "Tiến độ đã ghi nhận trong hệ thống": phải tham chiếu — không liệt kê lại việc one-shot đã hoàn thành như việc cần làm ngay, trừ khi dữ liệu GBP hiện tại vẫn cho thấy chưa xử lý trên hồ sơ thật. Ưu tiên khoảng trống còn lại và việc duy trì (nội dung mới).
 `
 
 export const PLAN_30_DAYS_PROMPT = `
@@ -69,6 +72,8 @@ Thông tin đầu vào:
 - Khu vực: {{area}}
 - Kết quả Audit:
 {{audit_result}}
+
+{{progress_context}}
 
 Hãy trả về đúng cấu trúc sau:
 
@@ -106,6 +111,7 @@ Yêu cầu bắt buộc:
 - Phân biệt rõ việc làm một lần và việc duy trì.
 - Không giả định thông tin không có trong Audit.
 - Viết ngắn gọn, cụ thể, có tính hành động.
+- Nếu có tiến độ hệ thống: không đưa việc one-shot đã done vào lộ trình; ưu tiên task còn mở và chủ đề nội dung chưa đăng; việc duy trì (đăng bài) phải đề xuất góc/chủ đề mới, không trùng bài đã có.
 `
 
 export const TASKS_FROM_PLAN_PROMPT = `
@@ -121,6 +127,8 @@ Thông tin đầu vào:
 - Lộ trình 30 ngày:
 {{plan_result}}
 
+{{progress_context}}
+
 Yêu cầu:
 - Liệt kê 8–15 việc cụ thể, khả thi, bám sát đúng nội dung lộ trình — không thêm việc không có trong lộ trình.
 - Phân loại mỗi việc vào đúng 1 trong các task_type sau:
@@ -133,6 +141,8 @@ Yêu cầu:
 - due_date tính từ {{start_date}}, định dạng YYYY-MM-DD, dựa vào tuần mà việc đó thuộc về trong lộ trình (tuần 1 → due_date trong 7 ngày đầu, tuần 2 → 7 ngày tiếp theo, v.v.), tăng dần hợp lý trong khoảng 30 ngày.
 - title ngắn gọn, hành động rõ ràng (ví dụ: "Đăng bài: 5 dấu hiệu cần lấy cao răng định kỳ"). Với task_type "content", title PHẢI là chủ đề bài viết cụ thể, không viết chung chung như "Đăng bài tuần 1".
 - description giải thích ngắn gọn lý do/nội dung chi tiết của việc đó. Không dùng dấu xuống dòng trong description; viết 1 câu liền.
+- Không tạo việc trùng hoặc gần trùng title với task đã có trong tiến độ hệ thống (mọi status). Không tạo content task trùng chủ đề bài đã chờ duyệt/đã duyệt/đã đăng.
+- Ưu tiên việc còn mở chưa có trong danh sách nếu lộ trình vẫn cần, và việc mới phát sinh từ audit/plan hiện tại.
 
 ĐỊNH DẠNG ĐẦU RA (BẮT BUỘC):
 - Chỉ trả về đúng 1 JSON array hợp lệ.

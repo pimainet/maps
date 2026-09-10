@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server'
 import { askClaude } from '@/lib/claude'
-import { createTasks, getClientById } from '@/lib/db'
+import { createTasks, getClientById, getTasks } from '@/lib/db'
 import { TASKS_FROM_PLAN_PROMPT } from '@/lib/prompts'
 import { requireActiveWorkspaceId } from '@/lib/auth'
 import { autoWriteContentBatch } from '@/lib/write-content'
+import {
+  getClientProgress,
+  filterDuplicateTasks,
+} from '@/lib/client-memory'
 
 export const maxDuration = 300
 export const runtime = 'nodejs'
@@ -16,25 +20,19 @@ type TaskItem = {
   due_date?: string
 }
 
-/** Lấy JSON array từ raw text dù AI có thêm markdown / giải thích. */
 function extractJsonArray(raw: string): string {
   let s = (raw || '').trim()
   if (!s) throw new Error('AI trả về chuỗi rỗng')
 
-  // Bỏ code fence ```json ... ```
   s = s.replace(/^```(?:json|JSON)?\s*/i, '').replace(/\s*```$/i, '').trim()
 
-  // Nếu còn text thừa, cắt từ [ đầu tiên đến ] cuối cùng
   const start = s.indexOf('[')
   const end = s.lastIndexOf(']')
   if (start === -1 || end === -1 || end <= start) {
     throw new Error('Không tìm thấy JSON array trong phản hồi AI')
   }
   s = s.slice(start, end + 1)
-
-  // Sửa lỗi thường gặp: trailing comma trước ] hoặc }
   s = s.replace(/,\s*([\]}])/g, '$1')
-
   return s
 }
 
@@ -56,7 +54,6 @@ const VALID_TYPES = ['content', 'profile_update', 'photo', 'review', 'other']
 const VALID_PRIORITIES = ['low', 'medium', 'high']
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
-// Mỗi bài = 4 lần Claude. Giữ 1 bài để tránh timeout trên Vercel.
 const AUTO_WRITE_COUNT = 1
 
 const REPAIR_PROMPT = `Bạn nhận được phản hồi sau đây từ một model khác. Hãy CHỈ trả về một JSON array hợp lệ chứa các task, không markdown, không giải thích.
@@ -73,7 +70,15 @@ export async function POST(req: Request) {
   try {
     const workspaceId = await requireActiveWorkspaceId()
     const body = await req.json()
-    const { client_id, plan_id, business_name, industry, area, plan_result, start_date } = body
+    const {
+      client_id,
+      plan_id,
+      business_name,
+      industry,
+      area,
+      plan_result,
+      start_date,
+    } = body
 
     if (!client_id || !plan_result) {
       return NextResponse.json(
@@ -82,15 +87,31 @@ export async function POST(req: Request) {
       )
     }
 
-    const effectiveStartDate = start_date || new Date().toISOString().slice(0, 10)
+    const effectiveStartDate =
+      start_date || new Date().toISOString().slice(0, 10)
 
-    const prompt = TASKS_FROM_PLAN_PROMPT.replaceAll('{{business_name}}', business_name || '')
+    // Bộ nhớ vận hành
+    let progress_context = ''
+    let progress: Awaited<ReturnType<typeof getClientProgress>> | null = null
+    try {
+      progress = await getClientProgress(client_id, workspaceId)
+      progress_context = progress.summary_text
+    } catch (e: any) {
+      console.error('getClientProgress tasks:', e?.message)
+      progress_context =
+        '### Tiến độ đã ghi nhận trong hệ thống\n- Không lấy được tiến độ.'
+    }
+
+    const prompt = TASKS_FROM_PLAN_PROMPT.replaceAll(
+      '{{business_name}}',
+      business_name || ''
+    )
       .replaceAll('{{industry}}', industry || '')
       .replaceAll('{{area}}', area || '')
       .replaceAll('{{start_date}}', effectiveStartDate)
       .replaceAll('{{plan_result}}', plan_result)
+      .replaceAll('{{progress_context}}', progress_context)
 
-    // JSON structured → temperature thấp + token cao hơn (8–15 task dễ cắt ở 2000)
     let raw = await askClaude(prompt, { maxTokens: 4096, temperature: 0.2 })
 
     let tasks: TaskItem[]
@@ -99,7 +120,6 @@ export async function POST(req: Request) {
       tasks = parseTasksJson(raw)
     } catch (err: any) {
       parseError = err?.message || String(err)
-      // Retry 1 lần: nhờ model sửa thành JSON thuần
       try {
         const repaired = await askClaude(REPAIR_PROMPT + raw, {
           maxTokens: 4096,
@@ -122,25 +142,58 @@ export async function POST(req: Request) {
       }
     }
 
-    const validTasks = tasks
+    const normalized = tasks
       .filter((t) => t && typeof t.title === 'string' && t.title.trim())
       .map((t) => ({
         title: t.title!.trim(),
         description: t.description?.trim(),
-        task_type: VALID_TYPES.includes(t.task_type || '') ? t.task_type! : 'other',
-        priority: VALID_PRIORITIES.includes(t.priority || '') ? t.priority! : 'medium',
+        task_type: VALID_TYPES.includes(t.task_type || '')
+          ? t.task_type!
+          : 'other',
+        priority: VALID_PRIORITIES.includes(t.priority || '')
+          ? t.priority!
+          : 'medium',
         due_date: DATE_RE.test(t.due_date || '') ? t.due_date : undefined,
       }))
 
-    if (validTasks.length === 0) {
-      return NextResponse.json(
-        { error: 'AI không sinh ra việc nào hợp lệ', raw_output: raw },
-        { status: 502 }
-      )
+    // Dedup với task đã có trong DB (mọi status)
+    const existingTasks = (await getTasks({ clientId: client_id, workspaceId })) || []
+    const existingForDedup = existingTasks.map((t: any) => ({
+      title: t.title || '',
+      task_type: t.task_type,
+      status: t.status,
+    }))
+    // Cũng coi chủ đề content đã có như "đã có việc content"
+    if (progress?.contents_done?.length) {
+      for (const c of progress.contents_done) {
+        existingForDedup.push({
+          title: c.topic,
+          task_type: 'content',
+          status: c.status,
+        })
+      }
+    }
+
+    const { kept, skipped } = filterDuplicateTasks(normalized, existingForDedup)
+
+    if (kept.length === 0) {
+      return NextResponse.json({
+        items: [],
+        skipped_duplicates: skipped.length,
+        auto_written: 0,
+        message:
+          skipped.length > 0
+            ? `AI đề xuất ${skipped.length} việc nhưng tất cả đều trùng việc/bài đã có — không tạo thêm.`
+            : 'AI không sinh ra việc nào hợp lệ',
+        error:
+          skipped.length === 0
+            ? 'AI không sinh ra việc nào hợp lệ'
+            : undefined,
+      }, { status: skipped.length > 0 ? 200 : 502 })
     }
 
     const created = await createTasks(
-      validTasks.map((t) => ({
+      kept.map((t) => ({
         client_id,
         plan_id,
         title: t.title,
@@ -185,21 +238,24 @@ export async function POST(req: Request) {
       autoWriteError = writeErrors.map((e) => e.error).join('; ')
     }
 
-    let message: string
+    const parts = [`Đã tạo ${created.length} việc mới`]
+    if (skipped.length > 0) {
+      parts.push(`bỏ qua ${skipped.length} việc trùng lịch sử`)
+    }
     if (writtenCount > 0) {
-      message = `Đã tạo ${created.length} việc và tự viết ${writtenCount} bài đưa vào Chờ duyệt`
+      parts.push(`tự viết ${writtenCount} bài vào Chờ duyệt`)
     } else if (autoWriteError) {
-      message = `Đã tạo ${created.length} việc, nhưng tự viết bài thất bại: ${autoWriteError}`
-    } else {
-      message = `Đã tạo ${created.length} việc`
+      parts.push(`tự viết bài lỗi: ${autoWriteError}`)
     }
 
     return NextResponse.json({
       items: created,
+      skipped_duplicates: skipped.length,
+      skipped_titles: skipped.map((s) => s.title),
       auto_written: writtenCount,
       auto_write_error: autoWriteError,
       auto_write_details: autoWritten,
-      message,
+      message: parts.join('; '),
     })
   } catch (error: any) {
     const status = error.message?.includes('Unauthorized')

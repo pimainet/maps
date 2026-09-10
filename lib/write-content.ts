@@ -11,6 +11,7 @@ import {
   getLatestContentHistory,
   deleteContentById,
 } from '@/lib/db'
+import { titlesSimilar } from '@/lib/client-memory'
 import {
   SERP_AWARE_PROMPT,
   WRITER_PROMPT,
@@ -117,6 +118,23 @@ export async function writeContentForTask(
 
   const topic = task.title
   const goal = task.description || ''
+
+  // Tránh viết bài chủ đề gần trùng bài đã có (approved/published/waiting)
+  try {
+    const existingContents = (await getContents(task.client_id, workspaceId)) || []
+    for (const c of existingContents) {
+      if (!['waiting_approval', 'approved', 'published'].includes(c.status)) continue
+      if (c.topic && titlesSimilar(c.topic, topic)) {
+        return {
+          skipped: true,
+          reason: 'similar_topic_exists',
+          content: c,
+        }
+      }
+    }
+  } catch {
+    /* ignore */
+  }
 
   // 1–4. AI pipeline TRƯỚC khi ghi DB
   const { serp_analysis, ai_content, critic_feedback, final_content } =
