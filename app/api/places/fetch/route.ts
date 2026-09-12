@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { canonicalizePlaceId } from '@/lib/place-identity'
 
 export async function POST(req: NextRequest) {
   try {
@@ -82,7 +83,7 @@ export async function POST(req: NextRequest) {
 
     // Đưa về dạng dễ dùng
     const result = {
-      place_id: place.id,
+      place_id: canonicalizePlaceId(place.id) || place.id,
       name: place.displayName?.text || '',
       phone: place.nationalPhoneNumber || place.internationalPhoneNumber || '',
       website_url: place.websiteUri || '',

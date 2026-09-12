@@ -18,6 +18,7 @@ export default function NewClientPage() {
     gbp_link: '',
     website_url: '',
     notes: '',
+    place_id: '',
   })
 
   function update(key: string, value: string) {
@@ -60,6 +61,7 @@ export default function NewClientPage() {
         gbp_link: data.gbp_link || prev.gbp_link,
         area: data.area || prev.area,
         industry: data.industry || prev.industry,
+        place_id: data.place_id || prev.place_id,
         notes:
           prev.notes ||
           `Đánh giá: ${data.rating || 'N/A'} (${data.review_count || 0} reviews)\n${data.description || ''}`,
@@ -86,10 +88,18 @@ export default function NewClientPage() {
       const data = await res.json()
 
       if (!res.ok) {
+        if (res.status === 409 && data.existing_client?.id) {
+          setError(
+            (data.error || 'Doanh nghiệp này đã tồn tại.') +
+              ' Bạn có thể mở hồ sơ đã có.'
+          )
+          // Cho phép điều hướng nhanh
+          ;(window as any).__dupClientId = data.existing_client.id
+          throw new Error(data.error || 'Trùng Place/Link Google Maps')
+        }
         throw new Error(data.error || 'Không tạo được khách hàng')
       }
 
-      // Chuyển sang trang chi tiết khách
       router.push(`/clients/${data.id}`)
     } catch (err: any) {
       setError(err.message || 'Có lỗi xảy ra')

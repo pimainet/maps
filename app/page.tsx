@@ -350,6 +350,7 @@ function Clients({ navigate, query, setQuery }: any) {
 function NewClient({ navigate, setToast }: any) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [dupClientId, setDupClientId] = useState<string | null>(null)
   const [form, setForm] = useState({
     name: '',
     industry: '',
@@ -358,6 +359,7 @@ function NewClient({ navigate, setToast }: any) {
     contact_name: '',
     brand_voice: 'chuyên nghiệp, gần gũi',
     gbp_link: '',
+    place_id: '',
     website_url: '',
     notes: '',
   })
@@ -383,6 +385,14 @@ function NewClient({ navigate, setToast }: any) {
       const data = await res.json()
 
       if (!res.ok) {
+        if (res.status === 409 && data.existing_client?.id) {
+          setError(
+            (data.error || 'Doanh nghiệp này đã tồn tại trong workspace.') +
+              ' Bấm「Mở hồ sơ đã có」bên dưới.'
+          )
+          setDupClientId(data.existing_client.id)
+          throw new Error(data.error || 'Trùng Place/Link')
+        }
         throw new Error(data.error || 'Không tạo được khách hàng')
       }
 
@@ -483,6 +493,17 @@ function NewClient({ navigate, setToast }: any) {
       {error && (
         <div style={{ color: '#b91c1c', background: '#fef2f2', padding: 12, borderRadius: 8, marginBottom: 16 }}>
           {error}
+          {dupClientId && (
+            <div style={{ marginTop: 8 }}>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => navigate(`/clients/${dupClientId}`)}
+              >
+                Mở hồ sơ đã có
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -695,6 +716,11 @@ function ClientDetailAction({ navigate, setToast }: any) {
             <strong>{client.website_url || '—'}</strong>
           </div>
         </div>
+        {client.place_id && (
+          <div style={{ marginBottom: 8, fontSize: 13, color: '#6b7280' }}>
+            Place ID: <code>{client.place_id}</code>
+          </div>
+        )}
         {client.gbp_link && (
           <div style={{ marginTop: 16 }}>
             <span style={{ color: '#6b7280', fontSize: 13 }}>Link GBP: </span>

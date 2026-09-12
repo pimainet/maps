@@ -85,6 +85,8 @@ export async function createClient(client: {
   contact_name?: string
   brand_voice?: string
   gbp_link?: string
+  gbp_link_normalized?: string | null
+  place_id?: string | null
   website_url?: string
   notes?: string
   workspace_id: string
@@ -98,6 +100,45 @@ export async function createClient(client: {
 
   if (error) throw error
   return data
+}
+
+/** Tìm client trùng place_id hoặc gbp_link_normalized trong cùng workspace. */
+export async function findDuplicateClient(params: {
+  workspaceId: string
+  placeId?: string | null
+  gbpLinkNormalized?: string | null
+  excludeClientId?: string
+}) {
+  const supabase = await createSupabaseServerClient()
+  const { workspaceId, placeId, gbpLinkNormalized, excludeClientId } = params
+
+  if (placeId) {
+    let q = supabase
+      .from('clients')
+      .select('id, name, place_id, gbp_link, created_at')
+      .eq('workspace_id', workspaceId)
+      .eq('place_id', placeId)
+      .limit(1)
+    if (excludeClientId) q = q.neq('id', excludeClientId)
+    const { data, error } = await q.maybeSingle()
+    if (error) throw error
+    if (data) return { match_by: 'place_id' as const, client: data }
+  }
+
+  if (gbpLinkNormalized) {
+    let q = supabase
+      .from('clients')
+      .select('id, name, place_id, gbp_link, created_at')
+      .eq('workspace_id', workspaceId)
+      .eq('gbp_link_normalized', gbpLinkNormalized)
+      .limit(1)
+    if (excludeClientId) q = q.neq('id', excludeClientId)
+    const { data, error } = await q.maybeSingle()
+    if (error) throw error
+    if (data) return { match_by: 'gbp_link' as const, client: data }
+  }
+
+  return null
 }
 
 // ── Audits ──────────────────────────────────────────────────────────
