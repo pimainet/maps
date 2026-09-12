@@ -73,7 +73,42 @@ export async function PATCH(
           { status: 400 }
         )
       }
+
+      // published = xác nhận đã đăng trên Google → bắt buộc có nội dung
+      if (body.status === 'published') {
+        const existing = await getContentById(id, workspaceId)
+        const latest = await getLatestContentHistory(id, workspaceId)
+        const text =
+          (typeof body.final_content === 'string' && body.final_content.trim()) ||
+          latest?.human_edited_version ||
+          latest?.ai_version ||
+          ''
+        if (!text.trim()) {
+          return NextResponse.json(
+            {
+              error:
+                'Chưa có nội dung bài để đánh dấu đã đăng. Hãy lưu/duyệt bài trước khi xác nhận đăng trên Google.',
+            },
+            { status: 400 }
+          )
+        }
+      }
+
       updatedStatus = await updateContentStatus(id, body.status, workspaceId)
+
+      if (body.status === 'published' && typeof body.final_content !== 'string') {
+        const content = updatedStatus || (await getContentById(id, workspaceId))
+        const latest = await getLatestContentHistory(id, workspaceId)
+        await saveContentHistory({
+          content_id: id,
+          client_id: content.client_id,
+          ai_version: latest?.ai_version ?? '',
+          human_edited_version:
+            latest?.human_edited_version || latest?.ai_version || '',
+          edit_note: `Xác nhận đã đăng trên Google Maps · ${new Date().toISOString()}`,
+          workspace_id: workspaceId,
+        })
+      }
     }
 
     if (typeof body.final_content === 'string') {
@@ -81,9 +116,11 @@ export async function PATCH(
       const latest = await getLatestContentHistory(id, workspaceId)
 
       const note =
-        body.status === 'approved'
-          ? 'Chỉnh sửa và duyệt bài'
-          : 'Lưu chỉnh sửa thủ công'
+        body.status === 'published'
+          ? `Xác nhận đã đăng trên Google Maps · ${new Date().toISOString()}`
+          : body.status === 'approved'
+            ? 'Chỉnh sửa và duyệt bài'
+            : 'Lưu chỉnh sửa thủ công'
 
       await saveContentHistory({
         content_id: id,

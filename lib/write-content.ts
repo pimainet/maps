@@ -12,12 +12,7 @@ import {
   deleteContentById,
 } from '@/lib/db'
 import { titlesSimilar } from '@/lib/client-memory'
-import {
-  SERP_AWARE_PROMPT,
-  WRITER_PROMPT,
-  CRITIC_PROMPT,
-  REFINER_PROMPT,
-} from '@/lib/prompts'
+import { WRITER_COMPACT_PROMPT, REFINE_LIGHT_PROMPT } from '@/lib/prompts'
 
 type ClientInfo = {
   name?: string
@@ -28,22 +23,20 @@ type ClientInfo = {
   notes?: string
 }
 
+/**
+ * Pipeline Tuần 3: tối đa 2 lần gọi Claude.
+ * 1) Writer compact (SERP-lite nằm trong prompt)
+ * 2) Refine nhẹ (trung thực + CTA + độ dài)
+ */
 async function runAiPipeline(
   topic: string,
   goal: string,
   info: ClientInfo | undefined
 ) {
-  const serpPrompt = SERP_AWARE_PROMPT
-    .replaceAll('{{industry}}', info?.industry || '')
-    .replaceAll('{{area}}', info?.area || '')
-    .replaceAll('{{topic}}', topic || '')
-    .replaceAll('{{goal}}', goal || '')
-    .replaceAll('{{business_name}}', info?.name || '')
-
-  const serp_analysis = await askClaude(serpPrompt)
-
-  const writerPrompt = WRITER_PROMPT
-    .replaceAll('{{business_name}}', info?.name || '')
+  const writerPrompt = WRITER_COMPACT_PROMPT.replaceAll(
+    '{{business_name}}',
+    info?.name || ''
+  )
     .replaceAll('{{industry}}', info?.industry || '')
     .replaceAll('{{area}}', info?.area || '')
     .replaceAll('{{topic}}', topic || '')
@@ -51,33 +44,35 @@ async function runAiPipeline(
     .replaceAll('{{brand_voice}}', info?.brand_voice || 'chuyên nghiệp, gần gũi')
     .replaceAll('{{phone}}', info?.phone || '')
     .replaceAll('{{extra_info}}', info?.notes || '')
-    .replaceAll('{{serp_analysis}}', serp_analysis)
 
-  const ai_content = await askClaude(writerPrompt)
+  const ai_content = await askClaude(writerPrompt, {
+    maxTokens: 1200,
+    temperature: 0.65,
+  })
 
-  const criticPrompt = CRITIC_PROMPT.replaceAll('{{ai_content}}', ai_content)
-  const critic_feedback = await askClaude(criticPrompt)
-
-  const refinerPrompt = REFINER_PROMPT
-    .replaceAll('{{ai_content}}', ai_content)
-    .replaceAll('{{critic_feedback}}', critic_feedback)
+  const refinePrompt = REFINE_LIGHT_PROMPT.replaceAll(
+    '{{ai_content}}',
+    ai_content
+  )
     .replaceAll('{{business_name}}', info?.name || '')
     .replaceAll('{{industry}}', info?.industry || '')
     .replaceAll('{{area}}', info?.area || '')
     .replaceAll('{{phone}}', info?.phone || '')
     .replaceAll('{{extra_info}}', info?.notes || '')
 
-  const final_content = await askClaude(refinerPrompt)
+  const final_content = await askClaude(refinePrompt, {
+    maxTokens: 1200,
+    temperature: 0.4,
+  })
 
-  return { serp_analysis, ai_content, critic_feedback, final_content }
+  return {
+    serp_analysis: '',
+    ai_content,
+    critic_feedback: '',
+    final_content,
+  }
 }
 
-/**
- * Viết 1 bài GBP cho 1 task content và đưa vào trạng thái waiting_approval.
- * - Chạy AI xong mới tạo/cập nhật content (tránh kẹt drafted trống khi Claude lỗi).
- * - Nếu đã có content + history hợp lệ thì bỏ qua.
- * - Nếu chỉ có bản drafted trống (lỗi lần trước) thì xóa và viết lại.
- */
 export async function writeContentForTask(
   taskId: string,
   workspaceId: string,
@@ -95,11 +90,15 @@ export async function writeContentForTask(
       !!(history?.ai_version && history.ai_version.trim()) ||
       !!(history?.human_edited_version && history.human_edited_version.trim())
 
-    if (hasText || existing.status === 'waiting_approval' || existing.status === 'approved' || existing.status === 'published') {
+    if (
+      hasText ||
+      existing.status === 'waiting_approval' ||
+      existing.status === 'approved' ||
+      existing.status === 'published'
+    ) {
       return { skipped: true, reason: 'already_has_content', content: existing }
     }
 
-    // Bản drafted trống từ lần fail trước → xóa để viết lại
     await deleteContentById(existing.id, workspaceId)
   }
 
@@ -119,7 +118,6 @@ export async function writeContentForTask(
   const topic = task.title
   const goal = task.description || ''
 
-  // Tránh viết bài chủ đề gần trùng bài đã có (approved/published/waiting)
   try {
     const existingContents = (await getContents(task.client_id, workspaceId)) || []
     for (const c of existingContents) {
@@ -136,11 +134,9 @@ export async function writeContentForTask(
     /* ignore */
   }
 
-  // 1–4. AI pipeline TRƯỚC khi ghi DB
   const { serp_analysis, ai_content, critic_feedback, final_content } =
     await runAiPipeline(topic, goal, info)
 
-  // 5. Lưu DB sau khi AI thành công
   const contentRow = await createContentForTask({
     ...task,
     workspace_id: workspaceId,
@@ -157,6 +153,7 @@ export async function writeContentForTask(
     client_id: contentRow.client_id,
     ai_version: final_content,
     edit_note: JSON.stringify({
+      pipeline: 'compact_v1',
       serp_analysis,
       ai_draft: ai_content,
       critic_feedback,
@@ -171,11 +168,6 @@ export async function writeContentForTask(
   }
 }
 
-/**
- * Lấy danh sách task content của 1 khách hàng chưa có bài viết hợp lệ.
- * Bỏ qua task đã có content có text / đang chờ duyệt / đã duyệt / đã đăng.
- * Task chỉ có drafted trống vẫn được coi là chưa viết.
- */
 export async function getUnwrittenContentTasks(
   clientId: string,
   workspaceId: string
@@ -197,7 +189,6 @@ export async function getUnwrittenContentTasks(
       writtenTaskIds.add(c.task_id)
       continue
     }
-    // drafted / khác: chỉ coi là đã viết nếu có history có text
     try {
       const history = await getLatestContentHistory(c.id, workspaceId)
       const hasText =
@@ -205,7 +196,7 @@ export async function getUnwrittenContentTasks(
         !!(history?.human_edited_version && history.human_edited_version.trim())
       if (hasText) writtenTaskIds.add(c.task_id)
     } catch {
-      // không có history → vẫn coi là chưa viết
+      /* ignore */
     }
   }
 
@@ -219,10 +210,6 @@ export async function getUnwrittenContentTasks(
     )
 }
 
-/**
- * Tự viết N bài đầu tiên cho các task content chưa viết.
- * Mỗi bài lỗi được ghi lại, không dừng cả batch.
- */
 export async function autoWriteContentBatch(
   clientId: string,
   workspaceId: string,

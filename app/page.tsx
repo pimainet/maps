@@ -1657,6 +1657,9 @@ function ContentDetail({ setToast }: any) {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Cập nhật thất bại')
       setContentData(data)
+      if (typeof data.final_content === 'string' && data.final_content) {
+        setFinalText(data.final_content)
+      }
       setToast(successMsg)
     } catch (err: any) {
       setToast(err.message || 'Có lỗi xảy ra')
@@ -1738,7 +1741,36 @@ function ContentDetail({ setToast }: any) {
             value={finalText}
             onChange={(e) => setFinalText(e.target.value)}
           />
+          <div
+            style={{
+              marginTop: 12,
+              marginBottom: 8,
+              padding: 12,
+              background: '#f8fafc',
+              borderRadius: 8,
+              fontSize: 13,
+              color: '#475569',
+              lineHeight: 1.5,
+            }}
+          >
+            <strong>Quy trình đăng tay trên Google:</strong> Copy bài → mở Google Business Profile
+            đúng location → dán bài → đăng → quay lại đây bấm「Đã đăng trên Google」.
+          </div>
           <div className="editor-actions">
+            <button
+              className="secondary-button"
+              disabled={saving || !finalText.trim()}
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(finalText)
+                  setToast('Đã copy bài — dán lên Google Business Profile')
+                } catch {
+                  setToast('Không copy được. Hãy chọn toàn bộ text và copy thủ công (Ctrl+C).')
+                }
+              }}
+            >
+              Copy bài
+            </button>
             <button
               className="secondary-button"
               disabled={saving}
@@ -1748,17 +1780,38 @@ function ContentDetail({ setToast }: any) {
             </button>
             <button
               className="primary-button"
-              disabled={saving}
-              onClick={() => patch({ final_content: finalText, status: 'approved' }, 'Đã duyệt bài viết')}
+              disabled={saving || !finalText.trim()}
+              onClick={() =>
+                patch(
+                  { final_content: finalText, status: 'approved' },
+                  'Đã duyệt bài — có thể copy và đăng lên Google'
+                )
+              }
             >
               <Check size={16} />Duyệt bài
             </button>
             <button
-              className="secondary-button"
-              disabled={saving}
-              onClick={() => patch({ status: 'published' }, 'Đã đánh dấu nội dung đã đăng')}
+              className="primary-button"
+              disabled={saving || !finalText.trim()}
+              onClick={() => {
+                if (!finalText.trim()) {
+                  setToast('Chưa có nội dung bài')
+                  return
+                }
+                if (
+                  !window.confirm(
+                    'Xác nhận bạn ĐÃ đăng bài này lên Google Business Profile (đúng location)?'
+                  )
+                ) {
+                  return
+                }
+                patch(
+                  { final_content: finalText, status: 'published' },
+                  'Đã ghi nhận: bài đã đăng trên Google'
+                )
+              }}
             >
-              <Check size={16} />Đánh dấu đã đăng
+              Đã đăng trên Google
             </button>
           </div>
         </Card>

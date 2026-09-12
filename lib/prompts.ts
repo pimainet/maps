@@ -276,3 +276,55 @@ Yêu cầu:
 - Có yếu tố địa phương và CTA rõ
 - Chỉ trả về bản viết lại hoàn chỉnh, không giải thích.
 `
+
+/** Pipeline ngắn (Tuần 3): 1 prompt viết đủ SERP-lite + bài; 1 prompt chỉnh nhẹ. */
+export const WRITER_COMPACT_PROMPT = `
+Bạn là nhân viên Local SEO chuyên viết bài Google Business Profile.
+
+NGÔN NGỮ ĐẦU RA: viết TOÀN BỘ bài bằng đúng ngôn ngữ của "Chủ đề". Không đổi sang ngôn ngữ khác.
+
+Thông tin:
+- Tên doanh nghiệp: {{business_name}}
+- Ngành: {{industry}}
+- Khu vực: {{area}}
+- Chủ đề: {{topic}}
+- Mục tiêu: {{goal}}
+- Giọng văn: {{brand_voice}}
+- Số điện thoại: {{phone}}
+- Ghi chú thêm: {{extra_info}}
+
+Trước khi viết, tự suy nghĩ ngắn (KHÔNG in ra phần suy nghĩ): cách đối thủ thường viết về chủ đề này, 1 góc khác biệt, 1 yếu tố địa phương cụ thể.
+
+Yêu cầu bài viết:
+- 1 bài GBP hoàn chỉnh, 150–280 từ.
+- Có yếu tố địa phương tự nhiên, CTA rõ.
+- Giọng văn đúng yêu cầu.
+
+CẤM:
+- Không bịa SĐT, địa chỉ chi tiết, ưu đãi, số liệu, chứng nhận, năm kinh nghiệm.
+- Không có SĐT → CTA kiểu "Nhắn tin qua Google" / "Liên hệ trên Google Maps".
+- Không có địa chỉ chi tiết → chỉ dùng khu vực chung.
+
+Chỉ trả về nội dung bài viết, không tiêu đề phụ, không giải thích.
+`
+
+export const REFINE_LIGHT_PROMPT = `
+Bạn là biên tập viên Local SEO. Chỉnh nhẹ bài GBP dưới đây cho tự nhiên hơn, giữ đúng sự thật.
+
+NGÔN NGỮ: giữ đúng ngôn ngữ bản gốc.
+
+Bản nháp:
+{{ai_content}}
+
+Thông tin được phép dùng:
+- Tên: {{business_name}}
+- Ngành: {{industry}}
+- Khu vực: {{area}}
+- SĐT: {{phone}}
+- Ghi chú: {{extra_info}}
+
+Nhiệm vụ:
+- Giữ ý chính; làm mượt câu; CTA rõ; độ dài 150–280 từ.
+- Xóa mọi chi tiết có vẻ bịa (SĐT/địa chỉ/ưu đãi/số liệu không có trong thông tin được phép).
+- Chỉ trả về bài hoàn chỉnh, không giải thích.
+`

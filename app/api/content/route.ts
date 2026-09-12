@@ -12,10 +12,8 @@ import {
   deleteContentById,
 } from '@/lib/db'
 import {
-  SERP_AWARE_PROMPT,
-  WRITER_PROMPT,
-  CRITIC_PROMPT,
-  REFINER_PROMPT,
+  WRITER_COMPACT_PROMPT,
+  REFINE_LIGHT_PROMPT,
 } from '@/lib/prompts'
 import { requireActiveWorkspaceId } from '@/lib/auth'
 
@@ -92,18 +90,8 @@ export async function POST(req: Request) {
       }
     }
 
-    // 1. SERP-Aware
-    const serpPrompt = SERP_AWARE_PROMPT
-      .replaceAll('{{industry}}', body.industry || '')
-      .replaceAll('{{area}}', body.area || '')
-      .replaceAll('{{topic}}', topic || '')
-      .replaceAll('{{goal}}', goal || '')
-      .replaceAll('{{business_name}}', body.business_name || '')
-
-    const serp_analysis = await askClaude(serpPrompt)
-
-    // 2. Writer
-    const writerPrompt = WRITER_PROMPT
+    // Pipeline compact: 2 lần Claude (writer + refine nhẹ)
+    const writerPrompt = WRITER_COMPACT_PROMPT
       .replaceAll('{{business_name}}', body.business_name || '')
       .replaceAll('{{industry}}', body.industry || '')
       .replaceAll('{{area}}', body.area || '')
@@ -112,25 +100,20 @@ export async function POST(req: Request) {
       .replaceAll('{{brand_voice}}', body.brand_voice || 'chuyên nghiệp, gần gũi')
       .replaceAll('{{phone}}', body.phone || '')
       .replaceAll('{{extra_info}}', body.extra_info || '')
-      .replaceAll('{{serp_analysis}}', serp_analysis)
 
-    const ai_content = await askClaude(writerPrompt)
+    const ai_content = await askClaude(writerPrompt, { maxTokens: 1200, temperature: 0.65 })
 
-    // 3. Critic
-    const criticPrompt = CRITIC_PROMPT.replaceAll('{{ai_content}}', ai_content)
-    const critic_feedback = await askClaude(criticPrompt)
-
-    // 4. Refiner
-    const refinerPrompt = REFINER_PROMPT
+    const refinePrompt = REFINE_LIGHT_PROMPT
       .replaceAll('{{ai_content}}', ai_content)
-      .replaceAll('{{critic_feedback}}', critic_feedback)
       .replaceAll('{{business_name}}', body.business_name || '')
       .replaceAll('{{industry}}', body.industry || '')
       .replaceAll('{{area}}', body.area || '')
       .replaceAll('{{phone}}', body.phone || '')
       .replaceAll('{{extra_info}}', body.extra_info || '')
 
-    const final_content = await askClaude(refinerPrompt)
+    const final_content = await askClaude(refinePrompt, { maxTokens: 1200, temperature: 0.4 })
+    const serp_analysis = ''
+    const critic_feedback = ''
 
     // 5. Lưu DB sau khi AI thành công
     let contentRow: any
@@ -154,7 +137,7 @@ export async function POST(req: Request) {
       content_id: contentRow.id,
       client_id: contentRow.client_id,
       ai_version: final_content,
-      edit_note: JSON.stringify({ serp_analysis, ai_draft: ai_content, critic_feedback }),
+      edit_note: JSON.stringify({ pipeline: 'compact_v1', serp_analysis, ai_draft: ai_content, critic_feedback }),
       workspace_id: workspaceId,
     })
 
