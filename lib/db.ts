@@ -569,3 +569,104 @@ export async function getContentHistoryList(contentId: string, workspaceId?: str
   if (error) throw error
   return data
 }
+
+
+// ── Cycles (chu kỳ 30 ngày) ─────────────────────────────────────────
+
+export async function getActiveCycle(clientId: string, workspaceId: string) {
+  const supabase = await createSupabaseServerClient()
+  const { data, error } = await supabase
+    .from('cycles')
+    .select('*')
+    .eq('client_id', clientId)
+    .eq('workspace_id', workspaceId)
+    .eq('status', 'active')
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
+export async function getLatestCycle(clientId: string, workspaceId: string) {
+  const supabase = await createSupabaseServerClient()
+  const { data, error } = await supabase
+    .from('cycles')
+    .select('*')
+    .eq('client_id', clientId)
+    .eq('workspace_id', workspaceId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
+export async function openCycle(input: {
+  client_id: string
+  workspace_id: string
+  opening_audit_id?: string | null
+  plan_id?: string | null
+}) {
+  const supabase = await createSupabaseServerClient()
+  const { data, error } = await supabase
+    .from('cycles')
+    .insert({
+      client_id: input.client_id,
+      workspace_id: input.workspace_id,
+      status: 'active',
+      opening_audit_id: input.opening_audit_id ?? null,
+      plan_id: input.plan_id ?? null,
+    })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateCycle(
+  id: string,
+  workspaceId: string,
+  patch: Record<string, unknown>
+) {
+  const supabase = await createSupabaseServerClient()
+  const { data, error } = await supabase
+    .from('cycles')
+    .update(patch)
+    .eq('id', id)
+    .eq('workspace_id', workspaceId)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function closeCycle(
+  id: string,
+  workspaceId: string,
+  snapshot?: Record<string, unknown>
+) {
+  return updateCycle(id, workspaceId, {
+    status: 'closed',
+    closed_at: new Date().toISOString(),
+    snapshot: snapshot ?? {},
+  })
+}
+
+/** Đóng cycle active (nếu có) rồi mở cycle mới. */
+export async function rotateCycle(input: {
+  client_id: string
+  workspace_id: string
+  opening_audit_id?: string | null
+  plan_id?: string | null
+  close_snapshot?: Record<string, unknown>
+}) {
+  const active = await getActiveCycle(input.client_id, input.workspace_id)
+  if (active) {
+    await closeCycle(active.id, input.workspace_id, input.close_snapshot)
+  }
+  return openCycle({
+    client_id: input.client_id,
+    workspace_id: input.workspace_id,
+    opening_audit_id: input.opening_audit_id,
+    plan_id: input.plan_id,
+  })
+}

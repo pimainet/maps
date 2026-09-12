@@ -741,6 +741,7 @@ function ClientDetailAction({ navigate, setToast }: any) {
 
 function ClientDetail({ navigate }: any) { return <><Card className="client-hero"><div className="client-hero-title"><div className="client-avatar hero bg-primary">TA</div><div><div className="title-line"><h2>Nha khoa Tâm An</h2><Badge status="active" /></div><p>Nha khoa · Quận 3, TP.HCM · Đã tham gia 4 tháng</p></div></div><div className="hero-actions"><button className="secondary-button" onClick={() => navigate('/clients/1/audit')}><ClipboardCheck size={16} />Chạy Audit</button><button className="secondary-button" onClick={() => navigate('/clients/1/plan')}><Target size={16} />Xem lộ trình</button><button className="primary-button" onClick={() => navigate('/contents')}><FileText size={16} />Xem nội dung</button></div></Card><div className="detail-grid"><Card><div className="section-head"><div><h2>Chu kỳ hiện tại</h2><p>Ngày 01/06 — 30/06/2025</p></div><Badge status="active" /></div><div className="progress-row"><div><span>Tiến độ task</span><strong>18 / 24</strong></div><div className="progress"><i style={{ width: '75%' }} /></div></div><div className="stats-strip"><div><strong>82</strong><span>Điểm audit</span></div><div><strong>18</strong><span>Task hoàn thành</span></div><div><strong>12</strong><span>Bài đã tạo</span></div><div><strong>7</strong><span>Chờ duyệt</span></div></div></Card><Card><div className="section-head"><div><h2>Việc ưu tiên</h2><p>Cần hoàn thành sớm</p></div><ArrowUpRight size={16} /></div><div className="priority-item"><div className="priority-dot" /><div><strong>Duyệt 3 bài GBP tuần 3</strong><span>Hạn hôm nay · Ưu tiên cao</span></div></div><div className="priority-item"><div className="priority-dot blue" /><div><strong>Bổ sung ảnh dịch vụ</strong><span>Hạn 20/06 · Ưu tiên vừa</span></div></div></Card></div><Card><div className="section-head"><div><h2>Hoạt động gần đây</h2><p>Lịch sử thay đổi trên hồ sơ</p></div></div><div className="timeline"><Timeline title="Đã hoàn thành audit lần 2" time="Hôm nay, 09:42" icon={ClipboardCheck} /><Timeline title="Tạo 4 bài viết từ lộ trình tuần 3" time="Hôm qua, 16:20" icon={Sparkles} /><Timeline title="Duyệt lộ trình 30 ngày" time="12/06/2025, 10:15" icon={Check} /></div></Card></> }
 function Timeline({ title, time, icon: Icon }: any) { return <div className="timeline-item"><div className="timeline-icon"><Icon size={15} /></div><div><strong>{title}</strong><span>{time}</span></div></div> }
+
 function Audit({ navigate, setToast }: any) {
   const [client, setClient] = useState<any>(null)
   const [loadingClient, setLoadingClient] = useState(true)
@@ -748,7 +749,6 @@ function Audit({ navigate, setToast }: any) {
   const [fetching, setFetching] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState<string | null>(null)
-
   const [form, setForm] = useState({
     output_language: 'Tiếng Việt',
     description: '',
@@ -771,14 +771,11 @@ function Audit({ navigate, setToast }: any) {
         const path = window.location.pathname
         const id = path.split('/clients/')[1]?.split('/')[0]
         if (!id) throw new Error('Không tìm thấy ID khách hàng')
-
         const res = await fetch('/api/clients')
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'Không tải được dữ liệu')
-
         const found = (Array.isArray(data) ? data : []).find((c: any) => c.id === id)
         if (!found) throw new Error('Không tìm thấy khách hàng')
-
         setClient(found)
         setForm((prev) => ({
           ...prev,
@@ -793,12 +790,10 @@ function Audit({ navigate, setToast }: any) {
     load()
   }, [])
 
-  // ===== TỰ LẤY TỪ GOOGLE MAPS =====
   async function handleAutoFetch() {
     if (!client) return
     setFetching(true)
     setError('')
-
     try {
       const res = await fetch('/api/places/fetch', {
         method: 'POST',
@@ -809,19 +804,15 @@ function Audit({ navigate, setToast }: any) {
           gbp_link: client.gbp_link,
         }),
       })
-
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Không lấy được dữ liệu')
-
       setForm((prev) => ({
         ...prev,
         description: data.description || prev.description,
-        primary_category: data.primary_category || prev.primary_category,
-        additional_categories: data.additional_categories || prev.additional_categories,
-        review_count: data.review_count || prev.review_count,
-        rating: data.rating || prev.rating,
+        primary_category: data.industry || data.primary_category || prev.primary_category,
+        review_count: data.review_count != null ? String(data.review_count) : prev.review_count,
+        rating: data.rating != null ? String(data.rating) : prev.rating,
       }))
-
       setToast('Đã lấy thông tin từ Google Maps thành công')
     } catch (err: any) {
       setError(err.message || 'Có lỗi khi lấy dữ liệu Google Maps')
@@ -835,7 +826,6 @@ function Audit({ navigate, setToast }: any) {
     setError('')
     setRunning(true)
     setResult(null)
-
     try {
       const res = await fetch('/api/audit', {
         method: 'POST',
@@ -850,11 +840,9 @@ function Audit({ navigate, setToast }: any) {
         }),
       })
       const data = await res.json()
-
       if (!res.ok) throw new Error(data.error || 'Audit thất bại')
-
-      setResult(data.audit_result || 'Không có kết quả')
-      setToast('Đã chạy audit thành công')
+      setResult(data.audit_result || '')
+      setToast('Đã chạy Audit thành công')
     } catch (err: any) {
       setError(err.message || 'Có lỗi xảy ra')
     } finally {
@@ -865,210 +853,120 @@ function Audit({ navigate, setToast }: any) {
   if (loadingClient) {
     return (
       <Card>
-        <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>
-          Đang tải thông tin khách hàng...
-        </div>
+        <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>Đang tải...</div>
       </Card>
     )
   }
-
   if (!client) {
     return (
       <Card>
-        <div style={{ padding: 40, textAlign: 'center', color: '#b91c1c' }}>
-          {error || 'Không tìm thấy khách hàng'}
-        </div>
+        <div style={{ padding: 40, textAlign: 'center', color: '#b91c1c' }}>{error || 'Không tìm thấy khách hàng'}</div>
       </Card>
     )
   }
 
   return (
-    <div className="audit-layout">
-      <Card className="audit-form">
-        <div className="section-head">
-          <div>
-            <h2>Dữ liệu audit — {client.name}</h2>
-            <p>Điền thêm thông tin GBP để AI phân tích chính xác hơn.</p>
-          </div>
+    <>
+      <Card>
+        <div className="title-line">
+          <h2>Audit Google Business Profile</h2>
+        </div>
+        <p>
+          Doanh nghiệp: <strong>{client.name}</strong>
+          {client.place_id ? <> · Place ID: <code>{client.place_id}</code></> : null}
+        </p>
+        <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+          <button className="secondary-button" onClick={handleAutoFetch} disabled={fetching}>
+            {fetching ? 'Đang lấy từ Google...' : 'Tự điền từ Google Maps'}
+          </button>
+          <button className="secondary-button" onClick={() => navigate(`/clients/${client.id}/plan`)}>
+            Sang lộ trình 30 ngày
+          </button>
         </div>
 
-        {/* NÚT TỰ LẤY THÔNG TIN */}
-        <button
-          type="button"
-          onClick={handleAutoFetch}
-          disabled={fetching}
-          style={{
-            width: '100%',
-            marginBottom: 20,
-            background: fetching ? '#93c5fd' : '#16a34a',
-            color: 'white',
-            border: 'none',
-            borderRadius: 8,
-            padding: '12px 16px',
-            fontWeight: 600,
-            cursor: fetching ? 'not-allowed' : 'pointer',
-            fontSize: 15,
-          }}
-        >
-          {fetching ? 'Đang lấy thông tin từ Google Maps...' : 'Tự lấy thông tin từ Google Maps'}
-        </button>
-
-        <label className="field">
-          <span>Ngôn ngữ đầu ra</span>
-          <select
-            value={PRESET_LANGUAGES.includes(form.output_language) ? form.output_language : 'custom'}
-            onChange={(e) => update('output_language', e.target.value === 'custom' ? '' : e.target.value)}
-          >
-            {PRESET_LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
-            <option value="custom">Khác (tự nhập)...</option>
-          </select>
-          {!PRESET_LANGUAGES.includes(form.output_language) && (
-            <input
-              style={{ marginTop: 8 }}
-              value={form.output_language}
-              onChange={(e) => update('output_language', e.target.value)}
-              placeholder="Nhập tên ngôn ngữ..."
-            />
-          )}
-        </label>
-
-        <label className="field">
-          <span>Mô tả hiện tại trên GBP</span>
-          <textarea
-            value={form.description}
-            onChange={(e) => update('description', e.target.value)}
-            placeholder="Mô tả đang hiển thị trên hồ sơ..."
-          />
-        </label>
-
-        <div className="form-grid compact">
+        <div className="form-grid" style={{ marginTop: 16 }}>
+          <label className="field">
+            <span>Ngôn ngữ đầu ra</span>
+            <input value={form.output_language} onChange={(e) => update('output_language', e.target.value)} />
+          </label>
+          <label className="field wide">
+            <span>Mô tả trên GBP</span>
+            <textarea value={form.description} onChange={(e) => update('description', e.target.value)} rows={3} />
+          </label>
           <label className="field">
             <span>Danh mục chính</span>
-            <input
-              value={form.primary_category}
-              onChange={(e) => update('primary_category', e.target.value)}
-              placeholder="Nha khoa"
-            />
+            <input value={form.primary_category} onChange={(e) => update('primary_category', e.target.value)} />
           </label>
           <label className="field">
             <span>Danh mục phụ</span>
-            <input
-              value={form.additional_categories}
-              onChange={(e) => update('additional_categories', e.target.value)}
-              placeholder="Phòng khám nha khoa"
-            />
+            <input value={form.additional_categories} onChange={(e) => update('additional_categories', e.target.value)} />
           </label>
           <label className="field">
             <span>Số đánh giá</span>
-            <input
-              value={form.review_count}
-              onChange={(e) => update('review_count', e.target.value)}
-              placeholder="128"
-            />
+            <input value={form.review_count} onChange={(e) => update('review_count', e.target.value)} />
           </label>
           <label className="field">
             <span>Điểm trung bình</span>
-            <input
-              value={form.rating}
-              onChange={(e) => update('rating', e.target.value)}
-              placeholder="4.8"
-            />
+            <input value={form.rating} onChange={(e) => update('rating', e.target.value)} />
+          </label>
+          <label className="field wide">
+            <span>Tình trạng bài đăng gần đây</span>
+            <input value={form.recent_posts} onChange={(e) => update('recent_posts', e.target.value)} />
+          </label>
+          <label className="field wide">
+            <span>Tình trạng hình ảnh</span>
+            <input value={form.photos_status} onChange={(e) => update('photos_status', e.target.value)} />
+          </label>
+          <label className="field wide">
+            <span>Thông tin bổ sung</span>
+            <textarea value={form.additional_info} onChange={(e) => update('additional_info', e.target.value)} rows={2} />
           </label>
         </div>
 
-        <label className="field">
-          <span>Tình trạng bài đăng gần đây</span>
-          <select value={form.recent_posts} onChange={(e) => update('recent_posts', e.target.value)}>
-            <option>Đăng đều hàng tuần</option>
-            <option>Đăng thưa thớt</option>
-            <option>Không đăng trong 30 ngày</option>
-          </select>
-        </label>
-
-        <label className="field">
-          <span>Tình trạng hình ảnh</span>
-          <select value={form.photos_status} onChange={(e) => update('photos_status', e.target.value)}>
-            <option>Có ảnh mới trong 3 tháng</option>
-            <option>Ảnh cũ hơn 6 tháng</option>
-            <option>Chưa cập nhật</option>
-          </select>
-        </label>
-
-        <label className="field">
-          <span>Thông tin thêm (nếu có)</span>
-          <textarea
-            value={form.additional_info}
-            onChange={(e) => update('additional_info', e.target.value)}
-            placeholder="Ví dụ: có dịch vụ niềng răng, phòng khám mới..."
-          />
-        </label>
-
         {error && (
-          <div style={{ color: '#b91c1c', background: '#fef2f2', padding: 12, borderRadius: 8, marginBottom: 12 }}>
-            {error}
-          </div>
+          <div style={{ color: '#b91c1c', background: '#fef2f2', padding: 12, borderRadius: 8, marginTop: 12 }}>{error}</div>
         )}
 
-        <button className="primary-button full" onClick={handleRunAudit} disabled={running}>
-          {running ? 'Đang chạy audit...' : (<><Sparkles size={17} /> Chạy Audit</>)}
-        </button>
-      </Card>
-
-      <Card className="result-panel">
-        <div className="result-top">
-          <div>
-            <p className="overline">Kết quả phân tích</p>
-            <h2>Audit tổng quan</h2>
-          </div>
-        </div>
-
-        {!result && !running && (
-          <div style={{ padding: 32, textAlign: 'center', color: '#6b7280' }}>
-            Điền thông tin bên trái rồi bấm “Chạy Audit” để xem kết quả.
-          </div>
-        )}
-
-        {running && (
-          <div style={{ padding: 32, textAlign: 'center', color: '#6b7280' }}>
-            AI đang phân tích... vui lòng đợi.
-          </div>
-        )}
-
-        {result && (
-          <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, fontSize: 14 }}>
-            {result}
-          </div>
-        )}
-
-        {result && (
-          <button
-            className="secondary-button full"
-            style={{ marginTop: 20 }}
-            onClick={() => navigate(`/clients/${client.id}/plan`)}
-          >
-            <Target size={16} /> Tạo lộ trình 30 ngày
+        <div style={{ marginTop: 16 }}>
+          <button className="primary-button" onClick={handleRunAudit} disabled={running}>
+            {running ? 'Đang audit...' : 'Chạy Audit'}
           </button>
-        )}
+        </div>
       </Card>
-    </div>
+
+      {result && (
+        <Card>
+          <div className="section-head">
+            <div>
+              <h2>Kết quả Audit</h2>
+              <p>Đã lưu vào hệ thống · có thể dùng để lập lộ trình</p>
+            </div>
+            <button className="primary-button" onClick={() => navigate(`/clients/${client.id}/plan`)}>
+              Lập lộ trình 30 ngày
+            </button>
+          </div>
+          <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, fontSize: 14 }}>{result}</div>
+        </Card>
+      )}
+    </>
   )
 }
-function Score({ label, value }: any) { return <div className="score-row"><div><span>{label}</span><strong>{value}/100</strong></div><div className="progress"><i style={{ width: `${value}%` }} /></div></div> }
+
 function Plan({ setToast }: any) {
   const [client, setClient] = useState<any>(null)
   const [loadingClient, setLoadingClient] = useState(true)
   const [running, setRunning] = useState(false)
+  const [generatingTasks, setGeneratingTasks] = useState(false)
   const [error, setError] = useState('')
+  const [tasksError, setTasksError] = useState('')
   const [result, setResult] = useState<string | null>(null)
-  const [savedPlan, setSavedPlan] = useState<any>(null)
-
+  const [auditResult, setAuditResult] = useState('')
   const [auditRecord, setAuditRecord] = useState<any>(null)
   const [loadingAudit, setLoadingAudit] = useState(true)
-  const [auditResult, setAuditResult] = useState('')
-
-  const [generatingTasks, setGeneratingTasks] = useState(false)
+  const [savedPlan, setSavedPlan] = useState<any>(null)
   const [tasksCreated, setTasksCreated] = useState<any[] | null>(null)
-  const [tasksError, setTasksError] = useState('')
+  const [forceNewCycle, setForceNewCycle] = useState(false)
+  const [cycleInfo, setCycleInfo] = useState<any>(null)
 
   useEffect(() => {
     async function load() {
@@ -1080,31 +978,32 @@ function Plan({ setToast }: any) {
         const res = await fetch('/api/clients')
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'Không tải được dữ liệu')
-
         const found = (Array.isArray(data) ? data : []).find((c: any) => c.id === id)
         if (!found) throw new Error('Không tìm thấy khách hàng')
-
         setClient(found)
 
-        // Tự động lấy audit gần nhất của khách hàng này, đúng nguyên tắc
-        // "Không viết bài mù" — lộ trình phải bám audit thật, không dán tay.
-        try {
-          const auditRes = await fetch(`/api/audit?client_id=${id}`)
-          const auditData = await auditRes.json()
-          if (auditRes.ok && auditData) {
-            setAuditRecord(auditData)
-            setAuditResult(auditData.audit_result || '')
+        setLoadingAudit(true)
+        const auditRes = await fetch(`/api/audit?client_id=${id}`)
+        const auditData = await auditRes.json()
+        if (auditRes.ok && auditData?.audit_result) {
+          setAuditRecord(auditData)
+          setAuditResult(auditData.audit_result)
+        }
+
+        const planRes = await fetch(`/api/plan?client_id=${id}`)
+        const planData = await planRes.json()
+        if (planRes.ok && planData) {
+          if (planData.plan_result) {
+            setResult(planData.plan_result)
+            setSavedPlan(planData)
           }
-        } catch {
-          // Không có audit nào — vẫn cho phép tạo lộ trình, người dùng sẽ thấy cảnh báo
-        } finally {
-          setLoadingAudit(false)
+          if (planData.active_cycle) setCycleInfo({ active_cycle: planData.active_cycle })
         }
       } catch (err: any) {
         setError(err.message || 'Có lỗi xảy ra')
-        setLoadingAudit(false)
       } finally {
         setLoadingClient(false)
+        setLoadingAudit(false)
       }
     }
     load()
@@ -1114,16 +1013,10 @@ function Plan({ setToast }: any) {
     if (!client) return
     setError('')
     setRunning(true)
-    setResult(null)
-    setSavedPlan(null)
-    setTasksCreated(null)
-    setTasksError('')
-
     try {
       const today = new Date()
       const end = new Date(today)
       end.setDate(end.getDate() + 30)
-
       const res = await fetch('/api/plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1136,17 +1029,29 @@ function Plan({ setToast }: any) {
           audit_result: auditResult || '',
           start_date: today.toISOString().slice(0, 10),
           end_date: end.toISOString().slice(0, 10),
+          force_new_cycle: forceNewCycle,
         }),
       })
       const data = await res.json()
-
       if (!res.ok) {
+        if (res.status === 409 && data.code === 'ACTIVE_CYCLE_EXISTS') {
+          setCycleInfo(data)
+          throw new Error(
+            data.error ||
+              'Đang có chu kỳ active. Bật「Mở chu kỳ mới」nếu muốn bắt đầu vòng mới.'
+          )
+        }
         throw new Error(data.error || 'Tạo lộ trình thất bại')
       }
-
       setResult(data.plan_result || 'Không có kết quả')
       setSavedPlan(data.plan || null)
-      setToast('Đã tạo lộ trình 30 ngày')
+      setCycleInfo(data.cycle ? { active_cycle: data.cycle } : null)
+      setForceNewCycle(false)
+      setToast(
+        data.force_new_cycle
+          ? 'Đã đóng chu kỳ cũ và tạo lộ trình chu kỳ mới'
+          : 'Đã tạo lộ trình 30 ngày (chu kỳ đang mở)'
+      )
     } catch (err: any) {
       setError(err.message || 'Có lỗi xảy ra')
     } finally {
@@ -1159,7 +1064,6 @@ function Plan({ setToast }: any) {
     setGeneratingTasks(true)
     setTasksError('')
     setTasksCreated(null)
-
     try {
       const res = await fetch('/api/tasks/generate-from-plan', {
         method: 'POST',
@@ -1175,28 +1079,16 @@ function Plan({ setToast }: any) {
         }),
       })
       const data = await res.json()
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Sinh danh sách việc thất bại')
-      }
-
+      if (!res.ok) throw new Error(data.error || 'Sinh danh sách việc thất bại')
       setTasksCreated(data.items || [])
       const written = data.auto_written || 0
       if (written > 0) {
-        setToast(
-          data.message ||
-            `Đã tạo ${data.items?.length || 0} việc và tự viết ${written} bài vào Chờ duyệt`
-        )
+        setToast(data.message || `Đã tạo ${data.items?.length || 0} việc và tự viết ${written} bài`)
       } else if (data.auto_write_error) {
-        setTasksError(
-          `Đã tạo ${data.items?.length || 0} việc nhưng tự viết bài lỗi: ${data.auto_write_error}`
-        )
-        setToast(`Đã tạo ${data.items?.length || 0} việc (tự viết bài thất bại — xem chi tiết)`)
+        setTasksError(`Đã tạo việc nhưng tự viết bài lỗi: ${data.auto_write_error}`)
+        setToast(data.message || 'Đã tạo việc (tự viết bài thất bại)')
       } else {
-        setToast(
-          data.message ||
-            `Đã tạo ${data.items?.length || 0} việc cần làm từ lộ trình`
-        )
+        setToast(data.message || `Đã tạo ${data.items?.length || 0} việc`)
       }
     } catch (err: any) {
       setTasksError(err.message || 'Có lỗi xảy ra')
@@ -1208,19 +1100,14 @@ function Plan({ setToast }: any) {
   if (loadingClient) {
     return (
       <Card>
-        <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>
-          Đang tải thông tin khách hàng...
-        </div>
+        <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>Đang tải...</div>
       </Card>
     )
   }
-
   if (!client) {
     return (
       <Card>
-        <div style={{ padding: 40, textAlign: 'center', color: '#b91c1c' }}>
-          {error || 'Không tìm thấy khách hàng'}
-        </div>
+        <div style={{ padding: 40, textAlign: 'center', color: '#b91c1c' }}>{error || 'Không tìm thấy khách hàng'}</div>
       </Card>
     )
   }
@@ -1239,6 +1126,14 @@ function Plan({ setToast }: any) {
               ? ` · ${[client.industry, client.area].filter(Boolean).join(' · ')}`
               : ''}
           </p>
+          {cycleInfo?.active_cycle && (
+            <p style={{ fontSize: 13, color: '#059669', marginTop: 8 }}>
+              Đang có chu kỳ active · bắt đầu{' '}
+              {cycleInfo.active_cycle.started_at
+                ? new Date(cycleInfo.active_cycle.started_at).toLocaleDateString('vi-VN')
+                : '—'}
+            </p>
+          )}
         </div>
 
         <div style={{ marginTop: 16 }}>
@@ -1247,31 +1142,64 @@ function Plan({ setToast }: any) {
               {loadingAudit
                 ? 'Đang tải audit gần nhất...'
                 : auditRecord
-                ? `Audit gần nhất (tự động lấy · ${new Date(auditRecord.created_at).toLocaleDateString('vi-VN')})`
-                : 'Chưa có audit nào — nên chạy Audit trước khi lập lộ trình'}
+                  ? `Audit gần nhất (${new Date(auditRecord.created_at).toLocaleDateString('vi-VN')})`
+                  : 'Chưa có audit — nên chạy Audit trước'}
             </span>
             <textarea
               value={auditResult}
               onChange={(e) => setAuditResult(e.target.value)}
-              placeholder="Chưa có audit đã lưu cho khách hàng này. Hãy chạy Audit trước, hoặc dán kết quả audit vào đây."
+              placeholder="Dán kết quả audit hoặc chạy Audit trước."
               rows={5}
             />
           </label>
         </div>
 
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 8,
+            marginTop: 12,
+            fontSize: 13,
+            color: '#374151',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={forceNewCycle}
+            onChange={(e) => setForceNewCycle(e.target.checked)}
+            style={{ marginTop: 3 }}
+          />
+          <span>
+            <strong>Mở chu kỳ mới</strong> — đóng chu kỳ 30 ngày đang chạy và bắt đầu vòng mới. Chỉ
+            bật khi đã xong việc kỳ trước hoặc đổi chiến lược.
+          </span>
+        </label>
+
+        {cycleInfo?.open_tasks_count != null && (
+          <p style={{ fontSize: 12, color: '#b45309', marginTop: 8 }}>
+            Chu kỳ hiện tại còn ~{cycleInfo.open_tasks_count} việc chưa xong
+            {cycleInfo.contents_count != null ? `, ${cycleInfo.contents_count} bài trong hệ thống` : ''}.
+          </p>
+        )}
+
         {error && (
-          <div style={{ color: '#b91c1c', background: '#fef2f2', padding: 12, borderRadius: 8, marginTop: 12 }}>
+          <div
+            style={{
+              color: '#b91c1c',
+              background: '#fef2f2',
+              padding: 12,
+              borderRadius: 8,
+              marginTop: 12,
+            }}
+          >
             {error}
           </div>
         )}
 
         <div className="plan-actions" style={{ marginTop: 16 }}>
-          <button
-            className="primary-button"
-            onClick={handleCreatePlan}
-            disabled={running}
-          >
-            {running ? 'Đang tạo lộ trình...' : (<><Sparkles size={16} /> Tạo lộ trình 30 ngày</>)}
+          <button className="primary-button" onClick={handleCreatePlan} disabled={running}>
+            {running ? 'Đang tạo lộ trình...' : 'Tạo lộ trình 30 ngày'}
           </button>
         </div>
       </Card>
@@ -1279,7 +1207,7 @@ function Plan({ setToast }: any) {
       {running && (
         <Card>
           <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>
-            AI đang xây dựng lộ trình 30 ngày... vui lòng đợi.
+            AI đang xây dựng lộ trình 30 ngày...
           </div>
         </Card>
       )}
@@ -1292,9 +1220,7 @@ function Plan({ setToast }: any) {
               <p>Kết quả từ AI</p>
             </div>
           </div>
-          <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, fontSize: 14 }}>
-            {result}
-          </div>
+          <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, fontSize: 14 }}>{result}</div>
         </Card>
       )}
 
@@ -1303,53 +1229,37 @@ function Plan({ setToast }: any) {
           <div className="section-head">
             <div>
               <h2>Sinh lịch việc từ lộ trình</h2>
-              <p>Tạo sẵn danh sách việc cần làm (bao gồm bài viết) theo đúng lộ trình vừa lập</p>
+              <p>Tạo task (có chống trùng với việc/bài đã có)</p>
             </div>
             <button
               className="secondary-button"
               onClick={handleGenerateTasks}
               disabled={generatingTasks}
             >
-              {generatingTasks ? 'Đang sinh lịch...' : (<><Sparkles size={15} />Sinh lịch việc</>)}
+              {generatingTasks ? 'Đang sinh lịch...' : 'Sinh lịch việc'}
             </button>
           </div>
-
           {tasksError && (
             <div style={{ color: '#b91c1c', background: '#fef2f2', padding: 12, borderRadius: 8 }}>
               {tasksError}
             </div>
           )}
-
           {tasksCreated && tasksCreated.length > 0 && (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr><th>Việc cần làm</th><th>Loại</th><th>Ưu tiên</th><th>Hạn</th></tr>
-                </thead>
-                <tbody>
-                  {tasksCreated.map((t: any) => (
-                    <tr key={t.id}>
-                      <td>
-                        <strong>{t.title}</strong>
-                        {t.description && <small style={{ display: 'block', color: '#6b7280' }}>{t.description}</small>}
-                      </td>
-                      <td className="muted-cell">{TASK_TYPE_LABEL[t.task_type] || t.task_type}</td>
-                      <td><span className={`priority ${t.priority === 'high' ? 'high' : ''}`}>{PRIORITY_LABEL[t.priority] || t.priority}</span></td>
-                      <td className="muted-cell">{t.due_date || '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <p style={{ marginTop: 12, fontSize: 13, color: '#6b7280' }}>
-                Vào mục "Việc cần làm" để theo dõi, hoặc mục "Nội dung" → tab "Ý tưởng" để cho AI viết các bài đăng.
-              </p>
-            </div>
+            <ul style={{ marginTop: 12, paddingLeft: 18 }}>
+              {tasksCreated.map((t: any) => (
+                <li key={t.id} style={{ marginBottom: 6 }}>
+                  {t.title} <span style={{ color: '#6b7280' }}>({t.task_type})</span>
+                </li>
+              ))}
+            </ul>
           )}
         </Card>
       )}
     </>
   )
 }
+
+
 function Tasks() {
   const [items, setItems] = useState<any[]>([])
   const [clients, setClients] = useState<any[]>([])

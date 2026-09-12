@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { askClaude } from '@/lib/claude'
-import { createTasks, getClientById, getTasks } from '@/lib/db'
+import { createTasks, getClientById, getTasks, getActiveCycle, openCycle, updateCycle } from '@/lib/db'
 import { TASKS_FROM_PLAN_PROMPT } from '@/lib/prompts'
 import { requireActiveWorkspaceId } from '@/lib/auth'
 import { autoWriteContentBatch } from '@/lib/write-content'
@@ -84,6 +84,28 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: 'Thiếu client_id hoặc plan_result' },
         { status: 400 }
+      )
+    }
+
+    const forceNewCycle = !!body.force_new_cycle
+    let cycle = await getActiveCycle(client_id, workspaceId)
+    if (!cycle) {
+      // Lần đầu: mở cycle gắn plan hiện tại
+      cycle = await openCycle({
+        client_id,
+        workspace_id: workspaceId,
+        plan_id: plan_id || null,
+      })
+    } else if (plan_id && cycle.plan_id && cycle.plan_id !== plan_id && !forceNewCycle) {
+      // Sinh task từ plan khác trong khi cycle đang gắn plan cũ
+      return NextResponse.json(
+        {
+          error:
+            'Đang có chu kỳ active gắn lộ trình khác. Dùng lộ trình của chu kỳ hiện tại, hoặc mở chu kỳ mới (force_new_cycle) trước.',
+          code: 'CYCLE_PLAN_MISMATCH',
+          active_cycle: cycle,
+        },
+        { status: 409 }
       )
     }
 
@@ -248,6 +270,14 @@ export async function POST(req: Request) {
       parts.push(`tự viết bài lỗi: ${autoWriteError}`)
     }
 
+    if (cycle?.id && plan_id) {
+      try {
+        await updateCycle(cycle.id, workspaceId, { plan_id })
+      } catch {
+        /* ignore */
+      }
+    }
+
     return NextResponse.json({
       items: created,
       skipped_duplicates: skipped.length,
@@ -255,6 +285,7 @@ export async function POST(req: Request) {
       auto_written: writtenCount,
       auto_write_error: autoWriteError,
       auto_write_details: autoWritten,
+      cycle,
       message: parts.join('; '),
     })
   } catch (error: any) {
