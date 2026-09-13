@@ -1,12 +1,8 @@
 /**
  * POST /api/gbp-snapshot
- * Enqueue (hoặc chạy) quan sát GBP public cho 1 client.
- *
  * Body: { client_id: string, force?: boolean }
  *
- * Giai đoạn A — bản đồng bộ có timeout (Pro + maxDuration).
- * Production nên chuyển sang Trigger.dev / Inngest (xem PHASE_A_README).
- *
+ * Trả về thêm diagnostics để debug.
  * Copy vào: app/api/gbp-snapshot/route.ts
  */
 
@@ -24,6 +20,13 @@ export const maxDuration = 300
 export const runtime = 'nodejs'
 
 export async function POST(req: Request) {
+  const diagnostics: Record<string, unknown> = {
+    has_browserbase_key: Boolean(process.env.BROWSERBASE_API_KEY),
+    has_browserbase_project: Boolean(process.env.BROWSERBASE_PROJECT_ID),
+    has_places_key: Boolean(process.env.GOOGLE_PLACES_API_KEY),
+    has_anthropic_key: Boolean(process.env.ANTHROPIC_API_KEY),
+  }
+
   try {
     const workspaceId = await requireActiveWorkspaceId()
     const body = await req.json()
@@ -31,35 +34,51 @@ export async function POST(req: Request) {
     const force = Boolean(body.force)
 
     if (!clientId) {
-      return NextResponse.json({ error: 'Thiếu client_id' }, { status: 400 })
+      return NextResponse.json(
+        { error: 'Thiếu client_id', diagnostics },
+        { status: 400 }
+      )
     }
 
     const client = await getClientById(clientId, workspaceId)
     if (!client) {
-      return NextResponse.json({ error: 'Không tìm thấy khách hàng' }, { status: 404 })
+      return NextResponse.json(
+        { error: 'Không tìm thấy khách hàng', diagnostics },
+        { status: 404 }
+      )
     }
 
-    // Cache: đã có snapshot tươi → trả luôn, không chạy browser
+    diagnostics.client_name = client.name
+    diagnostics.client_place_id = client.place_id || null
+    diagnostics.client_gbp_link = client.gbp_link || null
+
     if (!force) {
       const fresh = await getFreshSnapshotForClient(clientId, workspaceId)
       if (fresh) {
         return NextResponse.json({
           snapshot: fresh,
           cached: true,
-          message: 'Đã có quan sát còn hạn — không chạy lại browser',
+          message: 'Đã có quan sát còn hạn — không chạy lại',
+          diagnostics: {
+            ...diagnostics,
+            source_used: fresh.raw_json ? 'cached' : 'cached',
+            cached: true,
+          },
         })
       }
     }
 
     const mapsUrl =
       client.gbp_link ||
-      (client.place_id ? `https://www.google.com/maps/place/?q=place_id:${client.place_id}` : null)
+      (client.place_id
+        ? `https://www.google.com/maps/place/?q=place_id:${client.place_id}`
+        : null)
 
     if (!mapsUrl && !client.name) {
       return NextResponse.json(
         {
-          error:
-            'Khách hàng thiếu Link Google Maps / Place ID / Tên — không thể quan sát',
+          error: 'Khách hàng thiếu Link Google Maps / Place ID / Tên',
+          diagnostics,
         },
         { status: 400 }
       )
@@ -123,10 +142,21 @@ export async function POST(req: Request) {
         cached: false,
         message:
           status === 'ok'
-            ? 'Đã quan sát GBP thành công'
+            ? 'Đã quan sát thành công'
             : status === 'partial'
-              ? 'Quan sát một phần — vẫn dùng được cho Audit'
+              ? 'Quan sát một phần'
               : 'Quan sát thất bại',
+        diagnostics: {
+          ...diagnostics,
+          source_used: result.source_used || null,
+          run_error: result.error || null,
+          has_description: Boolean(result.description),
+          description_len: result.description?.length || 0,
+          posts_count: result.recent_posts?.length || 0,
+          posts_signal: result.posts_signal || null,
+          photos_signal: result.photos_signal || null,
+          rating: result.rating ?? null,
+        },
       })
     } catch (err: any) {
       const failed = await updateSnapshot(pending.id, workspaceId, {
@@ -137,6 +167,10 @@ export async function POST(req: Request) {
         {
           snapshot: failed,
           error: err?.message || 'Lỗi khi quan sát GBP',
+          diagnostics: {
+            ...diagnostics,
+            run_error: err?.message || String(err),
+          },
         },
         { status: 500 }
       )
@@ -147,11 +181,13 @@ export async function POST(req: Request) {
       : error.message?.includes('NoWorkspace')
         ? 409
         : 500
-    return NextResponse.json({ error: error.message }, { status })
+    return NextResponse.json(
+      { error: error.message, diagnostics },
+      { status }
+    )
   }
 }
 
-/** GET ?client_id= — lấy snapshot mới nhất */
 export async function GET(req: Request) {
   try {
     const workspaceId = await requireActiveWorkspaceId()
@@ -160,7 +196,6 @@ export async function GET(req: Request) {
     if (!clientId) {
       return NextResponse.json({ error: 'Thiếu client_id' }, { status: 400 })
     }
-
     const { getLatestSnapshotForClient } = await import('@/lib/gbp-snapshots')
     const snapshot = await getLatestSnapshotForClient(clientId, workspaceId)
     return NextResponse.json({ snapshot })
