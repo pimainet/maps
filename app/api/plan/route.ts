@@ -14,7 +14,7 @@ import {
 import { PLAN_30_DAYS_PROMPT } from '@/lib/prompts'
 import { requireActiveWorkspaceId } from '@/lib/auth'
 import { getClientProgress } from '@/lib/client-memory'
-import { enforceAiRateLimit } from '@/lib/rate-limit'
+import { checkAiRateLimit, recordAiUsage } from '@/lib/rate-limit'
 
 export const maxDuration = 300
 export const runtime = 'nodejs'
@@ -48,7 +48,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const workspaceId = await requireActiveWorkspaceId()
-    await enforceAiRateLimit(workspaceId, 'plan')
+    const { userId } = await checkAiRateLimit(workspaceId, 'plan')
     const body = await req.json()
     const forceNewCycle = !!body.force_new_cycle
 
@@ -107,6 +107,7 @@ export async function POST(req: Request) {
       maxTokens: 3000,
       temperature: 0.4,
     })
+    await recordAiUsage(workspaceId, 'plan', userId)
 
     const saved = await savePlan({
       client_id: body.client_id,

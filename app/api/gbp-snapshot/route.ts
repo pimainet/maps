@@ -15,7 +15,7 @@ import {
   updateSnapshot,
 } from '@/lib/gbp-snapshots'
 import { runGbpPublicSnapshot } from '@/lib/gbp-browser-snapshot'
-import { enforceAiRateLimit } from '@/lib/rate-limit'
+import { checkAiRateLimit, recordAiUsage } from '@/lib/rate-limit'
 
 export const maxDuration = 300
 export const runtime = 'nodejs'
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     const workspaceId = await requireActiveWorkspaceId()
     // Endpoint này còn gọi Browserbase + Google Places (cũng tốn phí),
     // không chỉ Claude — cũng cần chặn spam như các endpoint AI khác.
-    await enforceAiRateLimit(workspaceId, 'gbp-snapshot')
+    const { userId } = await checkAiRateLimit(workspaceId, 'gbp-snapshot')
     const body = await req.json()
     const clientId = body.client_id as string | undefined
     const force = Boolean(body.force)
@@ -105,6 +105,10 @@ export async function POST(req: Request) {
         area: client.area,
         placeId: client.place_id,
       })
+      // Chạy tới đây nghĩa là đã tốn phí Browserbase/Places/Claude thật
+      // (dù kết quả là 'ok', 'partial' hay 'failed') — khác với lỗi
+      // ngoại lệ ở catch bên dưới (network crash...) thì không tính.
+      await recordAiUsage(workspaceId, 'gbp-snapshot', userId)
 
       const hasCore =
         Boolean(result.description) ||

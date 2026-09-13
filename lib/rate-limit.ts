@@ -1,10 +1,19 @@
 // Chặn spam các endpoint gọi Claude API (tốn tiền thật mỗi lần gọi).
 //
-// Cách dùng trong 1 route handler, TRƯỚC khi gọi askClaude(...):
+// Cách dùng trong 1 route/hàm, quanh chỗ gọi askClaude(...):
 //
 //   const workspaceId = await requireActiveWorkspaceId()
-//   await enforceAiRateLimit(workspaceId, 'audit')
-//   ... (gọi askClaude, lưu kết quả như bình thường)
+//   await checkAiRateLimit(workspaceId, 'audit')   // throw nếu đã vượt giới hạn
+//   const result = await askClaude(...)             // có thể lỗi (Claude quá tải...)
+//   await recordAiUsage(workspaceId, 'audit')        // CHỈ ghi nhận khi đã chạy xong
+//
+// Vì sao tách CHECK và RECORD làm 2 bước thay vì 1 hàm gộp: nếu ghi
+// nhận lượt gọi NGAY khi vừa qua được check (trước khi thật sự gọi
+// Claude), thì 1 lần Claude lỗi tạm thời (quá tải, timeout — không
+// phải lỗi của người dùng) vẫn bị tính vào quota vốn đã giới hạn theo
+// giờ/tháng — người dùng mất 1 lượt mà không nhận được gì. Ghi nhận
+// SAU KHI thành công thì công bằng hơn, đúng với thứ đang được giới
+// hạn là "số lần tạo ra kết quả", không phải "số lần thử".
 //
 // Có 2 lớp giới hạn cộng lại, để vừa chặn 1 user spam, vừa chặn cả
 // workspace (nhiều user trong cùng workspace) spam:
@@ -46,13 +55,13 @@ const LIMITS: Record<string, EndpointLimit> = {
 export const AUDIT_QUOTA_PER_CLIENT = 3
 export const AUDIT_QUOTA_WINDOW_DAYS = 30
 
+type Endpoint = keyof typeof LIMITS
+
 /**
- * Kiểm tra rate limit cho 1 endpoint gọi AI. Throw nếu vượt giới hạn,
- * ngược lại ghi nhận lượt gọi này rồi return bình thường.
- *
- * `endpoint` phải là 1 key có trong LIMITS ở trên.
+ * Kiểm tra rate limit cho 1 endpoint gọi AI — CHỈ đọc, không ghi.
+ * Throw nếu đã vượt giới hạn. Gọi hàm này TRƯỚC khi gọi askClaude.
  */
-export async function enforceAiRateLimit(workspaceId: string, endpoint: keyof typeof LIMITS): Promise<void> {
+export async function checkAiRateLimit(workspaceId: string, endpoint: Endpoint): Promise<{ userId: string }> {
   const limit = LIMITS[endpoint]
   if (!limit) {
     throw new Error(`Config lỗi: chưa khai báo rate limit cho endpoint "${endpoint}"`)
@@ -102,19 +111,41 @@ export async function enforceAiRateLimit(workspaceId: string, endpoint: keyof ty
     )
   }
 
-  // Chưa vượt giới hạn — ghi nhận lượt gọi này rồi cho qua.
-  const { error: insertError } = await supabase.from('ai_usage_events').insert({
+  return { userId: user.id }
+}
+
+/**
+ * Ghi nhận 1 lượt gọi AI ĐÃ THÀNH CÔNG. Gọi hàm này SAU khi askClaude
+ * chạy xong — không gọi nếu askClaude ném lỗi, để không tính "lượt thử
+ * thất bại" vào quota của người dùng.
+ */
+export async function recordAiUsage(workspaceId: string, endpoint: Endpoint, userId: string): Promise<void> {
+  const supabase = await createSupabaseServerClient()
+  const { error } = await supabase.from('ai_usage_events').insert({
     workspace_id: workspaceId,
-    user_id: user.id,
+    user_id: userId,
     endpoint,
   })
-  if (insertError) throw insertError
+  if (error) throw error
+}
+
+/**
+ * Tiện ích gộp check + record, dùng khi hàm gọi askClaude đã tự lo
+ * try/catch riêng và muốn 1 lệnh gọi duy nhất bao quanh toàn bộ khối AI
+ * (check trước, record sau nếu không lỗi). Tương đương gọi
+ * checkAiRateLimit rồi recordAiUsage thủ công.
+ */
+export async function withAiRateLimit<T>(workspaceId: string, endpoint: Endpoint, run: () => Promise<T>): Promise<T> {
+  const { userId } = await checkAiRateLimit(workspaceId, endpoint)
+  const result = await run()
+  await recordAiUsage(workspaceId, endpoint, userId)
+  return result
 }
 
 /**
  * Giới hạn nghiệp vụ riêng cho audit: 1 client chỉ được audit tối đa
  * AUDIT_QUOTA_PER_CLIENT lần trong AUDIT_QUOTA_WINDOW_DAYS ngày gần
- * nhất. Khác với enforceAiRateLimit (chặn spam kỹ thuật theo user/
+ * nhất. Khác với checkAiRateLimit/withAiRateLimit (chặn spam kỹ thuật theo user/
  * workspace trong vài phút/giờ), hàm này chặn theo đúng bản chất công
  * việc: audit mở đầu 1 chu kỳ 30 ngày, không phải việc làm liên tục.
  *

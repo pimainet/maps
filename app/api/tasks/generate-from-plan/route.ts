@@ -3,7 +3,7 @@ import { askClaude } from '@/lib/claude'
 import { createTasks, getClientById, getTasks, getActiveCycle, openCycle, updateCycle } from '@/lib/db'
 import { TASKS_FROM_PLAN_PROMPT } from '@/lib/prompts'
 import { requireActiveWorkspaceId } from '@/lib/auth'
-import { enforceAiRateLimit } from '@/lib/rate-limit'
+import { checkAiRateLimit, recordAiUsage } from '@/lib/rate-limit'
 import { autoWriteContentBatch } from '@/lib/write-content'
 import {
   getClientProgress,
@@ -73,7 +73,7 @@ export async function POST(req: Request) {
     // "tasks-generate-from-plan" dùng limit riêng, rộng hơn 1 chút vì
     // endpoint này còn tự động viết bài (auto-write) sau khi sinh task
     // — tức có thể kéo theo thêm nhiều lượt gọi Claude nữa.
-    await enforceAiRateLimit(workspaceId, 'tasks-generate-from-plan')
+    const { userId } = await checkAiRateLimit(workspaceId, 'tasks-generate-from-plan')
     const body = await req.json()
     const {
       client_id,
@@ -168,6 +168,8 @@ export async function POST(req: Request) {
         )
       }
     }
+
+    await recordAiUsage(workspaceId, 'tasks-generate-from-plan', userId)
 
     const normalized = tasks
       .filter((t) => t && typeof t.title === 'string' && t.title.trim())

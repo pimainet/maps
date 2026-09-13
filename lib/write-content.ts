@@ -14,7 +14,7 @@ import {
 } from '@/lib/db'
 import { titlesSimilar } from '@/lib/client-memory'
 import { WRITER_COMPACT_PROMPT, REFINE_LIGHT_PROMPT, CRITIC_COMPACT_PROMPT } from '@/lib/prompts'
-import { enforceAiRateLimit } from '@/lib/rate-limit'
+import { checkAiRateLimit, recordAiUsage } from '@/lib/rate-limit'
 
 type ClientInfo = {
   name?: string
@@ -78,7 +78,7 @@ function formatCriticFeedback(raw: string): string {
  *    điểm, thay vì AI âm thầm sửa hộ).
  *
  * ĐÂY LÀ CỬA DUY NHẤT gọi AI để viết content trong toàn bộ hệ thống —
- * rate limit được enforce ngay tại đây (enforceAiRateLimit), nên dù gọi
+ * rate limit được kiểm tra + ghi nhận ngay tại đây (checkAiRateLimit/
  * từ /api/content (viết tay 1 bài), từ auto-write khi duyệt bài, hay từ
  * sinh lịch việc, đều không thể né được giới hạn.
  */
@@ -88,7 +88,7 @@ async function runAiPipeline(
   info: ClientInfo | undefined,
   workspaceId: string
 ) {
-  await enforceAiRateLimit(workspaceId, 'content')
+  const { userId } = await checkAiRateLimit(workspaceId, 'content')
 
   const writerPrompt = WRITER_COMPACT_PROMPT.replaceAll(
     '{{business_name}}',
@@ -121,6 +121,12 @@ async function runAiPipeline(
     maxTokens: 1200,
     temperature: 0.4,
   })
+
+  // Đến đây writer + refine đã thành công (có bài dùng được) — ghi
+  // nhận lượt gọi này vào quota NGAY, trước khi chạy bước critic (nếu
+  // critic lỗi thì không nên ảnh hưởng tới việc quota có được tính hay
+  // không — bài đã viết ra rồi, người dùng đã "dùng" 1 lượt thật sự).
+  await recordAiUsage(workspaceId, 'content', userId)
 
   let critic_feedback = ''
   try {

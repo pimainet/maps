@@ -4,7 +4,7 @@ import { saveAudit, getLatestAuditByClient, getAllAudits } from '@/lib/db'
 import { AUDIT_PROMPT } from '@/lib/prompts'
 import { requireActiveWorkspaceId } from '@/lib/auth'
 import { getClientProgress } from '@/lib/client-memory'
-import { enforceAiRateLimit, enforceClientAuditQuota } from '@/lib/rate-limit'
+import { checkAiRateLimit, recordAiUsage, enforceClientAuditQuota } from '@/lib/rate-limit'
 
 export const maxDuration = 300
 export const runtime = 'nodejs'
@@ -35,7 +35,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const workspaceId = await requireActiveWorkspaceId()
-    await enforceAiRateLimit(workspaceId, 'audit')
+    const { userId } = await checkAiRateLimit(workspaceId, 'audit')
     const body = await req.json()
 
     if (body.client_id) {
@@ -76,6 +76,7 @@ export async function POST(req: Request) {
       .replaceAll('{{progress_context}}', progress_context)
 
     const audit_result = await askClaude(prompt, { maxTokens: 3000, temperature: 0.4 })
+    await recordAiUsage(workspaceId, 'audit', userId)
 
     const saved = await saveAudit({
       client_id: body.client_id,
