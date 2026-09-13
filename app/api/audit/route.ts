@@ -4,6 +4,7 @@ import { saveAudit, getLatestAuditByClient, getAllAudits } from '@/lib/db'
 import { AUDIT_PROMPT } from '@/lib/prompts'
 import { requireActiveWorkspaceId } from '@/lib/auth'
 import { getClientProgress } from '@/lib/client-memory'
+import { enforceAiRateLimit, enforceClientAuditQuota } from '@/lib/rate-limit'
 
 export const maxDuration = 300
 export const runtime = 'nodejs'
@@ -24,7 +25,9 @@ export async function GET(req: Request) {
       ? 401
       : error.message?.includes('NoWorkspace')
         ? 409
-        : 500
+        : error.message?.includes('RateLimited')
+          ? 429
+          : 500
     return NextResponse.json({ error: error.message }, { status })
   }
 }
@@ -32,7 +35,12 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const workspaceId = await requireActiveWorkspaceId()
+    await enforceAiRateLimit(workspaceId, 'audit')
     const body = await req.json()
+
+    if (body.client_id) {
+      await enforceClientAuditQuota(body.client_id, workspaceId)
+    }
 
     let progress_context = ''
     if (body.client_id) {
@@ -86,7 +94,9 @@ export async function POST(req: Request) {
       ? 401
       : error.message?.includes('NoWorkspace')
         ? 409
-        : 500
+        : error.message?.includes('RateLimited')
+          ? 429
+          : 500
     return NextResponse.json({ error: error.message }, { status })
   }
 }

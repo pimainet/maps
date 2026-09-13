@@ -3,6 +3,7 @@ import { askClaude } from '@/lib/claude'
 import { createTasks, getClientById, getTasks, getActiveCycle, openCycle, updateCycle } from '@/lib/db'
 import { TASKS_FROM_PLAN_PROMPT } from '@/lib/prompts'
 import { requireActiveWorkspaceId } from '@/lib/auth'
+import { enforceAiRateLimit } from '@/lib/rate-limit'
 import { autoWriteContentBatch } from '@/lib/write-content'
 import {
   getClientProgress,
@@ -69,6 +70,10 @@ Phản hồi gốc:
 export async function POST(req: Request) {
   try {
     const workspaceId = await requireActiveWorkspaceId()
+    // "tasks-generate-from-plan" dùng limit riêng, rộng hơn 1 chút vì
+    // endpoint này còn tự động viết bài (auto-write) sau khi sinh task
+    // — tức có thể kéo theo thêm nhiều lượt gọi Claude nữa.
+    await enforceAiRateLimit(workspaceId, 'tasks-generate-from-plan')
     const body = await req.json()
     const {
       client_id,
@@ -293,7 +298,9 @@ export async function POST(req: Request) {
       ? 401
       : error.message?.includes('NoWorkspace')
         ? 409
-        : 500
+        : error.message?.includes('RateLimited')
+          ? 429
+          : 500
     return NextResponse.json({ error: error.message }, { status })
   }
 }

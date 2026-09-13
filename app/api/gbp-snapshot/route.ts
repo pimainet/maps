@@ -15,6 +15,7 @@ import {
   updateSnapshot,
 } from '@/lib/gbp-snapshots'
 import { runGbpPublicSnapshot } from '@/lib/gbp-browser-snapshot'
+import { enforceAiRateLimit } from '@/lib/rate-limit'
 
 export const maxDuration = 300
 export const runtime = 'nodejs'
@@ -29,6 +30,9 @@ export async function POST(req: Request) {
 
   try {
     const workspaceId = await requireActiveWorkspaceId()
+    // Endpoint này còn gọi Browserbase + Google Places (cũng tốn phí),
+    // không chỉ Claude — cũng cần chặn spam như các endpoint AI khác.
+    await enforceAiRateLimit(workspaceId, 'gbp-snapshot')
     const body = await req.json()
     const clientId = body.client_id as string | undefined
     const force = Boolean(body.force)
@@ -180,7 +184,9 @@ export async function POST(req: Request) {
       ? 401
       : error.message?.includes('NoWorkspace')
         ? 409
-        : 500
+        : error.message?.includes('RateLimited')
+          ? 429
+          : 500
     return NextResponse.json(
       { error: error.message, diagnostics },
       { status }

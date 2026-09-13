@@ -16,6 +16,7 @@ import {
   REFINE_LIGHT_PROMPT,
 } from '@/lib/prompts'
 import { requireActiveWorkspaceId } from '@/lib/auth'
+import { enforceAiRateLimit } from '@/lib/rate-limit'
 
 export const maxDuration = 300
 export const runtime = 'nodejs'
@@ -38,6 +39,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const workspaceId = await requireActiveWorkspaceId()
+    await enforceAiRateLimit(workspaceId, 'content')
     const body = await req.json()
 
     let topic = body.topic
@@ -149,7 +151,13 @@ export async function POST(req: Request) {
       final_content,
     })
   } catch (error: any) {
-    const status = error.message?.includes('Unauthorized') ? 401 : error.message?.includes('NoWorkspace') ? 409 : 500
+    const status = error.message?.includes('Unauthorized')
+      ? 401
+      : error.message?.includes('NoWorkspace')
+        ? 409
+        : error.message?.includes('RateLimited')
+          ? 429
+          : 500
     return NextResponse.json(
       { error: error.message || 'Unknown error' },
       { status }
