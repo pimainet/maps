@@ -790,30 +790,50 @@ function Audit({ navigate, setToast }: any) {
     load()
   }, [])
 
-  async function handleAutoFetch() {
+    async function handleAutoFetch() {
     if (!client) return
     setFetching(true)
     setError('')
     try {
-      const res = await fetch('/api/places/fetch', {
+      const res = await fetch('/api/gbp-snapshot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: client.name,
-          area: client.area,
-          gbp_link: client.gbp_link,
-        }),
+        body: JSON.stringify({ client_id: client.id, force: true }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Không lấy được dữ liệu')
+
+      const s = data.snapshot || {}
       setForm((prev) => ({
         ...prev,
-        description: data.description || prev.description,
-        primary_category: data.industry || data.primary_category || prev.primary_category,
-        review_count: data.review_count != null ? String(data.review_count) : prev.review_count,
-        rating: data.rating != null ? String(data.rating) : prev.rating,
+        description: s.description || prev.description,
+        primary_category: s.primary_category || prev.primary_category,
+        review_count:
+          s.review_count != null && s.review_count !== ''
+            ? String(s.review_count)
+            : prev.review_count,
+        rating:
+          s.rating != null && s.rating !== '' ? String(s.rating) : prev.rating,
+        recent_posts: s.posts_signal || prev.recent_posts,
+        photos_status: s.photos_signal || prev.photos_status,
+        additional_info: [
+          prev.additional_info,
+          s.address_text ? `Địa chỉ (Maps): ${s.address_text}` : '',
+          s.phone ? `SĐT (Maps): ${s.phone}` : '',
+        ]
+          .filter(Boolean)
+          .join('\n'),
       }))
-      setToast('Đã lấy thông tin từ Google Maps thành công')
+
+      if (s.status === 'failed') {
+        setToast(s.error_message || 'Quan sát thất bại')
+      } else {
+        setToast(
+          s.description
+            ? 'Đã lấy dữ liệu từ Google (có mô tả)'
+            : 'Đã lấy rating/review/ảnh — mô tả Google thường trống, bạn bổ sung tay'
+        )
+      }
     } catch (err: any) {
       setError(err.message || 'Có lỗi khi lấy dữ liệu Google Maps')
     } finally {
