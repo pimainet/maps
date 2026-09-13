@@ -3,6 +3,7 @@ import {
   getTaskById,
   getContentByTaskId,
   createContentForTask,
+  createAdHocContent,
   updateContentStatus,
   saveContentHistory,
   getTasks,
@@ -12,7 +13,8 @@ import {
   deleteContentById,
 } from '@/lib/db'
 import { titlesSimilar } from '@/lib/client-memory'
-import { WRITER_COMPACT_PROMPT, REFINE_LIGHT_PROMPT } from '@/lib/prompts'
+import { WRITER_COMPACT_PROMPT, REFINE_LIGHT_PROMPT, CRITIC_COMPACT_PROMPT } from '@/lib/prompts'
+import { enforceAiRateLimit } from '@/lib/rate-limit'
 
 type ClientInfo = {
   name?: string
@@ -23,16 +25,71 @@ type ClientInfo = {
   notes?: string
 }
 
+function parseCriticJson(raw: string): { score: number | null; verdict: string; honesty_flag: boolean; honesty_note: string; note: string } | null {
+  try {
+    let s = (raw || '').trim()
+    s = s.replace(/^```(?:json|JSON)?\s*/i, '').replace(/\s*```$/i, '').trim()
+    const start = s.indexOf('{')
+    const end = s.lastIndexOf('}')
+    if (start === -1 || end === -1 || end <= start) return null
+    s = s.slice(start, end + 1)
+    const parsed = JSON.parse(s)
+    return {
+      score: typeof parsed.score === 'number' ? parsed.score : null,
+      verdict: parsed.verdict || '',
+      honesty_flag: !!parsed.honesty_flag,
+      honesty_note: parsed.honesty_note || '',
+      note: parsed.note || '',
+    }
+  } catch {
+    return null
+  }
+}
+
+const VERDICT_LABEL: Record<string, string> = {
+  dat: 'Đạt',
+  can_chinh_sua_nhe: 'Cần chỉnh sửa nhẹ',
+  can_viet_lai: 'Cần viết lại đáng kể',
+}
+
+function formatCriticFeedback(raw: string): string {
+  const parsed = parseCriticJson(raw)
+  // Parse lỗi (AI trả về sai format) — vẫn lưu nguyên văn, còn hơn mất trắng.
+  if (!parsed) return raw || ''
+
+  const lines: string[] = []
+  const scoreText = parsed.score != null ? `${parsed.score}/10` : '—'
+  const verdictText = VERDICT_LABEL[parsed.verdict] || parsed.verdict || '—'
+  lines.push(`Điểm chất lượng: ${scoreText} · ${verdictText}`)
+  if (parsed.honesty_flag) {
+    lines.push(`⚠️ Có dấu hiệu thông tin không đúng thật: ${parsed.honesty_note || '(AI không nêu chi tiết)'} — kiểm tra kỹ trước khi duyệt.`)
+  }
+  if (parsed.note) lines.push(parsed.note)
+  return lines.join('\n')
+}
+
 /**
- * Pipeline Tuần 3: tối đa 2 lần gọi Claude.
+ * Pipeline viết content: tối đa 3 lần gọi Claude.
  * 1) Writer compact (SERP-lite nằm trong prompt)
  * 2) Refine nhẹ (trung thực + CTA + độ dài)
+ * 3) Critic rút gọn — CHỈ chấm điểm + cảnh báo bịa thông tin, KHÔNG viết
+ *    lại lần nữa (khác CRITIC_PROMPT/REFINER_PROMPT cũ, tốn thêm 1 lượt
+ *    gọi nữa để tự sửa — ở đây để con người tự quyết định sau khi thấy
+ *    điểm, thay vì AI âm thầm sửa hộ).
+ *
+ * ĐÂY LÀ CỬA DUY NHẤT gọi AI để viết content trong toàn bộ hệ thống —
+ * rate limit được enforce ngay tại đây (enforceAiRateLimit), nên dù gọi
+ * từ /api/content (viết tay 1 bài), từ auto-write khi duyệt bài, hay từ
+ * sinh lịch việc, đều không thể né được giới hạn.
  */
 async function runAiPipeline(
   topic: string,
   goal: string,
-  info: ClientInfo | undefined
+  info: ClientInfo | undefined,
+  workspaceId: string
 ) {
+  await enforceAiRateLimit(workspaceId, 'content')
+
   const writerPrompt = WRITER_COMPACT_PROMPT.replaceAll(
     '{{business_name}}',
     info?.name || ''
@@ -65,10 +122,25 @@ async function runAiPipeline(
     temperature: 0.4,
   })
 
+  let critic_feedback = ''
+  try {
+    const criticPrompt = CRITIC_COMPACT_PROMPT.replaceAll('{{final_content}}', final_content)
+      .replaceAll('{{business_name}}', info?.name || '')
+      .replaceAll('{{phone}}', info?.phone || '')
+      .replaceAll('{{extra_info}}', info?.notes || '')
+    const rawCritic = await askClaude(criticPrompt, { maxTokens: 400, temperature: 0.2 })
+    critic_feedback = formatCriticFeedback(rawCritic)
+  } catch (e: any) {
+    // Critic lỗi (vd Claude quá tải) không nên làm hỏng cả bài đã viết
+    // xong — vẫn lưu bài, chỉ là không có điểm đánh giá lần này.
+    console.error('Critic step lỗi:', e?.message)
+    critic_feedback = ''
+  }
+
   return {
     serp_analysis: '',
     ai_content,
-    critic_feedback: '',
+    critic_feedback,
     final_content,
   }
 }
@@ -135,7 +207,7 @@ export async function writeContentForTask(
   }
 
   const { serp_analysis, ai_content, critic_feedback, final_content } =
-    await runAiPipeline(topic, goal, info)
+    await runAiPipeline(topic, goal, info, workspaceId)
 
   const contentRow = await createContentForTask({
     ...task,
@@ -164,7 +236,58 @@ export async function writeContentForTask(
   return {
     skipped: false,
     content: updatedContent,
+    ai_content,
+    critic_feedback,
+    serp_analysis,
     final_content,
+  }
+}
+
+/**
+ * Viết 1 bài content KHÔNG gắn với task có sẵn (ad-hoc — người dùng tự
+ * nhập chủ đề, không qua lộ trình). Dùng chung pipeline + rate limit
+ * với writeContentForTask, chỉ khác bước tạo record đầu vào.
+ */
+export async function writeAdHocContent(input: {
+  clientId: string
+  planId?: string
+  topic: string
+  goal?: string
+  workspaceId: string
+  clientInfo: ClientInfo
+}) {
+  const { clientId, planId, topic, goal, workspaceId, clientInfo } = input
+
+  const { serp_analysis, ai_content, critic_feedback, final_content } = await runAiPipeline(
+    topic,
+    goal || '',
+    clientInfo,
+    workspaceId
+  )
+
+  const contentRow = await createAdHocContent({
+    client_id: clientId,
+    plan_id: planId,
+    topic,
+    workspace_id: workspaceId,
+  })
+
+  const updatedContent = await updateContentStatus(contentRow.id, 'waiting_approval', workspaceId)
+
+  await saveContentHistory({
+    content_id: contentRow.id,
+    client_id: contentRow.client_id,
+    ai_version: final_content,
+    edit_note: JSON.stringify({ pipeline: 'compact_v1', serp_analysis, ai_draft: ai_content, critic_feedback }),
+    workspace_id: workspaceId,
+  })
+
+  return {
+    content: updatedContent,
+    ai_content,
+    critic_feedback,
+    final_content,
+    serp_analysis,
   }
 }
 

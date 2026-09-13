@@ -308,6 +308,37 @@ CẤM:
 Chỉ trả về nội dung bài viết, không tiêu đề phụ, không giải thích.
 `
 
+/** Critic rút gọn cho pipeline Tuần 3: chỉ CHẤM ĐIỂM + cảnh báo bịa
+ * thông tin, KHÔNG viết lại bài (khác CRITIC_PROMPT + REFINER_PROMPT ở
+ * trên — bản đó viết lại thêm 1 lần, tốn thêm 1 lượt gọi Claude).
+ * Mục đích: agency thấy được tín hiệu chất lượng TRƯỚC KHI duyệt và
+ * dán bài lên hồ sơ Google thật, mà không phải trả thêm chi phí/tốc độ
+ * của 1 lượt gọi viết-lại đầy đủ. */
+export const CRITIC_COMPACT_PROMPT = `
+Bạn là Critic nội dung Local SEO. Chấm nhanh bài Google Business Profile dưới đây. KHÔNG viết lại bài.
+
+NGÔN NGỮ: viết nhận xét bằng đúng ngôn ngữ của "Bài viết".
+
+Bài viết:
+{{final_content}}
+
+Thông tin được phép dùng (để kiểm tra bài có bịa gì không):
+- Tên doanh nghiệp: {{business_name}}
+- Số điện thoại: {{phone}}
+- Ghi chú thêm: {{extra_info}}
+
+Chỉ trả về ĐÚNG 1 JSON object, không markdown, không giải thích gì thêm ngoài JSON, đúng format:
+{
+  "score": <số từ 0 đến 10, 1 chữ số thập phân>,
+  "verdict": "dat" | "can_chinh_sua_nhe" | "can_viet_lai",
+  "honesty_flag": true hoặc false,
+  "honesty_note": "<mô tả ngắn nếu honesty_flag=true (thông tin nào có vẻ bịa); để chuỗi rỗng nếu honesty_flag=false>",
+  "note": "<1-2 câu nhận xét ngắn gọn nhất, điều agency nên để ý trước khi duyệt bài>"
+}
+
+honesty_flag = true nếu bài có SĐT, địa chỉ chi tiết, ưu đãi, số liệu, chứng nhận, năm kinh nghiệm... KHÔNG có trong phần "Thông tin được phép dùng" ở trên.
+`
+
 export const REFINE_LIGHT_PROMPT = `
 Bạn là biên tập viên Local SEO. Chỉnh nhẹ bài GBP dưới đây cho tự nhiên hơn, giữ đúng sự thật.
 
