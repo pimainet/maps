@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
+import { Loader2 } from 'lucide-react'
 import { Card } from '@/components/dashboard/shared'
 import { useToast } from '@/components/dashboard/toast-context'
 
@@ -215,7 +216,8 @@ export default function ClientPlanPage() {
 
         <div className="plan-actions" style={{ marginTop: 16 }}>
           <button className="primary-button" onClick={handleCreatePlan} disabled={running}>
-            {running ? 'Đang tạo lộ trình...' : 'Tạo lộ trình 30 ngày'}
+            {running && <Loader2 size={16} className="animate-spin" />}
+            {running ? 'Đang tạo lộ trình... (khoảng 15-25 giây)' : 'Tạo lộ trình 30 ngày'}
           </button>
         </div>
       </Card>
@@ -246,7 +248,8 @@ export default function ClientPlanPage() {
               <p>Tạo task (có chống trùng với việc/bài đã có)</p>
             </div>
             <button className="secondary-button" onClick={handleGenerateTasks} disabled={generatingTasks}>
-              {generatingTasks ? 'Đang sinh lịch...' : 'Sinh lịch việc'}
+              {generatingTasks && <Loader2 size={14} className="animate-spin" />}
+              {generatingTasks ? 'Đang sinh lịch... (có thể mất 20-30 giây)' : 'Sinh lịch việc'}
             </button>
           </div>
           {tasksError && <div style={{ color: '#b91c1c', background: '#fef2f2', padding: 12, borderRadius: 8 }}>{tasksError}</div>}

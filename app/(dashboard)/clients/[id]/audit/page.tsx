@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import { Loader2 } from 'lucide-react'
 import { Card } from '@/components/dashboard/shared'
 import { useToast } from '@/components/dashboard/toast-context'
 
@@ -66,27 +67,6 @@ export default function ClientAuditPage() {
         body: JSON.stringify({ client_id: client.id, force: true }),
       })
       const data = await res.json()
-
-      // Hiện chẩn đoán — copy nội dung này gửi mình
-      const d = data.diagnostics || {}
-      const summary = [
-        '=== CHẨN ĐOÁN GBP SNAPSHOT ===',
-        'HTTP: ' + res.status,
-        'error: ' + (data.error || data.snapshot?.error_message || '(không)'),
-        'source_used: ' + (d.source_used || '(không rõ)'),
-        'has_browserbase_key: ' + d.has_browserbase_key,
-        'has_browserbase_project: ' + d.has_browserbase_project,
-        'has_places_key: ' + d.has_places_key,
-        'has_anthropic_key: ' + d.has_anthropic_key,
-        'run_error: ' + (d.run_error || '(không)'),
-        'has_description: ' + d.has_description,
-        'description_len: ' + d.description_len,
-        'posts_count: ' + d.posts_count,
-        'posts_signal: ' + (d.posts_signal || ''),
-        'photos_signal: ' + (d.photos_signal || ''),
-        'rating: ' + d.rating,
-      ].join('\n')
-      window.alert(summary)
 
       if (!res.ok) throw new Error(data.error || 'Không lấy được dữ liệu')
 
@@ -177,13 +157,19 @@ export default function ClientAuditPage() {
             </>
           ) : null}
         </p>
-        <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+        <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <button className="secondary-button" onClick={handleAutoFetch} disabled={fetching}>
+            {fetching && <Loader2 size={14} className="animate-spin" />}
             {fetching ? 'Đang lấy từ Google...' : 'Tự điền từ Google Maps'}
           </button>
           <button className="secondary-button" onClick={() => router.push(`/clients/${client.id}/plan`)}>
             Sang lộ trình 30 ngày
           </button>
+          {fetching && (
+            <span style={{ fontSize: 12, color: '#6b7280' }}>
+              Đang mở trình duyệt thật để đọc hồ sơ Google Maps — có thể mất 20–40 giây, đừng tắt trang.
+            </span>
+          )}
         </div>
 
         <div className="form-grid" style={{ marginTop: 16 }}>
@@ -229,7 +215,8 @@ export default function ClientAuditPage() {
 
         <div style={{ marginTop: 16 }}>
           <button className="primary-button" onClick={handleRunAudit} disabled={running}>
-            {running ? 'Đang audit...' : 'Chạy Audit'}
+            {running && <Loader2 size={16} className="animate-spin" />}
+            {running ? 'Đang audit... (khoảng 10-20 giây)' : 'Chạy Audit'}
           </button>
         </div>
       </Card>

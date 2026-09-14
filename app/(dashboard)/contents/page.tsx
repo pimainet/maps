@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowUpRight, Sparkles } from 'lucide-react'
+import { ArrowUpRight, Loader2, Sparkles } from 'lucide-react'
 import { Badge, Card } from '@/components/dashboard/shared'
 import { useToast } from '@/components/dashboard/toast-context'
 
@@ -187,7 +187,10 @@ export default function ContentsPage() {
                           }}
                         >
                           {writingId === c.id ? (
-                            'Đang viết...'
+                            <>
+                              <Loader2 size={14} className="animate-spin" />
+                              Đang viết...
+                            </>
                           ) : (
                             <>
                               <Sparkles size={14} />
