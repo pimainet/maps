@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowUpRight, ClipboardCheck, FileText, Target } from 'lucide-react'
+import { ArrowUpRight, BarChart3, ClipboardCheck, FileText, Target } from 'lucide-react'
 import { Card } from '@/components/dashboard/shared'
 import { TASK_TYPE_LABEL, PRIORITY_LABEL } from '@/lib/ui-constants'
 import { useToast } from '@/components/dashboard/toast-context'
@@ -101,6 +101,9 @@ export default function ClientDetailPage() {
         <div className="hero-actions">
           <button className="secondary-button" onClick={() => router.push(`/clients/${client.id}/audit`)}>
             <ClipboardCheck size={16} /> Chạy Audit
+          </button>
+          <button className="secondary-button" onClick={() => router.push(`/clients/${client.id}/report`)}>
+            <BarChart3 size={16} /> Xem báo cáo
           </button>
           <button className="primary-button" onClick={() => router.push(`/clients/${client.id}/plan`)}>
             <Target size={16} /> Tiếp tục lộ trình

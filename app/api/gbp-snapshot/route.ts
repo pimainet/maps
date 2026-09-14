@@ -20,6 +20,18 @@ import { checkAiRateLimit, recordAiUsage } from '@/lib/rate-limit'
 export const maxDuration = 300
 export const runtime = 'nodejs'
 
+const IS_PROD = process.env.NODE_ENV === 'production'
+
+/** Production không nên trả nguyên văn lỗi nội bộ (message exception,
+ * stack...) ra response — chỉ hữu ích lúc dev. Giữ lại các cờ has_*_key
+ * (chỉ true/false, không phải bí mật) và dữ liệu của chính client đó
+ * (client_name...) vì agency cần thấy để tự debug case của họ. */
+function sanitizeDiagnostics(d: Record<string, unknown>) {
+  if (!IS_PROD) return d
+  const { run_error, ...rest } = d
+  return rest
+}
+
 export async function POST(req: Request) {
   const diagnostics: Record<string, unknown> = {
     has_browserbase_key: Boolean(process.env.BROWSERBASE_API_KEY),
@@ -39,7 +51,7 @@ export async function POST(req: Request) {
 
     if (!clientId) {
       return NextResponse.json(
-        { error: 'Thiếu client_id', diagnostics },
+        { error: 'Thiếu client_id', diagnostics: sanitizeDiagnostics(diagnostics) },
         { status: 400 }
       )
     }
@@ -47,7 +59,7 @@ export async function POST(req: Request) {
     const client = await getClientById(clientId, workspaceId)
     if (!client) {
       return NextResponse.json(
-        { error: 'Không tìm thấy khách hàng', diagnostics },
+        { error: 'Không tìm thấy khách hàng', diagnostics: sanitizeDiagnostics(diagnostics) },
         { status: 404 }
       )
     }
@@ -63,11 +75,11 @@ export async function POST(req: Request) {
           snapshot: fresh,
           cached: true,
           message: 'Đã có quan sát còn hạn — không chạy lại',
-          diagnostics: {
+          diagnostics: sanitizeDiagnostics({
             ...diagnostics,
             source_used: fresh.raw_json ? 'cached' : 'cached',
             cached: true,
-          },
+          }),
         })
       }
     }
@@ -82,7 +94,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error: 'Khách hàng thiếu Link Google Maps / Place ID / Tên',
-          diagnostics,
+          diagnostics: sanitizeDiagnostics(diagnostics),
         },
         { status: 400 }
       )
@@ -154,7 +166,7 @@ export async function POST(req: Request) {
             : status === 'partial'
               ? 'Quan sát một phần'
               : 'Quan sát thất bại',
-        diagnostics: {
+        diagnostics: sanitizeDiagnostics({
           ...diagnostics,
           source_used: result.source_used || null,
           run_error: result.error || null,
@@ -164,7 +176,7 @@ export async function POST(req: Request) {
           posts_signal: result.posts_signal || null,
           photos_signal: result.photos_signal || null,
           rating: result.rating ?? null,
-        },
+        }),
       })
     } catch (err: any) {
       const failed = await updateSnapshot(pending.id, workspaceId, {
@@ -175,10 +187,10 @@ export async function POST(req: Request) {
         {
           snapshot: failed,
           error: err?.message || 'Lỗi khi quan sát GBP',
-          diagnostics: {
+          diagnostics: sanitizeDiagnostics({
             ...diagnostics,
             run_error: err?.message || String(err),
-          },
+          }),
         },
         { status: 500 }
       )
@@ -192,7 +204,7 @@ export async function POST(req: Request) {
           ? 429
           : 500
     return NextResponse.json(
-      { error: error.message, diagnostics },
+      { error: error.message, diagnostics: sanitizeDiagnostics(diagnostics) },
       { status }
     )
   }
