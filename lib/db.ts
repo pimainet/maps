@@ -365,6 +365,7 @@ export async function createContentForTask(task: {
   plan_id?: string
   title: string
   workspace_id: string
+  channel?: string
 }) {
   const supabase = await createSupabaseServerClient()
   const { data, error } = await supabase
@@ -374,7 +375,7 @@ export async function createContentForTask(task: {
       plan_id: task.plan_id ?? null,
       task_id: task.id,
       module_key: 'maps_seo',
-      channel: 'gbp_post',
+      channel: task.channel || 'gbp_post',
       topic: task.title,
       status: 'drafted',
       workspace_id: task.workspace_id,

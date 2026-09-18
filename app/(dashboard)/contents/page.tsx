@@ -27,7 +27,13 @@ export default function ContentsPage() {
       if (!contentRes.ok) throw new Error(contentData.error || 'Không tải được nội dung')
 
       setContentItems(Array.isArray(contentData) ? contentData : [])
-      setContentTasks(taskRes.ok ? (Array.isArray(taskData) ? taskData : []).filter((t: any) => t.task_type === 'content') : [])
+      setContentTasks(
+        taskRes.ok
+          ? (Array.isArray(taskData) ? taskData : []).filter(
+              (t: any) => t.task_type === 'content' || t.task_type === 'description_update'
+            )
+          : []
+      )
       if (clientRes.ok) setClients(Array.isArray(clientData) ? clientData : [])
     } catch (err: any) {
       setError(err.message || 'Có lỗi xảy ra')
@@ -69,6 +75,7 @@ export default function ContentsPage() {
         status: 'idea',
         created_at: t.created_at,
         isTaskOnly: true,
+        isDescription: t.task_type === 'description_update',
       }
     })
 
@@ -169,6 +176,7 @@ export default function ContentsPage() {
                   <tr key={c.id} onClick={() => !c.isTaskOnly && router.push(`/contents/${c.id}`)}>
                     <td>
                       <strong>{c.topic || 'Không có tiêu đề'}</strong>
+                      {c.isDescription && <span className="type-label" style={{ marginLeft: 8 }}>Mô tả hồ sơ</span>}
                       {c.goal && <small>{c.goal}</small>}
                     </td>
                     <td className="muted-cell">{clientMap[c.client_id]?.name || '—'}</td>
@@ -194,7 +202,7 @@ export default function ContentsPage() {
                           ) : (
                             <>
                               <Sparkles size={14} />
-                              Viết bài bằng AI
+                              {c.isDescription ? 'Viết mô tả bằng AI' : 'Viết bài bằng AI'}
                             </>
                           )}
                         </button>

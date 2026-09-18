@@ -13,7 +13,7 @@ import {
   deleteContentById,
 } from '@/lib/db'
 import { titlesSimilar } from '@/lib/client-memory'
-import { WRITER_COMPACT_PROMPT, REFINE_LIGHT_PROMPT, CRITIC_COMPACT_PROMPT } from '@/lib/prompts'
+import { WRITER_COMPACT_PROMPT, REFINE_LIGHT_PROMPT, CRITIC_COMPACT_PROMPT, DESCRIPTION_WRITER_PROMPT } from '@/lib/prompts'
 import { checkAiRateLimit, recordAiUsage } from '@/lib/rate-limit'
 
 type ClientInfo = {
@@ -151,13 +151,61 @@ async function runAiPipeline(
   }
 }
 
+/**
+ * Pipeline riêng cho việc viết "Mô tả doanh nghiệp" (Giới thiệu) trên
+ * hồ sơ GBP — KHÁC bài đăng: không có bước refine tự do (rủi ro vượt
+ * giới hạn ~750 ký tự Google cho phép), chỉ Writer (đã tự yêu cầu đúng
+ * luật chơi trong prompt) + Critic chấm điểm/cảnh báo bịa thông tin,
+ * giống bài đăng.
+ */
+async function runDescriptionPipeline(
+  info: ClientInfo | undefined,
+  currentDescription: string,
+  workspaceId: string
+) {
+  const { userId } = await checkAiRateLimit(workspaceId, 'content')
+
+  const writerPrompt = DESCRIPTION_WRITER_PROMPT.replaceAll('{{output_language}}', 'Tiếng Việt')
+    .replaceAll('{{business_name}}', info?.name || '')
+    .replaceAll('{{industry}}', info?.industry || '')
+    .replaceAll('{{area}}', info?.area || '')
+    .replaceAll('{{brand_voice}}', info?.brand_voice || 'chuyên nghiệp, gần gũi')
+    .replaceAll('{{current_description}}', currentDescription || '(chưa có)')
+    .replaceAll('{{extra_info}}', info?.notes || '')
+
+  const final_content = await askClaude(writerPrompt, { maxTokens: 500, temperature: 0.5 })
+
+  await recordAiUsage(workspaceId, 'content', userId)
+
+  let critic_feedback = ''
+  try {
+    const criticPrompt = CRITIC_COMPACT_PROMPT.replaceAll('{{final_content}}', final_content)
+      .replaceAll('{{business_name}}', info?.name || '')
+      .replaceAll('{{phone}}', info?.phone || '')
+      .replaceAll('{{extra_info}}', info?.notes || '')
+    const rawCritic = await askClaude(criticPrompt, { maxTokens: 400, temperature: 0.2 })
+    critic_feedback = formatCriticFeedback(rawCritic)
+  } catch (e: any) {
+    console.error('Critic step (description) lỗi:', e?.message)
+    critic_feedback = ''
+  }
+
+  return {
+    serp_analysis: '',
+    ai_content: final_content,
+    critic_feedback,
+    final_content,
+  }
+}
+
 export async function writeContentForTask(
   taskId: string,
   workspaceId: string,
   clientInfo?: ClientInfo
 ) {
   const task = await getTaskById(taskId, workspaceId)
-  if (task.task_type !== 'content') {
+  const isDescriptionTask = task.task_type === 'description_update'
+  if (task.task_type !== 'content' && !isDescriptionTask) {
     return { skipped: true, reason: 'not_content_task' }
   }
 
@@ -196,28 +244,56 @@ export async function writeContentForTask(
   const topic = task.title
   const goal = task.description || ''
 
-  try {
-    const existingContents = (await getContents(task.client_id, workspaceId)) || []
-    for (const c of existingContents) {
-      if (!['waiting_approval', 'approved', 'published'].includes(c.status)) continue
-      if (c.topic && titlesSimilar(c.topic, topic)) {
-        return {
-          skipped: true,
-          reason: 'similar_topic_exists',
-          content: c,
+  if (!isDescriptionTask) {
+    // Dedup theo chủ đề CHỈ áp dụng cho bài đăng (nhiều bài/tháng, dễ
+    // trùng chủ đề). Mô tả doanh nghiệp thì chỉ có 1 bản "hiện hành"
+    // mỗi lúc — việc dedup theo tên task ở đây không có ý nghĩa.
+    try {
+      const existingContents = (await getContents(task.client_id, workspaceId)) || []
+      for (const c of existingContents) {
+        if (!['waiting_approval', 'approved', 'published'].includes(c.status)) continue
+        if (c.topic && titlesSimilar(c.topic, topic)) {
+          return {
+            skipped: true,
+            reason: 'similar_topic_exists',
+            content: c,
+          }
         }
       }
+    } catch {
+      /* ignore */
     }
-  } catch {
-    /* ignore */
   }
 
-  const { serp_analysis, ai_content, critic_feedback, final_content } =
-    await runAiPipeline(topic, goal, info, workspaceId)
+  let serp_analysis = ''
+  let ai_content = ''
+  let critic_feedback = ''
+  let final_content = ''
+  const channel = isDescriptionTask ? 'gbp_description' : 'gbp_post'
+
+  if (isDescriptionTask) {
+    // Lấy mô tả THẬT hiện tại từ lần quét Google Maps gần nhất (nếu
+    // có) để AI viết lại dựa trên đúng nội dung đang có, không phải
+    // đoán từ đầu.
+    let currentDescription = ''
+    try {
+      const { getLatestSnapshotForClient } = await import('@/lib/gbp-snapshots')
+      const snapshot = await getLatestSnapshotForClient(task.client_id, workspaceId)
+      currentDescription = snapshot?.description || ''
+    } catch {
+      /* chưa có snapshot cũng không sao, AI vẫn viết được từ dữ liệu client */
+    }
+    const result = await runDescriptionPipeline(info, currentDescription, workspaceId)
+    ;({ serp_analysis, ai_content, critic_feedback, final_content } = result)
+  } else {
+    const result = await runAiPipeline(topic, goal, info, workspaceId)
+    ;({ serp_analysis, ai_content, critic_feedback, final_content } = result)
+  }
 
   const contentRow = await createContentForTask({
     ...task,
     workspace_id: workspaceId,
+    channel,
   })
 
   const updatedContent = await updateContentStatus(
@@ -231,7 +307,7 @@ export async function writeContentForTask(
     client_id: contentRow.client_id,
     ai_version: final_content,
     edit_note: JSON.stringify({
-      pipeline: 'compact_v1',
+      pipeline: isDescriptionTask ? 'description_v1' : 'compact_v1',
       serp_analysis,
       ai_draft: ai_content,
       critic_feedback,
@@ -331,7 +407,8 @@ export async function getUnwrittenContentTasks(
 
   return (tasks || [])
     .filter(
-      (t: any) => t.task_type === 'content' && !writtenTaskIds.has(t.id)
+      (t: any) =>
+        (t.task_type === 'content' || t.task_type === 'description_update') && !writtenTaskIds.has(t.id)
     )
     .sort(
       (a: any, b: any) =>
