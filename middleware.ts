@@ -36,7 +36,9 @@ export async function middleware(request: NextRequest) {
   const isPublic =
     pathname.startsWith('/login') ||
     pathname.startsWith('/signup') ||
-    pathname.startsWith('/auth')
+    pathname.startsWith('/auth') ||
+    pathname.startsWith('/demo') ||
+    pathname.startsWith('/api/public/')
 
   // Chưa login mà vào trang bảo vệ → redirect về /login
   if (!user && !isPublic) {

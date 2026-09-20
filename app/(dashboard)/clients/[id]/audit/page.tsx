@@ -5,6 +5,8 @@ import { useParams, useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { Card } from '@/components/dashboard/shared'
 import { useToast } from '@/components/dashboard/toast-context'
+import { parseAuditResult } from '@/lib/audit-parse'
+import { AuditResultView } from '@/components/dashboard/audit-result-view'
 
 export default function ClientAuditPage() {
   const router = useRouter()
@@ -222,18 +224,23 @@ export default function ClientAuditPage() {
       </Card>
 
       {result && (
-        <Card>
-          <div className="section-head">
-            <div>
-              <h2>Kết quả Audit</h2>
-              <p>Đã lưu vào hệ thống · có thể dùng để lập lộ trình</p>
-            </div>
+        <>
+          <div className="section-head" style={{ marginTop: 8 }}>
+            <div />
             <button className="primary-button" onClick={() => router.push(`/clients/${client.id}/plan`)}>
               Lập lộ trình 30 ngày
             </button>
           </div>
-          <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, fontSize: 14 }}>{result}</div>
-        </Card>
+          <AuditResultView
+            audit={parseAuditResult(result, {
+              name: client.name,
+              industry: client.industry,
+              area: client.area,
+              mapsUrl: client.gbp_link,
+            })}
+            rawFallback={result}
+          />
+        </>
       )}
     </>
   )
