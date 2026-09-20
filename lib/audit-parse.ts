@@ -16,7 +16,13 @@ function bulletsAfter(text: string, heading: RegExp, stop: RegExp): string[] {
   const block = endMatch >= 0 ? rest.slice(0, endMatch + 1) : rest
   return block
     .split('\n')
-    .map((l) => l.replace(/^\s*[-*•]\s*/, '').trim())
+    .map((l) =>
+        l
+          .replace(/^\s*[-*•]\s*/, '')
+          .replace(/\*\*/g, '')
+          .replace(/^\d+\.\s*/, '')
+          .trim(),
+      )
     .filter((l) => l && !heading.test(l) && !/^#{1,4}\s/.test(l) && l.length > 8)
     .slice(0, 6)
 }

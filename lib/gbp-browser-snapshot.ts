@@ -91,7 +91,7 @@ async function fromPlaces(input: RunGbpSnapshotInput): Promise<RunGbpSnapshotRes
       'Content-Type': 'application/json',
       'X-Goog-Api-Key': apiKey,
       'X-Goog-FieldMask':
-        'id,displayName,formattedAddress,nationalPhoneNumber,websiteUri,googleMapsUri,rating,userRatingCount,primaryTypeDisplayName,editorialSummary,photos',
+        'id,displayName,formattedAddress,nationalPhoneNumber,websiteUri,googleMapsUri,rating,userRatingCount,primaryTypeDisplayName,primaryType,types,regularOpeningHours,currentOpeningHours,editorialSummary,photos',
     },
   })
   const place = await detailsRes.json()
@@ -104,13 +104,23 @@ async function fromPlaces(input: RunGbpSnapshotInput): Promise<RunGbpSnapshotRes
   }
 
   const photosCount = Array.isArray(place.photos) ? place.photos.length : 0
+  const typeLabels = Array.isArray(place.types)
+    ? place.types
+        .map((t: string) => String(t || '').replace(/_/g, ' '))
+        .filter((t: string) => t && t !== 'point of interest' && t !== 'establishment')
+    : []
+  const hoursLines: string[] = place.regularOpeningHours?.weekdayDescriptions ||
+    place.currentOpeningHours?.weekdayDescriptions ||
+    []
 
   return {
     place_id: place.id || placeId,
     maps_url: place.googleMapsUri || input.mapsUrl || buildSearchUrl(input),
     business_name: place.displayName?.text || input.businessName || null,
     description: place.editorialSummary?.text || null,
-    primary_category: place.primaryTypeDisplayName?.text || null,
+    primary_category: place.primaryTypeDisplayName?.text || place.primaryType || null,
+    additional_categories: typeLabels.length ? typeLabels.join(', ') : null,
+    opening_hours: hoursLines.length ? hoursLines.join(' | ') : null,
     rating: place.rating ?? null,
     review_count: place.userRatingCount ?? null,
     phone: place.nationalPhoneNumber || null,
@@ -331,6 +341,9 @@ export async function runGbpPublicSnapshot(
           review_count: browserResult.review_count ?? places.review_count ?? null,
           primary_category:
             browserResult.primary_category || places.primary_category || null,
+          additional_categories:
+            browserResult.additional_categories || places.additional_categories || null,
+          opening_hours: browserResult.opening_hours || places.opening_hours || null,
           phone: browserResult.phone || places.phone || null,
           website_url: browserResult.website_url || places.website_url || null,
           address_text: browserResult.address_text || places.address_text || null,

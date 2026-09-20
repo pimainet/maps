@@ -15,6 +15,8 @@ export type GbpSnapshotPayload = {
   business_name?: string | null
   description?: string | null
   primary_category?: string | null
+  additional_categories?: string | null
+  opening_hours?: string | null
   rating?: number | null
   review_count?: number | null
   phone?: string | null

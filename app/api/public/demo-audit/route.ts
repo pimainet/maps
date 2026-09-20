@@ -118,6 +118,12 @@ export async function POST(req: Request) {
       snapshot.address_text ? `Địa chỉ (Maps): ${snapshot.address_text}` : '',
       snapshot.phone ? `SĐT (Maps): ${snapshot.phone}` : '',
       snapshot.website_url ? `Website: ${snapshot.website_url}` : '',
+      snapshot.opening_hours
+        ? `Giờ mở cửa (Maps, ĐÃ CÓ): ${snapshot.opening_hours}`
+        : 'Giờ mở cửa: Chưa đọc được trên lần quan sát này — không kết luận là thiếu.',
+      snapshot.additional_categories
+        ? `Danh mục phụ (Maps, ĐÃ CÓ): ${snapshot.additional_categories}`
+        : 'Danh mục phụ: Chưa đọc được trên lần quan sát này — không kết luận là thiếu.',
       Array.isArray(snapshot.recent_posts) && snapshot.recent_posts.length
         ? 'Bài đăng:\n' +
           snapshot.recent_posts
@@ -136,7 +142,10 @@ export async function POST(req: Request) {
       .replaceAll('{{gbp_link}}', snapshot.maps_url || mapsUrl)
       .replaceAll('{{description}}', snapshot.description || '')
       .replaceAll('{{primary_category}}', snapshot.primary_category || '')
-      .replaceAll('{{additional_categories}}', '')
+      .replaceAll(
+        '{{additional_categories}}',
+        snapshot.additional_categories || 'Chưa đọc được trên lần quan sát này — không kết luận là thiếu',
+      )
       .replaceAll('{{review_count}}', snapshot.review_count != null ? String(snapshot.review_count) : '')
       .replaceAll('{{rating}}', snapshot.rating != null ? String(snapshot.rating) : '')
       .replaceAll('{{recent_posts}}', snapshot.posts_signal || '')
