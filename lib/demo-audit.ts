@@ -30,6 +30,18 @@ export type DemoAudit = {
   actions: string[]
   difficulty: 'Cao' | 'Trung bình' | 'Thấp'
   lockedHints: { title: string; teaser: string }[]
+  source?: string
+  snapshot?: {
+    rating?: number | null
+    review_count?: number | null
+    category?: string | null
+    address?: string | null
+    phone?: string | null
+    photos_signal?: string | null
+    posts_signal?: string | null
+    place_id?: string | null
+    maps_url?: string | null
+  }
 }
 
 const INDUSTRY_LABEL: Record<string, string> = {

@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { buildDemoAudit } from '@/lib/demo-audit'
 
 export const runtime = 'nodejs'
 
@@ -32,36 +31,25 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Số Zalo không hợp lệ' }, { status: 400, headers })
     }
 
-    const audit = buildDemoAudit({
-      industry: body.industry || 'other',
-      industryLabel: body.industryLabel,
-      city: body.city || body.area || '',
-      status: body.status || 'unknown',
-      business: body.business || body.business_name || '',
-      mapsUrl: body.mapsUrl || body.gbp_link || '',
-      name: body.name || '',
-      phone,
-    })
-
     try {
       const { supabaseAdmin } = await import('@/lib/supabase/admin')
       await supabaseAdmin.from('demo_leads').insert({
         name: String(body.name || '').slice(0, 80),
         phone,
-        business_name: audit.businessName,
-        industry: audit.industryLabel,
-        area: audit.area,
-        gbp_link: audit.mapsUrl || null,
+        business_name: body.business || body.business_name || null,
+        industry: body.industryLabel || body.industry || null,
+        area: body.city || body.area || null,
+        gbp_link: body.mapsUrl || body.gbp_link || null,
         status: body.status || null,
-        overall_score: audit.overall,
-        source: body.source || 'landing-demo',
+        overall_score: null,
+        source: body.source || 'landing-lead',
         raw: body,
       })
     } catch (e: any) {
       console.error('demo_leads insert:', e?.message)
     }
 
-    return NextResponse.json({ ok: true, audit }, { headers })
+    return NextResponse.json({ ok: true }, { headers })
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Không nhận được lead' }, { status: 500, headers })
   }
