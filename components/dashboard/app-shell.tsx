@@ -31,9 +31,9 @@ import {
 } from 'lucide-react'
 import { ToastProvider } from './toast-context'
 
-function NavItem({ icon: Icon, label, active, href, count }: any) {
+function NavItem({ icon: Icon, label, active, href, count, onNavigate }: any) {
   return (
-    <Link href={href} className={`nav-item ${active ? 'active' : ''}`}>
+    <Link href={href} className={`nav-item ${active ? 'active' : ''}`} onClick={onNavigate}>
       <Icon size={18} />
       <span>{label}</span>
       {count && <b>{count}</b>}
@@ -69,9 +69,23 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false)
   const [clientName, setClientName] = useState('')
   const [pendingCount, setPendingCount] = useState<number | null>(null)
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
+
+  useEffect(() => {
+    setMobileOpen(false)
+    setMobileSearchOpen(false)
+  }, [pathname])
+
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = mobileOpen ? 'hidden' : prev
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [mobileOpen])
 
   useEffect(() => {
     fetch('/api/me')
@@ -165,23 +179,25 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         </Link>
         <nav>
           <p className="nav-label">Làm việc hôm nay</p>
-          <NavItem icon={LayoutDashboard} label="Tổng quan" active={pathname === '/'} href="/" />
+          <NavItem icon={LayoutDashboard} label="Tổng quan" active={pathname === '/'} href="/" onNavigate={() => setMobileOpen(false)} />
           <NavItem
             icon={Users}
             label="Khách hàng"
             active={pathname.startsWith('/clients')}
             href="/clients"
+            onNavigate={() => setMobileOpen(false)}
           />
-          <NavItem icon={ClipboardCheck} label="Việc cần làm" active={pathname.startsWith('/tasks')} href="/tasks" />
+          <NavItem icon={ClipboardCheck} label="Việc cần làm" active={pathname.startsWith('/tasks')} href="/tasks" onNavigate={() => setMobileOpen(false)} />
           <NavItem
             icon={FileText}
             label="Nội dung"
             active={pathname.startsWith('/contents')}
             count={pendingCount ? String(pendingCount) : undefined}
             href="/contents"
+            onNavigate={() => setMobileOpen(false)}
           />
           <p className="nav-label secondary">Hệ thống</p>
-          <NavItem icon={Settings} label="Cài đặt" active={pathname.startsWith('/settings')} href="/settings" />
+          <NavItem icon={Settings} label="Cài đặt" active={pathname.startsWith('/settings')} href="/settings" onNavigate={() => setMobileOpen(false)} />
         </nav>
         <div className="sidebar-footer">
           <div className="help-card">
@@ -204,7 +220,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       {mobileOpen && <div className="mobile-overlay" onClick={() => setMobileOpen(false)} />}
       <main className="main">
         <header className="topbar">
-          <button className="mobile-menu" onClick={() => setMobileOpen(true)}>
+          <button className="mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Mở menu">
             <Menu size={20} />
           </button>
           <div className="breadcrumbs">
@@ -212,12 +228,20 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
             <span>/</span>
             <strong>{title}</strong>
           </div>
+          <div className="mobile-title">{title}</div>
           <div className="top-actions">
             <div className="top-search">
               <Search size={16} />
               <input placeholder="Tìm kiếm..." />
               <kbd>⌘ K</kbd>
             </div>
+            <button
+              className="icon-button mobile-search-toggle"
+              aria-label="Tìm kiếm"
+              onClick={() => setMobileSearchOpen((v) => !v)}
+            >
+              <Search size={18} />
+            </button>
             <button className="icon-button" aria-label="Thông báo">
               <Bell size={18} />
               <i />
@@ -225,6 +249,12 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
             <div className="mini-avatar">{currentUser?.initials || 'U'}</div>
           </div>
         </header>
+        {mobileSearchOpen && (
+          <div className="mobile-search-bar">
+            <Search size={16} />
+            <input autoFocus placeholder="Tìm khách hàng, việc, nội dung..." />
+          </div>
+        )}
         <div className="content">
           <div className="page-heading">
             <div>
@@ -252,6 +282,29 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           {children}
         </div>
       </main>
+      <nav className="bottom-nav" aria-label="Điều hướng điện thoại">
+        <Link href="/" className={pathname === '/' ? 'active' : ''}>
+          <LayoutDashboard size={20} />
+          <span>Tổng quan</span>
+        </Link>
+        <Link href="/clients" className={pathname.startsWith('/clients') ? 'active' : ''}>
+          <Users size={20} />
+          <span>Khách</span>
+        </Link>
+        <Link href="/tasks" className={pathname.startsWith('/tasks') ? 'active' : ''}>
+          <ClipboardCheck size={20} />
+          <span>Việc</span>
+        </Link>
+        <Link href="/contents" className={pathname.startsWith('/contents') ? 'active' : ''}>
+          <FileText size={20} />
+          <span>Nội dung</span>
+          {pendingCount ? <b>{pendingCount}</b> : null}
+        </Link>
+        <button type="button" className={mobileOpen ? 'active' : ''} onClick={() => setMobileOpen(true)}>
+          <Menu size={20} />
+          <span>Menu</span>
+        </button>
+      </nav>
     </div>
   )
 }
