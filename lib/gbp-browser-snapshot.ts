@@ -11,7 +11,7 @@
  * Đặt vào: lib/gbp-browser-snapshot.ts
  */
 
-import type { GbpSnapshotPayload, GbpPostItem } from '@/lib/gbp-snapshot-types'
+import type { GbpSnapshotPayload, GbpPostItem, GbpReviewItem } from '@/lib/gbp-snapshot-types'
 import { GBP_SNAPSHOT_MAX_POSTS } from '@/lib/gbp-snapshot-types'
 import { askClaude } from '@/lib/claude'
 
@@ -90,8 +90,13 @@ async function fromPlaces(input: RunGbpSnapshotInput): Promise<RunGbpSnapshotRes
     headers: {
       'Content-Type': 'application/json',
       'X-Goog-Api-Key': apiKey,
+      // Thêm "reviews" vào field mask — field này đã nằm sẵn trong tier
+      // Enterprise+Atmosphere (do rating/photos đã có từ trước), nên KHÔNG
+      // phát sinh tier SKU mới, chỉ thêm dữ liệu vào cùng 1 lệnh gọi đã trả
+      // phí. Tự kiểm tra lại giá chính thức trên Google Cloud Console trước
+      // khi scale, số liệu bên ngoài không phải nguồn chính thức 100% nhất quán.
       'X-Goog-FieldMask':
-        'id,displayName,formattedAddress,nationalPhoneNumber,websiteUri,googleMapsUri,rating,userRatingCount,primaryTypeDisplayName,primaryType,types,regularOpeningHours,currentOpeningHours,editorialSummary,photos',
+        'id,displayName,formattedAddress,nationalPhoneNumber,websiteUri,googleMapsUri,rating,userRatingCount,primaryTypeDisplayName,primaryType,types,regularOpeningHours,currentOpeningHours,editorialSummary,photos,reviews',
     },
   })
   const place = await detailsRes.json()
@@ -104,6 +109,19 @@ async function fromPlaces(input: RunGbpSnapshotInput): Promise<RunGbpSnapshotRes
   }
 
   const photosCount = Array.isArray(place.photos) ? place.photos.length : 0
+  // Places API (New) trả text review dạng { text: { text, languageCode } }.
+  // originalText dùng khi review không phải tiếng Anh/bị dịch tự động —
+  // ưu tiên originalText để giữ đúng ngôn ngữ gốc cho AI đọc (T06).
+  const reviews: GbpReviewItem[] = Array.isArray(place.reviews)
+    ? place.reviews
+        .map((r: any) => ({
+          rating: typeof r?.rating === 'number' ? r.rating : null,
+          text: r?.originalText?.text || r?.text?.text || '',
+          relative_time: r?.relativePublishTimeDescription || null,
+          reply: null, // Places API không trả owner reply — xem ghi chú ở gbp-snapshot-types.ts
+        }))
+        .filter((r: GbpReviewItem) => r.rating != null && r.text.trim().length > 0)
+    : []
   const typeLabels = Array.isArray(place.types)
     ? place.types
         .map((t: string) => String(t || '').replace(/_/g, ' '))
@@ -138,6 +156,7 @@ async function fromPlaces(input: RunGbpSnapshotInput): Promise<RunGbpSnapshotRes
             ? 'Ít ảnh'
             : 'Chưa rõ / ít ảnh công khai',
     photos_count_est: photosCount,
+    reviews,
     source_used: 'places',
     raw: { source: 'places', place },
   }
@@ -356,6 +375,9 @@ export async function runGbpPublicSnapshot(
             browserResult.recent_posts?.length
               ? browserResult.recent_posts
               : places.recent_posts || [],
+          // Browser path (Stagehand/Claude extract) chưa thu thập review text
+          // — luôn lấy từ Places (API chính thức, xem ghi chú field mask ở trên).
+          reviews: places.reviews || [],
           source_used: 'browser+places',
           error: browserResult.error,
           raw: { browser: browserResult.raw, places: places.raw },

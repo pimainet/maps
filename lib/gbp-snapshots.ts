@@ -53,6 +53,7 @@ export async function updateSnapshot(
     recent_posts?: unknown
     photos_signal?: string | null
     photos_count_est?: number | null
+    reviews?: unknown
     competitors?: unknown
     raw_json?: unknown
   }

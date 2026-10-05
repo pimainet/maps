@@ -154,6 +154,7 @@ export async function POST(req: Request) {
         recent_posts: result.recent_posts || [],
         photos_signal: result.photos_signal || null,
         photos_count_est: result.photos_count_est ?? null,
+        reviews: result.reviews || [],
         raw_json: result.raw || null,
       })
 

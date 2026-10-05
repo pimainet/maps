@@ -9,6 +9,24 @@ export type GbpPostItem = {
   raw?: string | null
 }
 
+/**
+ * 1 review thật lấy qua Places API (New) field `reviews` — API CHÍNH THỨC
+ * của Google, không phải scrape. Giới hạn đã biết của chính API này (không
+ * phải do ta thu hẹp): chỉ trả tối đa ~5 review "liên quan nhất" theo thuật
+ * toán của Google (không chắc là mới nhất, không phải toàn bộ), và KHÔNG
+ * bao gồm nội dung chủ doanh nghiệp đã phản hồi (`reply`) — trường đó chỉ
+ * có qua Google Business Profile API (cần OAuth + khách xác minh quyền sở
+ * hữu hồ sơ), ngoài phạm vi snapshot public này. Vì vậy `reply` để sẵn
+ * trong type cho tương lai nhưng Data Collector hiện tại sẽ luôn để trống.
+ */
+export type GbpReviewItem = {
+  rating: number
+  text: string
+  relative_time?: string | null
+  /** Luôn null ở nguồn Places API — xem ghi chú ở trên. */
+  reply?: string | null
+}
+
 export type GbpSnapshotPayload = {
   place_id?: string | null
   maps_url?: string | null
@@ -26,6 +44,8 @@ export type GbpSnapshotPayload = {
   recent_posts?: GbpPostItem[]
   photos_signal?: string | null
   photos_count_est?: number | null
+  /** Review thật (tối đa ~5, do giới hạn Places API) — xem GbpReviewItem. */
+  reviews?: GbpReviewItem[]
 }
 
 export type GbpSnapshotStatus = 'pending' | 'running' | 'ok' | 'partial' | 'failed'
