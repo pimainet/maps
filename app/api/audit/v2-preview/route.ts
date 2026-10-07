@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
 import { requireActiveWorkspaceId } from '@/lib/auth'
 import { checkAiRateLimit, recordAiUsage } from '@/lib/rate-limit'
-import { getClientById } from '@/lib/db'
+import { getClientById, saveAuditV2, getAuditV2History } from '@/lib/db'
 import { getFreshSnapshotForClient } from '@/lib/gbp-snapshots'
 import { runGbpPublicSnapshot } from '@/lib/gbp-browser-snapshot'
-import { runAudit, createRealAIClassifier, checkWebsiteReachable } from '@/lib/audit-engine'
+import { runAudit, createRealAIClassifier, checkWebsiteReachable, diffAuditReports } from '@/lib/audit-engine'
+import type { AuditReport } from '@/lib/audit-engine'
 import type { GbpSnapshotPayload } from '@/lib/gbp-snapshot-types'
 
 export const maxDuration = 300
@@ -16,9 +17,16 @@ export const runtime = 'nodejs'
  * tại (1 lệnh gọi Claude tự do) TRƯỚC KHI quyết định có cutover route thật
  * `/api/audit` hay không.
  *
- * KHÔNG ghi gì vào bảng `audits` — chỉ trả JSON để xem/so sánh. KHÔNG tính
- * vào enforceClientAuditQuota (quota audit thật của khách hàng) — dùng
- * bucket rate-limit riêng 'audit-v2-preview' (xem lib/rate-limit.ts).
+ * KHI có client_id: lưu kết quả có cấu trúc vào `audits` với
+ * module_key='maps_seo_v2' (TÁCH BIỆT hoàn toàn khỏi audit thật
+ * module_key='maps_seo' — không bao giờ lẫn khi query). Việc lưu là
+ * best-effort: nếu lưu lỗi, vẫn trả report về bình thường, không vỡ response.
+ * KHÔNG tính vào enforceClientAuditQuota (quota audit thật của khách hàng)
+ * — dùng bucket rate-limit riêng 'audit-v2-preview' (xem lib/rate-limit.ts).
+ *
+ * GET ?client_id=...  trả lịch sử audit v2 của client đó (mới nhất trước)
+ * kèm so sánh cơ bản giữa 2 lần gần nhất — để trả lời câu hỏi "có cải
+ * thiện không" (PHẦN VII, Vấn đề 5 trong tài liệu framework gốc).
  *
  * Yêu cầu đăng nhập + thuộc workspace — không public như /api/public/demo-audit.
  *
@@ -31,6 +39,36 @@ export const runtime = 'nodejs'
  *      Chạy thử nhanh, không cần client có sẵn trong workspace (giống cách
  *      /api/public/demo-audit nhận input) — không lưu gì vào gbp_snapshots.
  */
+export async function GET(req: Request) {
+  try {
+    const workspaceId = await requireActiveWorkspaceId()
+    const { searchParams } = new URL(req.url)
+    const clientId = searchParams.get('client_id')
+    if (!clientId) {
+      return NextResponse.json({ error: 'Thiếu client_id.' }, { status: 400 })
+    }
+
+    const history = await getAuditV2History(clientId, workspaceId, 10)
+
+    let diff: (ReturnType<typeof diffAuditReports> & { fromDate: string; toDate: string }) | null = null
+    if (history.length >= 2) {
+      const [latest, previous] = history
+      if (latest.checks_json && previous.checks_json) {
+        diff = {
+          fromDate: previous.created_at,
+          toDate: latest.created_at,
+          ...diffAuditReports(previous.checks_json as AuditReport, latest.checks_json as AuditReport),
+        }
+      }
+    }
+
+    return NextResponse.json({ ok: true, history, diff })
+  } catch (error: any) {
+    const status = error.message?.includes('Unauthorized') ? 401 : error.message?.includes('NoWorkspace') ? 409 : 500
+    return NextResponse.json({ error: error.message || 'Lỗi lấy lịch sử audit v2.' }, { status })
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const workspaceId = await requireActiveWorkspaceId()
@@ -110,12 +148,33 @@ export async function POST(req: Request) {
     // Chỉ ghi nhận usage SAU KHI chạy xong thành công — đúng pattern đã có ở rate-limit.ts.
     await recordAiUsage(workspaceId, 'audit-v2-preview', userId)
 
+    // Lưu best-effort — chỉ khi có client_id thật trong workspace (không lưu
+    // cho lượt chạy thử ad-hoc bằng business_name/maps_url, vì không có
+    // client để gắn vào). Lỗi lưu KHÔNG được làm hỏng response — người dùng
+    // vẫn cần thấy report dù lưu lịch sử thất bại.
+    let saved = false
+    if (body.client_id) {
+      try {
+        await saveAuditV2({
+          client_id: body.client_id,
+          checks_json: report,
+          overall_score: report.overallScore,
+          raw_input: { snapshotSource, declaredIndustry, claimedBusinessName },
+          workspace_id: workspaceId,
+        })
+        saved = true
+      } catch (saveErr: any) {
+        console.error('audit v2-preview: saveAuditV2 failed (non-fatal):', saveErr?.message)
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       preview: true,
       snapshotSource,
       snapshot,
       report,
+      saved,
     })
   } catch (error: any) {
     console.error('audit v2-preview:', error)

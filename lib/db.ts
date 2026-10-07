@@ -187,6 +187,146 @@ export async function getLatestAuditByClient(clientId: string, workspaceId?: str
   return data
 }
 
+/**
+ * Lưu kết quả Audit Engine v2 (34 checks có cấu trúc) — TÁCH RIÊNG khỏi
+ * saveAudit() ở trên (flow cũ, module_key='maps_seo', đang phục vụ khách
+ * thật qua /api/audit). Dùng module_key='maps_seo_v2' để 2 luồng không bao
+ * giờ lẫn vào nhau khi query theo module_key.
+ *
+ * audit_result không có text tự do ở v2 — lưu placeholder ngắn thay vì
+ * null/chuỗi rỗng, phòng trường hợp cột có ràng buộc NOT NULL mà ta chưa
+ * thấy migration gốc (bảng `audits` được tạo trước các migration trong repo
+ * này — xem ghi chú khi review map.zip).
+ */
+export async function saveAuditV2(input: {
+  client_id: string
+  checks_json: unknown
+  overall_score: number | null
+  raw_input?: any
+  workspace_id: string
+}) {
+  const supabase = await createSupabaseServerClient()
+  const { data, error } = await supabase
+    .from('audits')
+    .insert({
+      client_id: input.client_id,
+      audit_result: '[Audit Engine v2 — xem checks_json để biết chi tiết từng check]',
+      raw_input: input.raw_input ?? {},
+      score_overview: input.overall_score,
+      checks_json: input.checks_json,
+      module_key: 'maps_seo_v2',
+      status: 'finalized',
+      workspace_id: input.workspace_id,
+    })
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+/** Lịch sử audit v2 của 1 client, mới nhất trước — dùng để so sánh/đo cải thiện. */
+export async function getAuditV2History(clientId: string, workspaceId: string, limit = 10) {
+  const supabase = await createSupabaseServerClient()
+  const { data, error } = await supabase
+    .from('audits')
+    .select('id, created_at, score_overview, checks_json')
+    .eq('client_id', clientId)
+    .eq('workspace_id', workspaceId)
+    .eq('module_key', 'maps_seo_v2')
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  if (error) throw error
+  return data
+}
+
+// ── Google Connections (self-serve OAuth cho Business Profile API) ───
+
+export async function saveGoogleConnection(input: {
+  workspace_id: string
+  client_id: string
+  google_account_email?: string | null
+  access_token_encrypted: string
+  refresh_token_encrypted: string
+  scope: string
+  expires_at: string // ISO
+}) {
+  const supabase = await createSupabaseServerClient()
+  // upsert theo client_id (UNIQUE) — kết nối lại ghi đè connection cũ, không tạo row trùng.
+  const { data, error } = await supabase
+    .from('google_connections')
+    .upsert(
+      {
+        workspace_id: input.workspace_id,
+        client_id: input.client_id,
+        google_account_email: input.google_account_email ?? null,
+        access_token_encrypted: input.access_token_encrypted,
+        refresh_token_encrypted: input.refresh_token_encrypted,
+        scope: input.scope,
+        expires_at: input.expires_at,
+        status: 'connected',
+        last_error: null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'client_id' },
+    )
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function getGoogleConnection(clientId: string, workspaceId: string) {
+  const supabase = await createSupabaseServerClient()
+  const { data, error } = await supabase
+    .from('google_connections')
+    .select('*')
+    .eq('client_id', clientId)
+    .eq('workspace_id', workspaceId)
+    .maybeSingle()
+
+  if (error) throw error
+  return data
+}
+
+/** Cập nhật access_token sau khi refresh, hoặc đánh dấu lỗi/revoked — KHÔNG đổi refresh_token trừ khi được truyền. */
+export async function updateGoogleConnection(
+  id: string,
+  patch: {
+    access_token_encrypted?: string
+    refresh_token_encrypted?: string
+    expires_at?: string
+    gbp_account_resource?: string | null
+    gbp_location_resource?: string | null
+    status?: 'connected' | 'revoked' | 'error'
+    last_error?: string | null
+  },
+) {
+  const supabase = await createSupabaseServerClient()
+  const { data, error } = await supabase
+    .from('google_connections')
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function deleteGoogleConnection(clientId: string, workspaceId: string) {
+  const supabase = await createSupabaseServerClient()
+  const { error } = await supabase
+    .from('google_connections')
+    .delete()
+    .eq('client_id', clientId)
+    .eq('workspace_id', workspaceId)
+
+  if (error) throw error
+}
+
 export async function getAllAudits(workspaceId?: string) {
   const supabase = await createSupabaseServerClient()
   let query = supabase

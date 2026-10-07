@@ -12,6 +12,8 @@ import type { AIClassifier, AuditInput, AuditReport } from './types'
 export * from './types'
 export { createRealAIClassifier } from './ai-client'
 export { checkWebsiteReachable } from './check-website'
+export { diffAuditReports } from './diff'
+export type { AuditDiff, AuditDiffEntry } from './diff'
 
 /**
  * Audit Engine — 34/34 checks, hoạt động trên ĐÚNG dữ liệu hệ thống thật sự
