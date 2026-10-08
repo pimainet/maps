@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
-import { Loader2 } from 'lucide-react'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
+import { ExternalLink, Loader2, Unplug } from 'lucide-react'
 import { Card } from '@/components/dashboard/shared'
 import { useToast } from '@/components/dashboard/toast-context'
 
@@ -10,6 +10,45 @@ export default function ClientPlanPage() {
   const { showToast } = useToast()
   const params = useParams<{ id: string }>()
   const clientId = params.id
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const [googleConnected, setGoogleConnected] = useState<boolean | null>(null)
+  const [disconnecting, setDisconnecting] = useState(false)
+
+  // Khách quay lại từ /api/google-connect/callback — hiện toast đúng kết quả
+  // rồi dọn query param để bấm F5 không hiện lại thông báo cũ.
+  useEffect(() => {
+    const status = searchParams.get('google_connect')
+    if (!status) return
+    const message = searchParams.get('message')
+    if (status === 'connected') {
+      showToast('Đã kết nối Google Business Profile — các việc "Đăng ngay" giờ chạy thật.')
+      setGoogleConnected(true)
+    } else if (status === 'error') {
+      showToast(message || 'Kết nối Google thất bại — thử lại.')
+    }
+    router.replace(`/clients/${clientId}/plan`)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
+
+  async function handleDisconnectGoogle() {
+    setDisconnecting(true)
+    try {
+      const res = await fetch('/api/google-connect/disconnect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_id: clientId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Ngắt kết nối thất bại')
+      setGoogleConnected(false)
+      showToast(data.note || 'Đã ngắt kết nối.')
+    } catch (err: any) {
+      showToast(err.message || 'Có lỗi xảy ra')
+    } finally {
+      setDisconnecting(false)
+    }
+  }
 
   const [client, setClient] = useState<any>(null)
   const [loadingClient, setLoadingClient] = useState(true)
@@ -53,6 +92,10 @@ export default function ClientPlanPage() {
           }
           if (planData.active_cycle) setCycleInfo({ active_cycle: planData.active_cycle })
         }
+
+        const connRes = await fetch(`/api/google-connect/status?client_id=${clientId}`)
+        const connData = await connRes.json()
+        if (connRes.ok) setGoogleConnected(Boolean(connData.connected))
       } catch (err: any) {
         setError(err.message || 'Có lỗi xảy ra')
       } finally {
@@ -177,6 +220,34 @@ export default function ClientPlanPage() {
               {cycleInfo.active_cycle.started_at ? new Date(cycleInfo.active_cycle.started_at).toLocaleDateString('vi-VN') : '—'}
             </p>
           )}
+
+          <div style={{ marginTop: 12, padding: 12, borderRadius: 8, background: googleConnected ? '#f0fdf4' : '#fffbeb' }}>
+            {googleConnected === null ? (
+              <span style={{ fontSize: 13, color: '#6b7280' }}>Đang kiểm tra kết nối Google...</span>
+            ) : googleConnected ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <span style={{ fontSize: 13, color: '#059669' }}>
+                  ✓ Đã kết nối Google Business Profile — các việc "Đăng ngay" ở trang Việc cần làm sẽ chạy thật.
+                </span>
+                <button className="icon-button" disabled={disconnecting} onClick={handleDisconnectGoogle} title="Ngắt kết nối">
+                  {disconnecting ? <Loader2 size={14} className="animate-spin" /> : <Unplug size={14} />}
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 13, color: '#92400e' }}>
+                  Chưa kết nối Google Business Profile — kết nối để bot tự đăng bài thay bạn.
+                </span>
+                <a
+                  className="secondary-button"
+                  href={`/api/google-connect/start?client_id=${clientId}`}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                >
+                  Kết nối Google Business Profile <ExternalLink size={14} />
+                </a>
+              </div>
+            )}
+          </div>
         </div>
 
         <div style={{ marginTop: 16 }}>
