@@ -4,10 +4,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { Bot, ChevronDown, ChevronUp, ExternalLink, Loader2 } from 'lucide-react'
 import { Badge, Card } from '@/components/dashboard/shared'
 import { TASK_TYPE_LABEL, PRIORITY_LABEL } from '@/lib/ui-constants'
+import { AUTO_POST_ENABLED } from '@/lib/features'
 
 // Khớp đúng lib/task-action.ts (server) — chỉ dùng để quyết hiện nút nào,
 // không tự ý thêm/bớt loại ở đây để tránh lệch với logic thật phía server.
-const AUTO_TASK_TYPES = new Set(['content', 'description_update'])
+const AUTO_TASK_TYPES = new Set(AUTO_POST_ENABLED ? ['content', 'description_update'] : [])
 
 type ExecuteResult = {
   ok?: boolean

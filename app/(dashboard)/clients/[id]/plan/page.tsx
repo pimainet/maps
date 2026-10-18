@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { ExternalLink, Loader2, Unplug } from 'lucide-react'
 import { Card } from '@/components/dashboard/shared'
 import { useToast } from '@/components/dashboard/toast-context'
+import { AUTO_POST_ENABLED } from '@/lib/features'
 
 export default function ClientPlanPage() {
   const { showToast } = useToast()
@@ -93,9 +94,11 @@ export default function ClientPlanPage() {
           if (planData.active_cycle) setCycleInfo({ active_cycle: planData.active_cycle })
         }
 
-        const connRes = await fetch(`/api/google-connect/status?client_id=${clientId}`)
-        const connData = await connRes.json()
-        if (connRes.ok) setGoogleConnected(Boolean(connData.connected))
+        if (AUTO_POST_ENABLED) {
+          const connRes = await fetch(`/api/google-connect/status?client_id=${clientId}`)
+          const connData = await connRes.json()
+          if (connRes.ok) setGoogleConnected(Boolean(connData.connected))
+        }
       } catch (err: any) {
         setError(err.message || 'Có lỗi xảy ra')
       } finally {
@@ -221,6 +224,7 @@ export default function ClientPlanPage() {
             </p>
           )}
 
+          {AUTO_POST_ENABLED && (
           <div style={{ marginTop: 12, padding: 12, borderRadius: 8, background: googleConnected ? '#f0fdf4' : '#fffbeb' }}>
             {googleConnected === null ? (
               <span style={{ fontSize: 13, color: '#6b7280' }}>Đang kiểm tra kết nối Google...</span>
@@ -248,6 +252,7 @@ export default function ClientPlanPage() {
               </div>
             )}
           </div>
+          )}
         </div>
 
         <div style={{ marginTop: 16 }}>

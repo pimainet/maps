@@ -12,6 +12,8 @@
  * API). Đây là lựa chọn sản phẩm có chủ đích, có thể mở rộng dần sau.
  */
 
+import { AUTO_POST_ENABLED } from '@/lib/features'
+
 export type TaskActionType = 'auto_post' | 'manual_guided'
 
 export interface TaskGuidance {
@@ -22,10 +24,30 @@ export interface TaskGuidance {
   steps?: string[]
 }
 
+const MANUAL_POST_GUIDANCE: TaskGuidance = {
+  actionType: 'manual_guided',
+  whyManual: 'Bài viết được bạn tự đăng lên Google Business Profile sau khi duyệt nội dung.',
+  steps: [
+    'Mở mục Nội dung, duyệt/chỉnh sửa bản nháp của việc này.',
+    'Copy nội dung đã duyệt.',
+    'Mở Google Maps hoặc Google Business Profile, chọn "Thêm bản cập nhật" (Add update) rồi dán nội dung và đăng.',
+    'Quay lại đây và đánh dấu hoàn thành.',
+  ],
+}
+
+const MANUAL_DESCRIPTION_GUIDANCE: TaskGuidance = {
+  actionType: 'manual_guided',
+  whyManual: 'Phần giới thiệu doanh nghiệp được bạn tự cập nhật vào hồ sơ Google Business Profile sau khi duyệt nội dung.',
+  steps: [
+    'Mở mục Nội dung, duyệt/chỉnh sửa bản mô tả của việc này.',
+    'Copy nội dung đã duyệt.',
+    'Mở Google Maps hoặc Google Business Profile, vào "Sửa hồ sơ" (Edit profile), tìm mục mô tả/giới thiệu doanh nghiệp, dán nội dung và lưu.',
+    'Quay lại đây và đánh dấu hoàn thành.',
+  ],
+}
+
 const GUIDANCE: Record<string, TaskGuidance> = {
-  content: {
-    actionType: 'auto_post',
-  },
+  content: AUTO_POST_ENABLED ? { actionType: 'auto_post' } : MANUAL_POST_GUIDANCE,
   profile_update: {
     actionType: 'manual_guided',
     whyManual:
@@ -58,9 +80,7 @@ const GUIDANCE: Record<string, TaskGuidance> = {
       'Bấm "Trả lời" (Reply) và viết phản hồi — lịch sự, cụ thể, có hướng giải quyết nếu là review tiêu cực.',
     ],
   },
-  description_update: {
-    actionType: 'auto_post',
-  },
+  description_update: AUTO_POST_ENABLED ? { actionType: 'auto_post' } : MANUAL_DESCRIPTION_GUIDANCE,
   other: {
     actionType: 'manual_guided',
     whyManual: 'Việc này cần bạn tự xem xét và quyết định cách làm phù hợp nhất với tình hình thực tế của doanh nghiệp.',
