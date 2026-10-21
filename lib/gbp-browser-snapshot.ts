@@ -200,22 +200,151 @@ async function fetchMapsPageText(url: string): Promise<{ text: string; finalUrl:
     const page = context.pages()[0] || (await context.newPage())
 
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 })
-    await page.waitForTimeout(5000)
-
-    // Thử cuộn panel / mở tab nếu có
+    // Đợi panel chính load
+    await page.waitForTimeout(4000)
     try {
-      await page.evaluate(() => {
-        window.scrollBy(0, 400)
-      })
-      await page.waitForTimeout(1500)
+      await page.waitForSelector('div[role="main"], div[role="region"]', { timeout: 8000 })
+    } catch {
+      /* continue */
+    }
+
+    // Đóng cookie / consent nếu có
+    try {
+      const accept = page.getByRole('button', { name: /accept|agree|đồng ý|chấp nhận|all/i }).first()
+      if (await accept.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await accept.click({ timeout: 2000 }).catch(() => {})
+        await page.waitForTimeout(800)
+      }
     } catch {
       /* ignore */
     }
 
-    const text = await page.evaluate(() => {
-      const root = document.body
-      return (root?.innerText || '').slice(0, 25000)
-    })
+    const sections: string[] = []
+
+    // Helper: click tab/button by text (EN + VI)
+    async function clickTab(labels: string[]): Promise<boolean> {
+      for (const label of labels) {
+        try {
+          const btn = page.getByRole('tab', { name: new RegExp(label, 'i') }).first()
+          if (await btn.isVisible({ timeout: 1500 }).catch(() => false)) {
+            await btn.click({ timeout: 3000 })
+            await page.waitForTimeout(1200)
+            return true
+          }
+        } catch {
+          /* next */
+        }
+        try {
+          const btn = page.getByRole('button', { name: new RegExp(label, 'i') }).first()
+          if (await btn.isVisible({ timeout: 1500 }).catch(() => false)) {
+            await btn.click({ timeout: 3000 })
+            await page.waitForTimeout(1200)
+            return true
+          }
+        } catch {
+          /* next */
+        }
+        try {
+          const link = page.getByText(new RegExp(`^${label}$`, 'i')).first()
+          if (await link.isVisible({ timeout: 1500 }).catch(() => false)) {
+            await link.click({ timeout: 3000 })
+            await page.waitForTimeout(1200)
+            return true
+          }
+        } catch {
+          /* next */
+        }
+      }
+      return false
+    }
+
+    // Helper: cuộn panel bên trái nhiều lần
+    async function scrollPanel(times = 4) {
+      for (let i = 0; i < times; i++) {
+        try {
+          await page.evaluate(() => {
+            const panel =
+              document.querySelector('div[role="main"]') ||
+              document.querySelector('[role="region"]') ||
+              document.body
+            if (panel) {
+              panel.scrollBy(0, 600)
+            }
+            window.scrollBy(0, 400)
+          })
+          await page.waitForTimeout(700)
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+
+    // 1. Overview / tổng quan
+    sections.push('=== OVERVIEW / TỔNG QUAN ===')
+    sections.push(
+      await page.evaluate(() => (document.body.innerText || '').slice(0, 8000))
+    )
+    await scrollPanel(2)
+
+    // 2. About / Giới thiệu — quan trọng nhất cho description, categories, hours, attributes
+    const openedAbout = await clickTab([
+      'About',
+      'Giới thiệu',
+      'Thông tin',
+      'Info',
+    ])
+    if (openedAbout) {
+      await scrollPanel(3)
+      sections.push('\n=== ABOUT / GIỚI THIỆU ===')
+      sections.push(
+        await page.evaluate(() => (document.body.innerText || '').slice(0, 12000))
+      )
+    }
+
+    // 3. Reviews / Đánh giá
+    const openedReviews = await clickTab(['Reviews', 'Đánh giá', 'Review'])
+    if (openedReviews) {
+      await scrollPanel(3)
+      sections.push('\n=== REVIEWS / ĐÁNH GIÁ ===')
+      sections.push(
+        await page.evaluate(() => (document.body.innerText || '').slice(0, 10000))
+      )
+    }
+
+    // 4. Posts / Updates / Bài đăng
+    const openedPosts = await clickTab([
+      'Updates',
+      'Posts',
+      'Bài đăng',
+      'Cập nhật',
+      'From the owner',
+      'Từ chủ sở hữu',
+    ])
+    if (openedPosts) {
+      await scrollPanel(3)
+      sections.push('\n=== POSTS / BÀI ĐĂNG ===')
+      sections.push(
+        await page.evaluate(() => (document.body.innerText || '').slice(0, 8000))
+      )
+    }
+
+    // 5. Photos signal (không cần mở full gallery nếu chậm)
+    const openedPhotos = await clickTab(['Photos', 'Ảnh', 'Images'])
+    if (openedPhotos) {
+      await page.waitForTimeout(800)
+      sections.push('\n=== PHOTOS / ẢNH ===')
+      sections.push(
+        await page.evaluate(() => (document.body.innerText || '').slice(0, 4000))
+      )
+    }
+
+    // Thu thập text tổng + đánh dấu section
+    let text = sections.join('\n').slice(0, 35000)
+    // Fallback nếu quá ngắn
+    if (text.length < 200) {
+      text = await page.evaluate(() => (document.body.innerText || '').slice(0, 25000))
+    }
+
     const finalUrl = page.url()
 
     await browser.close()
@@ -248,6 +377,7 @@ async function extractWithClaude(
   businessName?: string
 ): Promise<Partial<GbpSnapshotPayload>> {
   const prompt = `Bạn đọc đoạn text chụp từ trang Google Maps / Google Business Profile công khai.
+Text được đánh dấu theo section (OVERVIEW, ABOUT, REVIEWS, POSTS, PHOTOS).
 Doanh nghiệp cần tìm: ${businessName || '(xem trong text)'}
 
 Trích xuất JSON ĐÚNG schema sau (không markdown, không giải thích):
@@ -255,6 +385,8 @@ Trích xuất JSON ĐÚNG schema sau (không markdown, không giải thích):
   "business_name": string|null,
   "description": string|null,
   "primary_category": string|null,
+  "additional_categories": string|null,
+  "opening_hours": string|null,
   "rating": number|null,
   "review_count": number|null,
   "phone": string|null,
@@ -267,15 +399,17 @@ Trích xuất JSON ĐÚNG schema sau (không markdown, không giải thích):
 }
 
 Quy tắc:
-- description = phần mô tả / About của doanh nghiệp (không lấy review của khách).
-- recent_posts: tối đa ${GBP_SNAPSHOT_MAX_POSTS} bài đăng/updates của doanh nghiệp nếu thấy; không thấy thì [].
-- posts_signal: 1 câu tóm tắt tình trạng đăng bài (có/không, gần đây hay không).
-- photos_signal: nhiều/ít/không rõ.
+- description = phần mô tả / About của doanh nghiệp (ưu tiên section ABOUT; không lấy review của khách).
+- additional_categories: các danh mục phụ nếu thấy (cách nhau bằng dấu phẩy).
+- opening_hours: giờ mở cửa nếu thấy (tóm tắt hoặc từng ngày).
+- recent_posts: tối đa ${GBP_SNAPSHOT_MAX_POSTS} bài đăng/updates của doanh nghiệp nếu thấy trong section POSTS; không thấy thì [].
+- posts_signal: 1 câu tóm tắt tình trạng đăng bài (có/không, gần đây hay không, tần suất).
+- photos_signal: nhiều/ít/không rõ; photos_count_est nếu ước lượng được số ảnh.
 - Không bịa. Không thấy thì null hoặc [].
 
 TEXT TRANG:
 ---
-${pageText.slice(0, 18000)}
+${pageText.slice(0, 22000)}
 ---`
 
   const raw = await askClaude(prompt, { maxTokens: 2000, temperature: 0.2 })
@@ -318,6 +452,8 @@ async function fromBrowser(input: RunGbpSnapshotInput): Promise<RunGbpSnapshotRe
     business_name: extracted.business_name || input.businessName || null,
     description: extracted.description || null,
     primary_category: extracted.primary_category || null,
+    additional_categories: extracted.additional_categories || null,
+    opening_hours: extracted.opening_hours || null,
     rating: extracted.rating ?? null,
     review_count: extracted.review_count ?? null,
     phone: extracted.phone || null,
