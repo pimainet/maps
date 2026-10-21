@@ -61,7 +61,7 @@ export default function ContentDetailPage() {
   if (loading) {
     return (
       <Card>
-        <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>Đang tải bài viết...</div>
+        <div className="empty-note">Đang tải bài viết…</div>
       </Card>
     )
   }
@@ -69,7 +69,7 @@ export default function ContentDetailPage() {
   if (error || !content) {
     return (
       <Card>
-        <div style={{ padding: 40, textAlign: 'center', color: '#b91c1c' }}>{error || 'Không tìm thấy bài viết'}</div>
+        <div className="empty-note error">{error || 'Không tìm thấy bài viết'}</div>
       </Card>
     )
   }
@@ -85,7 +85,7 @@ export default function ContentDetailPage() {
               <FileText size={19} />
             </div>
             <div>
-              <p className="overline">{isDescription ? 'MÔ TẢ HỒ SƠ (GIỚI THIỆU DOANH NGHIỆP)' : 'GBP POST'}{content.goal ? ` · ${content.goal}` : ''}</p>
+              <p className="overline">{isDescription ? 'Giới thiệu doanh nghiệp' : 'Bài đăng Google'}{content.goal ? `: ${content.goal}` : ''}</p>
               <h2>{content.topic || 'Không có tiêu đề'}</h2>
             </div>
           </div>
@@ -98,11 +98,11 @@ export default function ContentDetailPage() {
           <Card className="critic-card">
             <div className="section-head">
               <div>
-                <h2>Nhận xét Critic</h2>
-                <p>Kiểm tra chất lượng trước khi xuất bản</p>
+                <h2>Nhận xét về bài viết</h2>
+                <p>Kiểm tra chất lượng trước khi đăng</p>
               </div>
             </div>
-            <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, fontSize: 14 }}>{content.critic_feedback}</div>
+            <div className="prose">{content.critic_feedback}</div>
           </Card>
         )}
 
@@ -110,12 +110,12 @@ export default function ContentDetailPage() {
           <Card>
             <div className="section-head">
               <div>
-                <h2>Phân tích SERP-Aware</h2>
-                <p>Góc nhìn từ AI trước khi viết</p>
+                <h2>Vì sao bài viết theo hướng này</h2>
+                <p>Phân tích AI làm trước khi viết</p>
               </div>
               <Sparkles size={18} />
             </div>
-            <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, fontSize: 14 }}>{content.serp_analysis}</div>
+            <div className="prose">{content.serp_analysis}</div>
           </Card>
         )}
 
@@ -123,8 +123,8 @@ export default function ContentDetailPage() {
           <Card>
             <div className="section-head">
               <div>
-                <h2>Bản nháp</h2>
-                <p>AI Writer v1</p>
+                <h2>Bản nháp đầu tiên</h2>
+                <p>Bản AI viết, chưa chỉnh sửa</p>
               </div>
             </div>
             <div className="draft-box">{content.ai_content}</div>
@@ -140,31 +140,18 @@ export default function ContentDetailPage() {
           </div>
           <textarea className="final-editor" value={finalText} onChange={(e) => setFinalText(e.target.value)} />
           {isDescription && (
-            <p style={{ marginTop: -8, marginBottom: 8, fontSize: 12, color: finalText.length > 750 ? '#dc2626' : '#6b7280' }}>
+            <p className={`char-count ${finalText.length > 750 ? 'over' : ''}`}>
               {finalText.length}/750 ký tự (giới hạn của Google cho phần Giới thiệu doanh nghiệp)
             </p>
           )}
-          <div
-            style={{
-              marginTop: 12,
-              marginBottom: 8,
-              padding: 12,
-              background: '#f8fafc',
-              borderRadius: 8,
-              fontSize: 13,
-              color: '#475569',
-              lineHeight: 1.5,
-            }}
-          >
+          <div className="how-to">
             {isDescription ? (
               <>
-                <strong>Quy trình cập nhật tay trên Google:</strong> Copy nội dung → mở Google Business Profile đúng location → vào mục
-                "Giới thiệu doanh nghiệp" → dán đè lên mô tả cũ → lưu → quay lại đây bấm「Đã cập nhật trên Google」.
+                <strong>Cách cập nhật lên Google:</strong> bấm “Copy mô tả”, mở hồ sơ Google của đúng cơ sở, vào mục “Giới thiệu doanh nghiệp”, dán đè lên mô tả cũ rồi lưu. Sau đó quay lại đây và bấm “Đã cập nhật trên Google”.
               </>
             ) : (
               <>
-                <strong>Quy trình đăng tay trên Google:</strong> Copy bài → mở Google Business Profile đúng location → dán bài → đăng →
-                quay lại đây bấm「Đã đăng trên Google」.
+                <strong>Cách đăng lên Google:</strong> bấm “Copy bài”, mở hồ sơ Google của đúng cơ sở, chọn “Thêm bản cập nhật”, dán bài rồi đăng. Sau đó quay lại đây và bấm “Đã đăng trên Google”.
               </>
             )}
           </div>
@@ -175,7 +162,7 @@ export default function ContentDetailPage() {
               onClick={async () => {
                 try {
                   await navigator.clipboard.writeText(finalText)
-                  showToast(isDescription ? 'Đã copy mô tả — dán vào hồ sơ Google Business Profile' : 'Đã copy bài — dán lên Google Business Profile')
+                  showToast(isDescription ? 'Đã copy mô tả. Hãy dán vào hồ sơ Google của bạn' : 'Đã copy bài. Hãy dán lên Google của bạn')
                 } catch {
                   showToast('Không copy được. Hãy chọn toàn bộ text và copy thủ công (Ctrl+C).')
                 }
@@ -205,12 +192,12 @@ export default function ContentDetailPage() {
               disabled={saving || !finalText.trim()}
               onClick={() => {
                 if (!finalText.trim()) {
-                  showToast('Chưa có nội dung')
+                  showToast('Chưa có nội dung để lưu')
                   return
                 }
                 const confirmMsg = isDescription
-                  ? 'Xác nhận bạn ĐÃ cập nhật mô tả này vào Google Business Profile (đúng location)?'
-                  : 'Xác nhận bạn ĐÃ đăng bài này lên Google Business Profile (đúng location)?'
+                  ? 'Xác nhận bạn ĐÃ cập nhật mô tả này vào Google Business Profile (đúng cơ sở)?'
+                  : 'Xác nhận bạn ĐÃ đăng bài này lên Google Business Profile (đúng cơ sở)?'
                 if (!window.confirm(confirmMsg)) {
                   return
                 }

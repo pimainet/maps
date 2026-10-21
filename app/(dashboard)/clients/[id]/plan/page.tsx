@@ -1,10 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { ExternalLink, Loader2, Unplug } from 'lucide-react'
+import { ArrowRight, ExternalLink, Loader2, Unplug } from 'lucide-react'
 import { Card } from '@/components/dashboard/shared'
 import { useToast } from '@/components/dashboard/toast-context'
+import { TASK_TYPE_LABEL } from '@/lib/ui-constants'
 import { AUTO_POST_ENABLED } from '@/lib/features'
 
 export default function ClientPlanPage() {
@@ -73,7 +75,7 @@ export default function ClientPlanPage() {
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'Không tải được dữ liệu')
         const found = (Array.isArray(data) ? data : []).find((c: any) => c.id === clientId)
-        if (!found) throw new Error('Không tìm thấy khách hàng')
+        if (!found) throw new Error('Không tìm thấy doanh nghiệp này')
         setClient(found)
 
         setLoadingAudit(true)
@@ -136,15 +138,15 @@ export default function ClientPlanPage() {
       if (!res.ok) {
         if (res.status === 409 && data.code === 'ACTIVE_CYCLE_EXISTS') {
           setCycleInfo(data)
-          throw new Error(data.error || 'Đang có chu kỳ active. Bật「Mở chu kỳ mới」nếu muốn bắt đầu vòng mới.')
+          throw new Error('Bạn đang có một kế hoạch đang chạy. Chọn “Bắt đầu kế hoạch mới” nếu muốn làm lại từ đầu.')
         }
-        throw new Error(data.error || 'Tạo lộ trình thất bại')
+        throw new Error(data.error || 'Chưa tạo được kế hoạch. Thử lại sau ít phút.')
       }
-      setResult(data.plan_result || 'Không có kết quả')
+      setResult(data.plan_result || 'Chưa có nội dung kế hoạch.')
       setSavedPlan(data.plan || null)
       setCycleInfo(data.cycle ? { active_cycle: data.cycle } : null)
       setForceNewCycle(false)
-      showToast(data.force_new_cycle ? 'Đã đóng chu kỳ cũ và tạo lộ trình chu kỳ mới' : 'Đã tạo lộ trình 30 ngày (chu kỳ đang mở)')
+      showToast(data.force_new_cycle ? 'Đã bắt đầu kế hoạch mới' : 'Đã tạo kế hoạch 30 ngày')
     } catch (err: any) {
       setError(err.message || 'Có lỗi xảy ra')
     } finally {
@@ -172,14 +174,14 @@ export default function ClientPlanPage() {
         }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Sinh danh sách việc thất bại')
+      if (!res.ok) throw new Error(data.error || 'Chưa tạo được danh sách việc. Thử lại sau ít phút.')
       setTasksCreated(data.items || [])
       const written = data.auto_written || 0
       if (written > 0) {
-        showToast(data.message || `Đã tạo ${data.items?.length || 0} việc và tự viết ${written} bài`)
+        showToast(data.message || `Đã tạo ${data.items?.length || 0} việc và soạn sẵn ${written} bài nháp`)
       } else if (data.auto_write_error) {
-        setTasksError(`Đã tạo việc nhưng tự viết bài lỗi: ${data.auto_write_error}`)
-        showToast(data.message || 'Đã tạo việc (tự viết bài thất bại)')
+        setTasksError(`Đã tạo việc nhưng chưa soạn được bài nháp: ${data.auto_write_error}`)
+        showToast(data.message || 'Đã tạo việc, bài nháp chưa soạn được')
       } else {
         showToast(data.message || `Đã tạo ${data.items?.length || 0} việc`)
       }
@@ -193,114 +195,117 @@ export default function ClientPlanPage() {
   if (loadingClient) {
     return (
       <Card>
-        <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>Đang tải...</div>
+        <div className="empty-note">Đang tải…</div>
       </Card>
     )
   }
   if (!client) {
     return (
       <Card>
-        <div style={{ padding: 40, textAlign: 'center', color: '#b91c1c' }}>{error || 'Không tìm thấy khách hàng'}</div>
+        <div className="empty-note error">{error || 'Không tìm thấy doanh nghiệp này'}</div>
       </Card>
     )
   }
 
+  const startedAt = cycleInfo?.active_cycle?.started_at
+    ? new Date(cycleInfo.active_cycle.started_at).toLocaleDateString('vi-VN')
+    : null
+
   return (
     <>
-      <Card className="plan-summary">
-        <div>
-          <p className="overline">Lộ trình 30 ngày</p>
-          <div className="title-line">
-            <h2>Lộ trình tăng trưởng Local SEO</h2>
-          </div>
-          <p>
-            Doanh nghiệp: <strong>{client.name}</strong>
-            {client.industry || client.area ? ` · ${[client.industry, client.area].filter(Boolean).join(' · ')}` : ''}
-          </p>
-          {cycleInfo?.active_cycle && (
-            <p style={{ fontSize: 13, color: '#059669', marginTop: 8 }}>
-              Đang có chu kỳ active · bắt đầu{' '}
-              {cycleInfo.active_cycle.started_at ? new Date(cycleInfo.active_cycle.started_at).toLocaleDateString('vi-VN') : '—'}
+      <Card>
+        <div className="section-head">
+          <div>
+            <h2>Tạo kế hoạch 30 ngày</h2>
+            <p>
+              Cho <strong>{client.name}</strong>
+              {client.industry || client.area ? `, ${[client.industry, client.area].filter(Boolean).join(', ')}` : ''}
             </p>
+          </div>
+          {cycleInfo?.active_cycle && (
+            <span className="status-badge status-success">
+              <span className="status-dot" />
+              {startedAt ? `Đang chạy từ ${startedAt}` : 'Đang chạy'}
+            </span>
           )}
+        </div>
 
-          {AUTO_POST_ENABLED && (
-          <div style={{ marginTop: 12, padding: 12, borderRadius: 8, background: googleConnected ? '#f0fdf4' : '#fffbeb' }}>
+        {AUTO_POST_ENABLED && (
+          <div className={`alert ${googleConnected ? 'alert-ok' : 'alert-warn'}`} style={{ marginBottom: 20 }}>
             {googleConnected === null ? (
-              <span style={{ fontSize: 13, color: '#6b7280' }}>Đang kiểm tra kết nối Google...</span>
+              <span>Đang kiểm tra kết nối Google…</span>
             ) : googleConnected ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                <span style={{ fontSize: 13, color: '#059669' }}>
-                  ✓ Đã kết nối Google Business Profile — các việc "Đăng ngay" ở trang Việc cần làm sẽ chạy thật.
-                </span>
+                <span>Đã kết nối Google Business Profile. Các việc “Đăng ngay” ở trang Việc cần làm sẽ chạy thật.</span>
                 <button className="icon-button" disabled={disconnecting} onClick={handleDisconnectGoogle} title="Ngắt kết nối">
-                  {disconnecting ? <Loader2 size={14} className="animate-spin" /> : <Unplug size={14} />}
+                  {disconnecting ? <Loader2 size={16} className="animate-spin" /> : <Unplug size={16} />}
                 </button>
               </div>
             ) : (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 13, color: '#92400e' }}>
-                  Chưa kết nối Google Business Profile — kết nối để bot tự đăng bài thay bạn.
-                </span>
-                <a
-                  className="secondary-button"
-                  href={`/api/google-connect/start?client_id=${clientId}`}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                <span>Chưa kết nối Google Business Profile. Kết nối để đăng bài tự động.</span>
+                <a className="secondary-button" href={`/api/google-connect/start?client_id=${clientId}`}>
                   Kết nối Google Business Profile <ExternalLink size={14} />
                 </a>
               </div>
             )}
           </div>
-          )}
-        </div>
-
-        <div style={{ marginTop: 16 }}>
-          <label className="field">
-            <span>
-              {loadingAudit
-                ? 'Đang tải audit gần nhất...'
-                : auditRecord
-                  ? `Audit gần nhất (${new Date(auditRecord.created_at).toLocaleDateString('vi-VN')})`
-                  : 'Chưa có audit — nên chạy Audit trước'}
-            </span>
-            <textarea
-              value={auditResult}
-              onChange={(e) => setAuditResult(e.target.value)}
-              placeholder="Dán kết quả audit hoặc chạy Audit trước."
-              rows={5}
-            />
-          </label>
-        </div>
-
-        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 12, fontSize: 13, color: '#374151' }}>
-          <input type="checkbox" checked={forceNewCycle} onChange={(e) => setForceNewCycle(e.target.checked)} style={{ marginTop: 3 }} />
-          <span>
-            <strong>Mở chu kỳ mới</strong> — đóng chu kỳ 30 ngày đang chạy và bắt đầu vòng mới. Chỉ bật khi đã xong việc kỳ trước hoặc đổi
-            chiến lược.
-          </span>
-        </label>
-
-        {cycleInfo?.open_tasks_count != null && (
-          <p style={{ fontSize: 12, color: '#b45309', marginTop: 8 }}>
-            Chu kỳ hiện tại còn ~{cycleInfo.open_tasks_count} việc chưa xong
-            {cycleInfo.contents_count != null ? `, ${cycleInfo.contents_count} bài trong hệ thống` : ''}.
-          </p>
         )}
 
-        {error && <div style={{ color: '#b91c1c', background: '#fef2f2', padding: 12, borderRadius: 8, marginTop: 12 }}>{error}</div>}
+        <label className="field">
+          <span>Kết quả kiểm tra hồ sơ</span>
+          <textarea
+            value={auditResult}
+            onChange={(e) => setAuditResult(e.target.value)}
+            placeholder="Dán kết quả kiểm tra vào đây, hoặc kiểm tra hồ sơ trước."
+            rows={5}
+          />
+        </label>
+        <p className="rail-sub" style={{ margin: '10px 0 0' }}>
+          {loadingAudit ? (
+            'Đang tải kết quả kiểm tra gần nhất…'
+          ) : auditRecord ? (
+            `Lấy từ lần kiểm tra ngày ${new Date(auditRecord.created_at).toLocaleDateString('vi-VN')}. Bạn có thể chỉnh sửa trước khi tạo kế hoạch.`
+          ) : (
+            <>
+              Chưa có kết quả kiểm tra. Kế hoạch sẽ sát thực tế hơn nếu bạn{' '}
+              <Link href={`/clients/${clientId}/audit`} className="text-button">
+                kiểm tra hồ sơ trước
+              </Link>
+              .
+            </>
+          )}
+        </p>
 
-        <div className="plan-actions" style={{ marginTop: 16 }}>
+        {cycleInfo && (
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginTop: 20, fontSize: 14.5, lineHeight: 1.6 }}>
+            <input type="checkbox" checked={forceNewCycle} onChange={(e) => setForceNewCycle(e.target.checked)} style={{ marginTop: 5 }} />
+            <span>
+              <strong>Bắt đầu kế hoạch mới.</strong> Kế hoạch đang chạy sẽ được đóng lại. Chỉ chọn khi bạn đã xong việc kỳ trước hoặc muốn đổi hướng.
+            </span>
+          </label>
+        )}
+
+        {cycleInfo?.open_tasks_count != null && (
+          <div className="alert alert-warn" style={{ marginTop: 16 }}>
+            Kế hoạch hiện tại còn khoảng {cycleInfo.open_tasks_count} việc chưa xong
+            {cycleInfo.contents_count != null ? ` và ${cycleInfo.contents_count} bài viết` : ''}.
+          </div>
+        )}
+
+        {error && <div className="alert alert-error" style={{ marginTop: 16 }}>{error}</div>}
+
+        <div className="plan-actions" style={{ marginTop: 24 }}>
           <button className="primary-button" onClick={handleCreatePlan} disabled={running}>
-            {running && <Loader2 size={16} className="animate-spin" />}
-            {running ? 'Đang tạo lộ trình... (khoảng 15-25 giây)' : 'Tạo lộ trình 30 ngày'}
+            {running && <Loader2 size={18} className="animate-spin" />}
+            {running ? 'Đang tạo kế hoạch… (khoảng 15–25 giây)' : 'Tạo kế hoạch 30 ngày'}
           </button>
         </div>
       </Card>
 
       {running && (
         <Card>
-          <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>AI đang xây dựng lộ trình 30 ngày...</div>
+          <div className="empty-note">Đang soạn kế hoạch 30 ngày cho bạn…</div>
         </Card>
       )}
 
@@ -308,11 +313,11 @@ export default function ClientPlanPage() {
         <Card>
           <div className="section-head">
             <div>
-              <h2>Lộ trình đã tạo</h2>
-              <p>Kết quả từ AI</p>
+              <h2>Kế hoạch của bạn</h2>
+              <p>Soạn dựa trên kết quả kiểm tra hồ sơ.</p>
             </div>
           </div>
-          <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, fontSize: 14 }}>{result}</div>
+          <div className="prose">{result}</div>
         </Card>
       )}
 
@@ -320,24 +325,44 @@ export default function ClientPlanPage() {
         <Card>
           <div className="section-head">
             <div>
-              <h2>Sinh lịch việc từ lộ trình</h2>
-              <p>Tạo task (có chống trùng với việc/bài đã có)</p>
+              <p className="overline">Bước tiếp theo</p>
+              <h2>Biến kế hoạch thành danh sách việc</h2>
+              <p>Mỗi việc có hướng dẫn từng bước. Việc đã có sẽ không bị tạo trùng.</p>
             </div>
-            <button className="secondary-button" onClick={handleGenerateTasks} disabled={generatingTasks}>
-              {generatingTasks && <Loader2 size={14} className="animate-spin" />}
-              {generatingTasks ? 'Đang sinh lịch... (có thể mất 20-30 giây)' : 'Sinh lịch việc'}
-            </button>
           </div>
-          {tasksError && <div style={{ color: '#b91c1c', background: '#fef2f2', padding: 12, borderRadius: 8 }}>{tasksError}</div>}
+
+          {tasksError && <div className="alert alert-error" style={{ marginBottom: 16 }}>{tasksError}</div>}
+
           {tasksCreated && tasksCreated.length > 0 && (
-            <ul style={{ marginTop: 12, paddingLeft: 18 }}>
+            <div className="client-list" style={{ marginBottom: 20 }}>
               {tasksCreated.map((t: any) => (
-                <li key={t.id} style={{ marginBottom: 6 }}>
-                  {t.title} <span style={{ color: '#6b7280' }}>({t.task_type})</span>
-                </li>
+                <div className="client-row" key={t.id}>
+                  <div className="row-main">
+                    <strong>{t.title}</strong>
+                    <span>{TASK_TYPE_LABEL[t.task_type] || t.task_type}</span>
+                  </div>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
+          {tasksCreated && tasksCreated.length === 0 && (
+            <div className="alert alert-ok" style={{ marginBottom: 20 }}>
+              Không có việc mới. Các việc trong kế hoạch này đã được tạo trước đó.
+            </div>
+          )}
+
+          <div className="plan-actions">
+            {tasksCreated ? (
+              <Link href="/tasks" className="primary-button">
+                Bắt đầu làm <ArrowRight size={18} />
+              </Link>
+            ) : (
+              <button className="primary-button" onClick={handleGenerateTasks} disabled={generatingTasks}>
+                {generatingTasks && <Loader2 size={18} className="animate-spin" />}
+                {generatingTasks ? 'Đang tạo danh sách việc… (20–30 giây)' : 'Tạo danh sách việc'}
+              </button>
+            )}
+          </div>
         </Card>
       )}
     </>

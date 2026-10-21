@@ -47,14 +47,14 @@ export default function NewClientPage() {
 
       if (!res.ok) {
         if (res.status === 409 && data.existing_client?.id) {
-          setError((data.error || 'Doanh nghiệp này đã tồn tại trong workspace.') + ' Bấm「Mở hồ sơ đã có」bên dưới.')
+          setError((data.error || 'Doanh nghiệp này đã có trong danh sách của bạn.') + ' Bấm「Mở hồ sơ đã có」bên dưới.')
           setDupClientId(data.existing_client.id)
           throw new Error(data.error || 'Trùng Place/Link')
         }
-        throw new Error(data.error || 'Không tạo được khách hàng')
+        throw new Error(data.error || 'Không thêm được doanh nghiệp')
       }
 
-      showToast('Đã lưu khách hàng mới')
+      showToast('Đã thêm doanh nghiệp')
       router.push(`/clients/${data.id}`)
     } catch (err: any) {
       setError(err.message || 'Có lỗi xảy ra')
@@ -71,7 +71,7 @@ export default function NewClientPage() {
         </div>
         <div>
           <h2>Thông tin doanh nghiệp</h2>
-          <p>Bắt đầu bằng những thông tin cơ bản để thiết lập chu kỳ Local SEO.</p>
+          <p>Vài thông tin cơ bản để viết bài và lập kế hoạch đúng với doanh nghiệp của bạn.</p>
         </div>
       </div>
 
@@ -103,7 +103,7 @@ export default function NewClientPage() {
           <input value={form.brand_voice} onChange={(e) => update('brand_voice', e.target.value)} placeholder="Thân thiện, chuyên gia..." />
         </label>
         <label className="field wide">
-          <span>Link Google Business Profile</span>
+          <span>Link hồ sơ Google (Google Maps)</span>
           <input value={form.gbp_link} onChange={(e) => update('gbp_link', e.target.value)} placeholder="https://maps.google.com/..." />
         </label>
         <label className="field wide">
@@ -117,7 +117,7 @@ export default function NewClientPage() {
       </div>
 
       {error && (
-        <div style={{ color: '#b91c1c', background: '#fef2f2', padding: 12, borderRadius: 8, marginBottom: 16 }}>
+        <div style={{ color: 'var(--danger)', background: 'var(--danger-soft)', padding: 12, borderRadius: 8, marginBottom: 16 }}>
           {error}
           {dupClientId && (
             <div style={{ marginTop: 8 }}>
@@ -135,10 +135,10 @@ export default function NewClientPage() {
         </button>
         <button className="primary-button" onClick={handleSubmit} disabled={loading}>
           {loading ? (
-            'Đang lưu...'
+            'Đang lưu…'
           ) : (
             <>
-              <Check size={17} /> Lưu khách hàng
+              <Check size={18} /> Lưu doanh nghiệp
             </>
           )}
         </button>

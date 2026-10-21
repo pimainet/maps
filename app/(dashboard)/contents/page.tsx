@@ -90,7 +90,7 @@ export default function ContentsPage() {
   async function handleWriteContent(item: any) {
     const client = clientMap[item.client_id]
     if (!client) {
-      showToast('Không tìm thấy thông tin khách hàng cho ý tưởng này')
+      showToast('Không tìm thấy doanh nghiệp của ý tưởng này')
       return
     }
     setWritingId(item.id)
@@ -111,7 +111,7 @@ export default function ContentsPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Viết bài thất bại')
 
-      showToast('Đã viết bài bằng AI, sẵn sàng để duyệt')
+      showToast('Đã viết xong, bạn có thể xem và duyệt')
       await loadAll()
       router.push(`/contents/${data.content.id}`)
     } catch (err: any) {
@@ -125,9 +125,8 @@ export default function ContentsPage() {
     <>
       <div className="approval-summary">
         <div>
-          <p className="overline">Nội dung thật từ hệ thống</p>
-          <h2>{loading ? 'Đang tải...' : `${pending.length} bài viết ${filter === 'waiting_approval' ? 'đang chờ duyệt' : ''}`}</h2>
-          <p>Danh sách bài viết đã được AI tạo và lưu trong database.</p>
+          <h2>{loading ? 'Đang tải…' : `${pending.length} bài viết${filter === 'waiting_approval' ? ' đang chờ duyệt' : ''}`}</h2>
+          <p>Đọc, chỉnh sửa và duyệt từng bài trước khi đăng lên Google.</p>
         </div>
       </div>
 
@@ -147,14 +146,14 @@ export default function ContentsPage() {
           </button>
         </div>
 
-        {loading && <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>Đang tải danh sách bài viết...</div>}
+        {loading && <div className="empty-note">Đang tải bài viết…</div>}
 
-        {error && <div style={{ padding: 20, color: '#b91c1c' }}>{error}</div>}
+        {error && <div style={{ padding: 20, color: 'var(--danger)' }}>{error}</div>}
 
         {!loading && !error && pending.length === 0 && (
-          <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>
+          <div className="empty-note">
             {filter === 'idea'
-              ? 'Chưa có ý tưởng nào. Vào trang Lộ trình của một khách hàng và bấm "Sinh lịch việc".'
+              ? 'Chưa có ý tưởng nào. Mở một doanh nghiệp, vào Kế hoạch 30 ngày và bấm “Tạo danh sách việc”.'
               : 'Chưa có bài viết nào ở trạng thái này.'}
           </div>
         )}
@@ -165,7 +164,7 @@ export default function ContentsPage() {
               <thead>
                 <tr>
                   <th>Chủ đề</th>
-                  <th>Khách hàng</th>
+                  <th>Doanh nghiệp</th>
                   <th>Trạng thái</th>
                   <th>Ngày tạo</th>
                   <th />
@@ -197,7 +196,7 @@ export default function ContentsPage() {
                           {writingId === c.id ? (
                             <>
                               <Loader2 size={14} className="animate-spin" />
-                              Đang viết...
+                              Đang viết…
                             </>
                           ) : (
                             <>

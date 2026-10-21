@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowUpRight, Plus } from 'lucide-react'
 import { Badge, Card } from '@/components/dashboard/shared'
+import { ROLE_LABEL } from '@/lib/ui-constants'
 import { useToast } from '@/components/dashboard/toast-context'
 
 export default function WorkspacesPage() {
@@ -43,9 +44,9 @@ export default function WorkspacesPage() {
       })
       if (!res.ok) {
         const data = await res.json()
-        throw new Error(data.error || 'Chuyển workspace thất bại')
+        throw new Error(data.error || 'Không chuyển được không gian làm việc')
       }
-      showToast('Đã chuyển workspace')
+      showToast('Đã chuyển không gian làm việc')
       window.location.href = '/'
     } catch (err: any) {
       showToast(err.message || 'Có lỗi xảy ra')
@@ -58,21 +59,21 @@ export default function WorkspacesPage() {
     <Card>
       <div className="section-head">
         <div>
-          <h2>Workspace của bạn</h2>
-          <p>Bấm để chuyển sang làm việc trong workspace khác.</p>
+          <h2>Không gian làm việc của bạn</h2>
+          <p>Bấm vào một không gian để chuyển sang làm việc trong đó.</p>
         </div>
         <button className="primary-button" onClick={() => router.push('/workspaces/new')}>
-          <Plus size={16} /> Tạo workspace mới
+          <Plus size={18} /> Tạo không gian mới
         </button>
       </div>
 
-      {loading && <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>Đang tải...</div>}
+      {loading && <div className="empty-note">Đang tải…</div>}
 
       {!loading && items.length === 0 && (
-        <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>
-          Bạn chưa thuộc workspace nào.{' '}
+        <div className="empty-note">
+          Bạn chưa thuộc không gian làm việc nào.{' '}
           <button className="text-button" onClick={() => router.push('/workspaces/new')}>
-            Tạo workspace đầu tiên
+            Tạo không gian đầu tiên
           </button>
         </div>
       )}
@@ -84,13 +85,13 @@ export default function WorkspacesPage() {
             <div className="row-main">
               <strong>{w.name}</strong>
               <span>
-                Vai trò của bạn: {w.role} · Gói {w.plan}
+                {ROLE_LABEL[w.role] || w.role}, gói {w.plan}
               </span>
             </div>
             {w.id === activeId ? (
               <Badge status="active" />
             ) : switching === w.id ? (
-              <span className="muted-cell">Đang chuyển...</span>
+              <span className="muted-cell">Đang chuyển…</span>
             ) : (
               <ArrowUpRight size={15} />
             )}

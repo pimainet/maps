@@ -18,11 +18,19 @@ export const statusMap: Record<string, { label: string; className: string }> = {
 export const PRESET_LANGUAGES = ['Tiếng Việt', 'English', '日本語', '한국어', 'ภาษาไทย', 'Bahasa Indonesia', '中文']
 
 export const TASK_TYPE_LABEL: Record<string, string> = {
-  content: 'Nội dung',
-  profile_update: 'Hồ sơ GBP',
+  content: 'Bài đăng',
+  description_update: 'Giới thiệu doanh nghiệp',
+  profile_update: 'Hồ sơ Google',
   photo: 'Hình ảnh',
   review: 'Đánh giá',
   other: 'Khác',
+}
+
+// Vai trò hiển thị cho người dùng (giá trị lưu trong database vẫn là owner/admin/member).
+export const ROLE_LABEL: Record<string, string> = {
+  owner: 'Chủ sở hữu',
+  admin: 'Quản trị viên',
+  member: 'Thành viên',
 }
 
 export const PRIORITY_LABEL: Record<string, string> = {

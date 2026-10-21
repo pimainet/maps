@@ -85,6 +85,10 @@ export async function getLatestSnapshotForClient(
     .select('*')
     .eq('client_id', clientId)
     .eq('workspace_id', workspaceId)
+    // Mốc ban đầu nhập tay (source = 'manual') chỉ có điểm đánh giá + số lượt đánh giá,
+    // không đủ để tự điền hồ sơ hay làm ngữ cảnh viết bài — bỏ qua ở đây,
+    // báo cáo Kết quả có truy vấn riêng nên vẫn dùng được.
+    .neq('source', 'manual')
     .order('captured_at', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false })
     .limit(1)
@@ -162,3 +166,71 @@ export function snapshotToAuditFields(snapshot: any): {
 }
 
 export type { GbpSnapshotPayload }
+
+function parseRating(value: unknown): number | null {
+  const n = parseFloat(String(value ?? '').trim().replace(',', '.'))
+  return Number.isFinite(n) && n > 0 && n <= 5 ? Math.round(n * 10) / 10 : null
+}
+
+function parseCount(value: unknown): number | null {
+  const digits = String(value ?? '').replace(/[^\d]/g, '')
+  if (!digits) return null
+  const n = parseInt(digits, 10)
+  return Number.isFinite(n) ? n : null
+}
+
+/**
+ * Lưu "mốc ban đầu" từ chính điểm đánh giá + số lượt đánh giá khách nhập khi kiểm tra hồ sơ.
+ * Nhẹ hơn hẳn lấy dữ liệu bằng trình duyệt, nên có mốc ngay từ ngày đầu để trang Kết quả
+ * so sánh được sau này. Không ghi gì nếu không có số hợp lệ, hoặc nếu số y hệt lần lưu gần nhất
+ * trong 24 giờ (tránh trùng khi bấm kiểm tra nhiều lần).
+ */
+export async function saveManualBaselineSnapshot(input: {
+  workspace_id: string
+  client_id: string
+  business_name?: string | null
+  rating?: unknown
+  review_count?: unknown
+}) {
+  const rating = parseRating(input.rating)
+  const reviewCount = parseCount(input.review_count)
+  if (rating == null && reviewCount == null) return null
+
+  const supabase = await createSupabaseServerClient()
+
+  const { data: last } = await supabase
+    .from('gbp_snapshots')
+    .select('rating, review_count, captured_at')
+    .eq('client_id', input.client_id)
+    .eq('workspace_id', input.workspace_id)
+    .in('status', ['ok', 'partial'])
+    .not('captured_at', 'is', null)
+    .order('captured_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (last?.captured_at) {
+    const recent = Date.now() - new Date(last.captured_at).getTime() < 24 * 60 * 60 * 1000
+    const sameRating = (last.rating != null ? Number(last.rating) : null) === rating
+    const sameReviews = (last.review_count != null ? Number(last.review_count) : null) === reviewCount
+    if (recent && sameRating && sameReviews) return null
+  }
+
+  const { data, error } = await supabase
+    .from('gbp_snapshots')
+    .insert({
+      workspace_id: input.workspace_id,
+      client_id: input.client_id,
+      source: 'manual',
+      status: 'ok' as GbpSnapshotStatus,
+      captured_at: new Date().toISOString(),
+      business_name: input.business_name ?? null,
+      rating,
+      review_count: reviewCount,
+    })
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}

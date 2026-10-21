@@ -27,7 +27,7 @@ export default function ClientDetailPage() {
         if (!res.ok) throw new Error(data.error || 'Không tải được dữ liệu')
 
         const found = (Array.isArray(data) ? data : []).find((c: any) => c.id === clientId)
-        if (!found) throw new Error('Không tìm thấy khách hàng')
+        if (!found) throw new Error('Không tìm thấy doanh nghiệp này')
 
         setClient(found)
 
@@ -71,7 +71,7 @@ export default function ClientDetailPage() {
   if (loading) {
     return (
       <Card>
-        <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>Đang tải thông tin khách hàng...</div>
+        <div className="empty-note">Đang tải thông tin doanh nghiệp…</div>
       </Card>
     )
   }
@@ -79,7 +79,7 @@ export default function ClientDetailPage() {
   if (error || !client) {
     return (
       <Card>
-        <div style={{ padding: 40, textAlign: 'center', color: '#b91c1c' }}>{error || 'Không tìm thấy khách hàng'}</div>
+        <div className="empty-note error">{error || 'Không tìm thấy doanh nghiệp này'}</div>
       </Card>
     )
   }
@@ -95,18 +95,18 @@ export default function ClientDetailPage() {
             <div className="title-line">
               <h2>{client.name}</h2>
             </div>
-            <p>{[client.industry, client.area].filter(Boolean).join(' · ') || 'Chưa có ngành / khu vực'}</p>
+            <p>{[client.industry, client.area].filter(Boolean).join(', ') || 'Chưa có ngành nghề và khu vực'}</p>
           </div>
         </div>
         <div className="hero-actions">
           <button className="secondary-button" onClick={() => router.push(`/clients/${client.id}/audit`)}>
-            <ClipboardCheck size={16} /> Chạy Audit
+            <ClipboardCheck size={18} /> Kiểm tra hồ sơ
           </button>
           <button className="secondary-button" onClick={() => router.push(`/clients/${client.id}/report`)}>
-            <BarChart3 size={16} /> Xem báo cáo
+            <BarChart3 size={18} /> Xem kết quả
           </button>
           <button className="primary-button" onClick={() => router.push(`/clients/${client.id}/plan`)}>
-            <Target size={16} /> Tiếp tục lộ trình
+            <Target size={18} /> Kế hoạch 30 ngày
           </button>
         </div>
       </Card>
@@ -115,9 +115,8 @@ export default function ClientDetailPage() {
         <Card className="next-action-card">
           <div className="section-head">
             <div>
-              <p className="overline">Việc tiếp theo</p>
               <h2>Việc đang chờ</h2>
-              <p>Các việc chưa hoàn thành của khách hàng này.</p>
+              <p>Những việc bạn cần làm cho doanh nghiệp này.</p>
             </div>
             <span className="action-count">
               {pendingTasks.length}
@@ -126,42 +125,49 @@ export default function ClientDetailPage() {
           </div>
           <div className="task-checklist">
             {pendingTasks.length === 0 && (
-              <div style={{ padding: 16, textAlign: 'center', color: '#6b7280' }}>
-                Không còn việc nào đang chờ. Vào trang Lộ trình để sinh thêm việc mới.
+              <div style={{ padding: 16, textAlign: 'center', color: 'var(--muted-foreground)' }}>
+                Không còn việc nào đang chờ. Vào Kế hoạch 30 ngày để tạo thêm việc mới.
               </div>
             )}
             {pendingTasks.slice(0, 5).map((task) => (
-              <button className="check-task" key={task.id} disabled={updatingId === task.id} onClick={() => markDone(task.id)}>
-                <span className="check-box" />
-                <span>
-                  <strong>{task.title}</strong>
-                  <small>
-                    {TASK_TYPE_LABEL[task.task_type] || task.task_type} · Ưu tiên {PRIORITY_LABEL[task.priority] || task.priority}
-                    {task.due_date ? ` · Hạn ${task.due_date}` : ''}
-                  </small>
-                </span>
-                <ArrowUpRight size={15} />
-              </button>
+              <div className="check-task" key={task.id}>
+                <button
+                  className="check-box"
+                  disabled={updatingId === task.id}
+                  onClick={() => markDone(task.id)}
+                  aria-label={`Đánh dấu đã xong: ${task.title}`}
+                  title="Đánh dấu đã xong"
+                />
+                <button className="task-open" onClick={() => router.push('/tasks')}>
+                  <span className="task-text">
+                    <strong>{task.title}</strong>
+                    <small>
+                      {TASK_TYPE_LABEL[task.task_type] || task.task_type}, ưu tiên {(PRIORITY_LABEL[task.priority] || task.priority || '').toLowerCase()}
+                      {task.due_date ? `, hạn ${new Date(`${String(task.due_date).slice(0, 10)}T00:00:00`).toLocaleDateString('vi-VN')}` : ''}
+                    </small>
+                  </span>
+                  <ArrowUpRight size={16} style={{ color: 'var(--faint)' }} />
+                </button>
+              </div>
             ))}
           </div>
           <button className="primary-button full" onClick={() => router.push('/tasks')}>
-            <ClipboardCheck size={16} /> Mở tất cả công việc
+            <ClipboardCheck size={18} /> Xem tất cả việc
           </button>
         </Card>
 
         <Card className="quick-actions-card">
           <div className="section-head">
             <div>
-              <p className="overline">Điều phối nhanh</p>
-              <h2>Chọn một hành động</h2>
+              <h2>Lối tắt</h2>
             </div>
           </div>
           <div className="quick-actions">
             <button onClick={() => router.push('/contents')}>
               <FileText size={18} />
               <span>
-                <strong>Duyệt nội dung</strong>
-                <small>Xem bài đang chờ</small>
+                <strong>Duyệt bài viết</strong>
+                <small>Xem những bài đang chờ bạn</small>
               </span>
               <ArrowUpRight size={15} />
             </button>
@@ -172,8 +178,8 @@ export default function ClientDetailPage() {
       <Card>
         <div className="section-head">
           <div>
-            <h2>Thông tin khách hàng</h2>
-            <p>Dữ liệu đang lưu trong hệ thống</p>
+            <h2>Thông tin doanh nghiệp</h2>
+            <p>Dùng để viết bài đúng với doanh nghiệp của bạn.</p>
           </div>
         </div>
         <div className="signal-grid">
@@ -194,21 +200,16 @@ export default function ClientDetailPage() {
             <strong>{client.website_url || '—'}</strong>
           </div>
         </div>
-        {client.place_id && (
-          <div style={{ marginBottom: 8, fontSize: 13, color: '#6b7280' }}>
-            Place ID: <code>{client.place_id}</code>
-          </div>
-        )}
         {client.gbp_link && (
           <div style={{ marginTop: 16 }}>
-            <span style={{ color: '#6b7280', fontSize: 13 }}>Link GBP: </span>
-            <a href={client.gbp_link} target="_blank" rel="noreferrer" style={{ color: '#2563eb' }}>
+            <span style={{ color: 'var(--muted-foreground)', fontSize: 13 }}>Hồ sơ Google: </span>
+            <a href={client.gbp_link} target="_blank" rel="noreferrer" style={{ color: 'var(--primary)' }}>
               {client.gbp_link}
             </a>
           </div>
         )}
         {client.notes && (
-          <div style={{ marginTop: 12, color: '#6b7280', fontSize: 14 }}>
+          <div style={{ marginTop: 12, color: 'var(--muted-foreground)', fontSize: 14 }}>
             <strong>Ghi chú:</strong> {client.notes}
           </div>
         )}

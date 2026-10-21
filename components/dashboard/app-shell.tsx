@@ -1,40 +1,22 @@
 'use client'
 
-// Khung sidebar + topbar dùng chung cho toàn bộ khu vực dashboard.
+// Khung thanh bên + điều hướng dùng chung cho toàn bộ khu vực dashboard.
+// Đây là layout thật của route group (dashboard): Next.js tự điều hướng theo URL.
 //
-// TRƯỚC ĐÂY: khung này (và toàn bộ nội dung từng trang) nằm chung trong
-// app/page.tsx (2200+ dòng), điều hướng bằng router giả tự chế
-// (window.history.pushState + tự parse pathname). Vấn đề: router giả đó
-// chỉ hoạt động khi bấm nút trong app — F5 hoặc mở thẳng 1 link (vd
-// /clients/abc) sẽ khiến Next.js render đúng file route thật ở app/,
-// vốn là bản nháp cũ không có sidebar này.
-//
-// BÂY GIỜ: đây là layout thật của route group (dashboard), Next.js tự
-// điều hướng đúng theo URL, không còn 2 hệ thống router chồng nhau nữa.
+// Nguyên tắc ngôn ngữ: viết cho chủ doanh nghiệp, không dùng thuật ngữ của agency
+// (workspace, audit, chu kỳ...). Chỉ hiện những điều khiển thực sự hoạt động.
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import {
-  Bell,
-  CircleHelp,
-  ClipboardCheck,
-  FileText,
-  LayoutDashboard,
-  Menu,
-  MoreHorizontal,
-  Plus,
-  Search,
-  Settings,
-  Sparkles,
-  Users,
-  X,
-} from 'lucide-react'
+import { ChevronsUpDown, ClipboardCheck, FileText, House, LogOut, Menu, Plus, Settings, Store, X } from 'lucide-react'
 import { ToastProvider } from './toast-context'
+import { Brand } from './brand'
+import { ROLE_LABEL } from '@/lib/ui-constants'
 
 function NavItem({ icon: Icon, label, active, href, count, onNavigate }: any) {
   return (
-    <Link href={href} className={`nav-item ${active ? 'active' : ''}`} onClick={onNavigate}>
-      <Icon size={18} />
+    <Link href={href} className={`nav-item ${active ? 'active' : ''}`} onClick={onNavigate} aria-current={active ? 'page' : undefined}>
+      <Icon size={19} />
       <span>{label}</span>
       {count && <b>{count}</b>}
     </Link>
@@ -49,34 +31,45 @@ type CurrentUser = {
   clientLimit: { maxClients: number; clientCount: number; canAddMore: boolean } | null
 }
 
-function pageTitle(pathname: string, clientName: string) {
-  if (pathname.startsWith('/clients/new')) return 'Thêm khách hàng'
+type PageInfo = { title: string; subtitle: string }
+
+function pageInfo(pathname: string, clientName: string): PageInfo {
+  if (pathname.startsWith('/clients/new'))
+    return { title: 'Thêm doanh nghiệp', subtitle: 'Vài thông tin cơ bản là đủ để bắt đầu.' }
   if (pathname.startsWith('/clients/')) {
-    if (pathname.includes('/audit')) return 'Audit Google Business Profile'
-    if (pathname.includes('/plan')) return 'Lộ trình 30 ngày'
-    return clientName || 'Chi tiết khách hàng'
+    if (pathname.includes('/audit'))
+      return { title: 'Kiểm tra hồ sơ Google', subtitle: 'Xem hồ sơ của bạn đang mạnh ở đâu và cần sửa gì.' }
+    if (pathname.includes('/plan'))
+      return { title: 'Kế hoạch 30 ngày', subtitle: 'Từng bước để khách tìm thấy bạn nhiều hơn trên Google Maps.' }
+    if (pathname.includes('/report'))
+      return { title: 'Kết quả', subtitle: 'So sánh trước và sau để thấy kế hoạch có hiệu quả không.' }
+    return { title: clientName || 'Doanh nghiệp', subtitle: 'Tình hình và những việc cần làm của doanh nghiệp này.' }
   }
-  if (pathname.startsWith('/clients')) return 'Khách hàng'
-  if (pathname.startsWith('/tasks')) return 'Công việc'
-  if (pathname.startsWith('/contents')) return 'Nội dung'
-  if (pathname.startsWith('/workspaces/new')) return 'Tạo workspace'
-  if (pathname.startsWith('/workspaces')) return 'Workspace của bạn'
-  if (pathname.startsWith('/settings')) return 'Cài đặt'
-  return 'Tổng quan'
+  if (pathname.startsWith('/clients'))
+    return { title: 'Doanh nghiệp', subtitle: 'Chọn một doanh nghiệp để xem việc cần làm và kế hoạch.' }
+  if (pathname.startsWith('/tasks'))
+    return { title: 'Việc cần làm', subtitle: 'Làm từng việc một. Bấm “Xem hướng dẫn” để được chỉ từng bước.' }
+  if (pathname.startsWith('/contents'))
+    return { title: 'Bài viết', subtitle: 'Đọc, chỉnh sửa và duyệt bài trước khi đăng lên Google.' }
+  if (pathname.startsWith('/workspaces/new'))
+    return { title: 'Tạo không gian làm việc', subtitle: '' }
+  if (pathname.startsWith('/workspaces'))
+    return { title: 'Không gian làm việc', subtitle: 'Chuyển giữa các không gian làm việc của bạn.' }
+  if (pathname.startsWith('/settings'))
+    return { title: 'Cài đặt', subtitle: 'Thông tin tài khoản và những người cùng sử dụng.' }
+  return { title: 'Trang chủ', subtitle: '' }
 }
 
 function AppShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [mobileSearchOpen, setMobileSearchOpen] = useState(false)
   const [clientName, setClientName] = useState('')
   const [pendingCount, setPendingCount] = useState<number | null>(null)
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
 
   useEffect(() => {
     setMobileOpen(false)
-    setMobileSearchOpen(false)
   }, [pathname])
 
   useEffect(() => {
@@ -92,19 +85,19 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!data?.profile) return
-        const name = data.profile.full_name || data.user?.email || 'User'
+        const name = data.profile.full_name || data.user?.email || 'Bạn'
         const initials =
           name
             .split(' ')
             .filter(Boolean)
-            .slice(0, 2)
+            .slice(-2)
             .map((w: string) => w[0]?.toUpperCase() || '')
-            .join('') || 'U'
+            .join('') || 'B'
         setCurrentUser({
           fullName: name,
           role: data.activeRole || 'member',
           initials,
-          workspaceName: data.activeWorkspace?.name || 'Chưa có workspace',
+          workspaceName: data.activeWorkspace?.name || 'Chưa có không gian làm việc',
           clientLimit: data.clientLimit || null,
         })
         if (Array.isArray(data.workspaces) && data.workspaces.length === 0) {
@@ -118,7 +111,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     const isClientRoute = /^\/clients\/[^/]+/.test(pathname)
     if (!isClientRoute) return
     const id = pathname.split('/clients/')[1]?.split('/')[0]
-    if (!id) return
+    if (!id || id === 'new') return
     fetch('/api/clients')
       .then((r) => r.json())
       .then((data) => {
@@ -143,165 +136,117 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     window.location.href = '/login'
   }
 
-  const today = new Date().toLocaleDateString('vi-VN', {
-    weekday: 'long',
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  })
-
-  const title = pageTitle(pathname, clientName)
-  const isDashboard = pathname === '/'
-  const isClients = pathname.startsWith('/clients') && !pathname.startsWith('/clients/')
-  const showAddClient = isDashboard || isClients
+  const { title, subtitle } = pageInfo(pathname, clientName)
+  const isHome = pathname === '/'
+  const isClients = pathname === '/clients'
   const canAddMore = currentUser?.clientLimit?.canAddMore
+  const roleLabel = ROLE_LABEL[currentUser?.role || ''] || 'Thành viên'
+  const closeMenu = () => setMobileOpen(false)
 
   return (
     <div className="app-shell">
-      <aside className={`sidebar ${mobileOpen ? 'open' : ''}`}>
+      <aside className={`sidebar ${mobileOpen ? 'open' : ''}`} aria-label="Menu chính">
         <div className="brand">
-          <div className="brand-mark">
-            <Sparkles size={16} />
-          </div>
-          <span>
-            local growth <strong>os</strong>
-          </span>
-          <button className="close-mobile" onClick={() => setMobileOpen(false)}>
-            <X size={18} />
+          <Brand className="brand-inner" />
+          <button className="close-mobile" onClick={closeMenu} aria-label="Đóng menu">
+            <X size={20} />
           </button>
         </div>
-        <Link href="/workspaces" className="workspace" style={{ cursor: 'pointer' }}>
+
+        <Link href="/workspaces" className="workspace" onClick={closeMenu} title="Đổi không gian làm việc">
           <div className="workspace-avatar">{(currentUser?.workspaceName || 'LG').slice(0, 2).toUpperCase()}</div>
-          <div>
-            <p className="workspace-name">{currentUser?.workspaceName || 'Workspace'}</p>
-            <p className="workspace-plan">Agency workspace</p>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <p className="workspace-name">{currentUser?.workspaceName || 'Đang tải…'}</p>
+            <p className="workspace-plan">{roleLabel}</p>
           </div>
+          <ChevronsUpDown size={16} style={{ color: 'var(--muted-foreground)', flex: '0 0 auto' }} />
         </Link>
+
         <nav>
-          <p className="nav-label">Làm việc hôm nay</p>
-          <NavItem icon={LayoutDashboard} label="Tổng quan" active={pathname === '/'} href="/" onNavigate={() => setMobileOpen(false)} />
-          <NavItem
-            icon={Users}
-            label="Khách hàng"
-            active={pathname.startsWith('/clients')}
-            href="/clients"
-            onNavigate={() => setMobileOpen(false)}
-          />
-          <NavItem icon={ClipboardCheck} label="Việc cần làm" active={pathname.startsWith('/tasks')} href="/tasks" onNavigate={() => setMobileOpen(false)} />
+          <NavItem icon={House} label="Trang chủ" active={isHome} href="/" onNavigate={closeMenu} />
+          <NavItem icon={Store} label="Doanh nghiệp" active={pathname.startsWith('/clients')} href="/clients" onNavigate={closeMenu} />
+          <NavItem icon={ClipboardCheck} label="Việc cần làm" active={pathname.startsWith('/tasks')} href="/tasks" onNavigate={closeMenu} />
           <NavItem
             icon={FileText}
-            label="Nội dung"
+            label="Bài viết"
             active={pathname.startsWith('/contents')}
             count={pendingCount ? String(pendingCount) : undefined}
             href="/contents"
-            onNavigate={() => setMobileOpen(false)}
+            onNavigate={closeMenu}
           />
-          <p className="nav-label secondary">Hệ thống</p>
-          <NavItem icon={Settings} label="Cài đặt" active={pathname.startsWith('/settings')} href="/settings" onNavigate={() => setMobileOpen(false)} />
+          <div className="nav-gap" />
+          <NavItem icon={Settings} label="Cài đặt" active={pathname.startsWith('/settings')} href="/settings" onNavigate={closeMenu} />
         </nav>
+
         <div className="sidebar-footer">
-          <div className="help-card">
-            <CircleHelp size={17} />
+          <div className="user-row">
+            <div className="user-avatar">{currentUser?.initials || 'B'}</div>
             <div>
-              <strong>Cần trợ giúp?</strong>
-              <span>Xem hướng dẫn sử dụng</span>
+              <strong>{currentUser?.fullName || 'Bạn'}</strong>
+              <span>{roleLabel}</span>
             </div>
-          </div>
-          <div className="user-row" style={{ cursor: 'pointer' }} onClick={handleLogout} title="Đăng xuất">
-            <div className="user-avatar">{currentUser?.initials || 'U'}</div>
-            <div>
-              <strong>{currentUser?.fullName || 'User'}</strong>
-              <span>{currentUser?.role || 'member'} · Đăng xuất</span>
-            </div>
-            <MoreHorizontal size={17} />
+            <button className="icon-button" onClick={handleLogout} title="Đăng xuất" aria-label="Đăng xuất">
+              <LogOut size={18} />
+            </button>
           </div>
         </div>
       </aside>
-      {mobileOpen && <div className="mobile-overlay" onClick={() => setMobileOpen(false)} />}
+
+      {mobileOpen && <div className="mobile-overlay" onClick={closeMenu} />}
+
       <main className="main">
         <header className="topbar">
           <button className="mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Mở menu">
-            <Menu size={20} />
+            <Menu size={22} />
           </button>
-          <div className="breadcrumbs">
-            <span>Workspace</span>
-            <span>/</span>
-            <strong>{title}</strong>
-          </div>
-          <div className="mobile-title">{title}</div>
-          <div className="top-actions">
-            <div className="top-search">
-              <Search size={16} />
-              <input placeholder="Tìm kiếm..." />
-              <kbd>⌘ K</kbd>
-            </div>
-            <button
-              className="icon-button mobile-search-toggle"
-              aria-label="Tìm kiếm"
-              onClick={() => setMobileSearchOpen((v) => !v)}
-            >
-              <Search size={18} />
-            </button>
-            <button className="icon-button" aria-label="Thông báo">
-              <Bell size={18} />
-              <i />
-            </button>
-            <div className="mini-avatar">{currentUser?.initials || 'U'}</div>
-          </div>
+          <Brand />
         </header>
-        {mobileSearchOpen && (
-          <div className="mobile-search-bar">
-            <Search size={16} />
-            <input autoFocus placeholder="Tìm khách hàng, việc, nội dung..." />
-          </div>
-        )}
+
         <div className="content">
-          <div className="page-heading">
-            <div>
-              <p className="overline">{today}</p>
-              <h1>{title}</h1>
-              <p className="subheading">Theo dõi và điều phối toàn bộ chu kỳ Local SEO của bạn.</p>
+          {!isHome && (
+            <div className="page-heading">
+              <div>
+                <h1>{title}</h1>
+                {subtitle && <p className="subheading">{subtitle}</p>}
+              </div>
+              {isClients && canAddMore !== false && (
+                <Link href="/clients/new" className="primary-button">
+                  <Plus size={18} />
+                  Thêm doanh nghiệp
+                </Link>
+              )}
+              {isClients && currentUser?.clientLimit && !currentUser.clientLimit.canAddMore && (
+                <button className="secondary-button" disabled title="Liên hệ để nâng gói và thêm doanh nghiệp mới">
+                  <Plus size={18} />
+                  Đã đạt giới hạn ({currentUser.clientLimit.maxClients})
+                </button>
+              )}
             </div>
-            {showAddClient && canAddMore !== false && (
-              <Link href="/clients/new" className="primary-button">
-                <Plus size={17} />
-                Thêm khách hàng
-              </Link>
-            )}
-            {showAddClient && currentUser?.clientLimit && !currentUser.clientLimit.canAddMore && (
-              <button
-                className="secondary-button"
-                disabled
-                title="Liên hệ nâng cấp gói để thêm doanh nghiệp mới"
-              >
-                <Plus size={17} />
-                Đã đạt giới hạn ({currentUser.clientLimit.maxClients})
-              </button>
-            )}
-          </div>
+          )}
           {children}
         </div>
       </main>
+
       <nav className="bottom-nav" aria-label="Điều hướng điện thoại">
-        <Link href="/" className={pathname === '/' ? 'active' : ''}>
-          <LayoutDashboard size={20} />
-          <span>Tổng quan</span>
+        <Link href="/" className={isHome ? 'active' : ''}>
+          <House size={22} />
+          <span>Trang chủ</span>
         </Link>
         <Link href="/clients" className={pathname.startsWith('/clients') ? 'active' : ''}>
-          <Users size={20} />
-          <span>Khách</span>
+          <Store size={22} />
+          <span>Doanh nghiệp</span>
         </Link>
         <Link href="/tasks" className={pathname.startsWith('/tasks') ? 'active' : ''}>
-          <ClipboardCheck size={20} />
+          <ClipboardCheck size={22} />
           <span>Việc</span>
         </Link>
         <Link href="/contents" className={pathname.startsWith('/contents') ? 'active' : ''}>
-          <FileText size={20} />
-          <span>Nội dung</span>
+          <FileText size={22} />
+          <span>Bài viết</span>
           {pendingCount ? <b>{pendingCount}</b> : null}
         </Link>
         <button type="button" className={mobileOpen ? 'active' : ''} onClick={() => setMobileOpen(true)}>
-          <Menu size={20} />
+          <Menu size={22} />
           <span>Menu</span>
         </button>
       </nav>

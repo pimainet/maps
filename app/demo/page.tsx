@@ -2,7 +2,7 @@
 
 import { Suspense, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Sparkles } from 'lucide-react'
+import { Brand } from '@/components/dashboard/brand'
 import { buildDemoAudit } from '@/lib/demo-audit'
 import { AuditResultView } from '@/components/dashboard/audit-result-view'
 
@@ -30,17 +30,11 @@ function DemoInner() {
   return (
     <div className="auth-page" style={{ alignItems: 'start', paddingTop: 48 }}>
       <div style={{ width: '100%', maxWidth: 920 }}>
-        <div className="auth-brand" style={{ marginBottom: 16 }}>
-          <div className="brand-mark">
-            <Sparkles size={16} />
-          </div>
-          <span>
-            local growth <strong>os</strong>
-          </span>
-        </div>
-        <p className="overline">Bản xem trước khách</p>
-        <h1 style={{ margin: '6px 0 8px', fontSize: 28, letterSpacing: '-0.04em' }}>Audit Google Business Profile</h1>
-        <p className="auth-sub">Cùng giao diện sản phẩm chính. Chỉ mở điểm, ưu tiên Cao và 3 việc đầu.</p>
+        <Brand className="auth-brand" />
+        <h1 style={{ margin: '0 0 10px', fontFamily: 'var(--font-display), Georgia, serif', fontWeight: 350, fontSize: 40, lineHeight: 1.12, letterSpacing: '-0.02em' }}>
+          Hồ sơ Google của bạn đang ở đâu?
+        </h1>
+        <p className="auth-sub">Bản xem nhanh: điểm tổng quan, những điểm cần ưu tiên và 3 việc đầu tiên nên làm.</p>
 
         {!unlocked && (
           <section className="panel" style={{ marginBottom: 16 }}>
@@ -56,7 +50,7 @@ function DemoInner() {
             </div>
             <div style={{ marginTop: 16 }}>
               <button className="primary-button" onClick={() => setUnlocked(true)} type="button">
-                Xem audit sơ bộ
+                Xem kết quả sơ bộ
               </button>
             </div>
           </section>
@@ -70,7 +64,7 @@ function DemoInner() {
 
 export default function PublicDemoAuditPage() {
   return (
-    <Suspense fallback={<div className="auth-page">Đang mở bản xem trước...</div>}>
+    <Suspense fallback={<div className="auth-page">Đang mở bản xem nhanh…</div>}>
       <DemoInner />
     </Suspense>
   )

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Sparkles } from 'lucide-react'
+import { Brand } from '@/components/dashboard/brand'
 
 export default function SignupPage() {
   const router = useRouter()
@@ -71,14 +71,7 @@ export default function SignupPage() {
     return (
       <div className="auth-page">
         <div className="auth-card">
-          <div className="auth-brand">
-            <div className="brand-mark">
-              <Sparkles size={18} />
-            </div>
-            <span>
-              local growth <strong>os</strong>
-            </span>
-          </div>
+          <Brand className="auth-brand" />
           <h1>Kiểm tra email</h1>
           <p className="auth-sub">
             Chúng tôi đã gửi link xác nhận đến <strong>{email}</strong>. Vui lòng
@@ -95,17 +88,10 @@ export default function SignupPage() {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <div className="auth-brand">
-          <div className="brand-mark">
-            <Sparkles size={18} />
-          </div>
-          <span>
-            local growth <strong>os</strong>
-          </span>
-        </div>
+        <Brand className="auth-brand" />
 
         <h1>Tạo tài khoản</h1>
-        <p className="auth-sub">Bắt đầu quản lý Local SEO trong một workspace</p>
+        <p className="auth-sub">Theo dõi và làm theo kế hoạch tăng khách từ Google Maps.</p>
 
         <button
           type="button"

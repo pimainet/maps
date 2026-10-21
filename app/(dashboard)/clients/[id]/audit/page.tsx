@@ -43,7 +43,7 @@ export default function ClientAuditPage() {
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'Không tải được dữ liệu')
         const found = (Array.isArray(data) ? data : []).find((c: any) => c.id === clientId)
-        if (!found) throw new Error('Không tìm thấy khách hàng')
+        if (!found) throw new Error('Không tìm thấy doanh nghiệp này')
         setClient(found)
         setForm((prev) => ({
           ...prev,
@@ -119,9 +119,9 @@ export default function ClientAuditPage() {
         }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Audit thất bại')
+      if (!res.ok) throw new Error(data.error || 'Chưa kiểm tra được hồ sơ. Thử lại sau ít phút.')
       setResult(data.audit_result || '')
-      showToast('Đã chạy Audit thành công')
+      showToast('Đã kiểm tra xong hồ sơ')
     } catch (err: any) {
       setError(err.message || 'Có lỗi xảy ra')
     } finally {
@@ -132,14 +132,14 @@ export default function ClientAuditPage() {
   if (loadingClient) {
     return (
       <Card>
-        <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>Đang tải...</div>
+        <div className="empty-note">Đang tải…</div>
       </Card>
     )
   }
   if (!client) {
     return (
       <Card>
-        <div style={{ padding: 40, textAlign: 'center', color: '#b91c1c' }}>{error || 'Không tìm thấy khách hàng'}</div>
+        <div className="empty-note error">{error || 'Không tìm thấy doanh nghiệp này'}</div>
       </Card>
     )
   }
@@ -148,39 +148,33 @@ export default function ClientAuditPage() {
     <>
       <Card>
         <div className="title-line">
-          <h2>Audit Google Business Profile</h2>
+          <h2>Kiểm tra hồ sơ Google</h2>
         </div>
         <p>
-          Doanh nghiệp: <strong>{client.name}</strong>
-          {client.place_id ? (
-            <>
-              {' '}
-              · Place ID: <code>{client.place_id}</code>
-            </>
-          ) : null}
+          Cho <strong>{client.name}</strong>. Điền thông tin hồ sơ, hoặc để hệ thống tự lấy từ Google Maps.
         </p>
         <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <button className="secondary-button" onClick={handleAutoFetch} disabled={fetching}>
             {fetching && <Loader2 size={14} className="animate-spin" />}
-            {fetching ? 'Đang lấy từ Google...' : 'Tự điền từ Google Maps'}
+            {fetching ? 'Đang lấy từ Google…' : 'Tự điền từ Google Maps'}
           </button>
           <button className="secondary-button" onClick={() => router.push(`/clients/${client.id}/plan`)}>
-            Sang lộ trình 30 ngày
+            Xem kế hoạch 30 ngày
           </button>
           {fetching && (
-            <span style={{ fontSize: 12, color: '#6b7280' }}>
-              Đang mở trình duyệt thật để đọc hồ sơ Google Maps — có thể mất 20–40 giây, đừng tắt trang.
+            <span style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>
+              Đang đọc hồ sơ trên Google Maps. Việc này mất 20–40 giây, bạn đừng tắt trang.
             </span>
           )}
         </div>
 
         <div className="form-grid" style={{ marginTop: 16 }}>
           <label className="field">
-            <span>Ngôn ngữ đầu ra</span>
+            <span>Ngôn ngữ kết quả</span>
             <input value={form.output_language} onChange={(e) => update('output_language', e.target.value)} />
           </label>
           <label className="field wide">
-            <span>Mô tả trên GBP</span>
+            <span>Phần giới thiệu trên Google</span>
             <textarea value={form.description} onChange={(e) => update('description', e.target.value)} rows={3} />
           </label>
           <label className="field">
@@ -213,12 +207,12 @@ export default function ClientAuditPage() {
           </label>
         </div>
 
-        {error && <div style={{ color: '#b91c1c', background: '#fef2f2', padding: 12, borderRadius: 8, marginTop: 12 }}>{error}</div>}
+        {error && <div style={{ color: 'var(--danger)', background: 'var(--danger-soft)', padding: 12, borderRadius: 8, marginTop: 12 }}>{error}</div>}
 
         <div style={{ marginTop: 16 }}>
           <button className="primary-button" onClick={handleRunAudit} disabled={running}>
             {running && <Loader2 size={16} className="animate-spin" />}
-            {running ? 'Đang audit... (khoảng 10-20 giây)' : 'Chạy Audit'}
+            {running ? 'Đang kiểm tra… (khoảng 10–20 giây)' : 'Kiểm tra hồ sơ'}
           </button>
         </div>
       </Card>
@@ -228,7 +222,7 @@ export default function ClientAuditPage() {
           <div className="section-head" style={{ marginTop: 8 }}>
             <div />
             <button className="primary-button" onClick={() => router.push(`/clients/${client.id}/plan`)}>
-              Lập lộ trình 30 ngày
+              Tạo kế hoạch 30 ngày
             </button>
           </div>
           <AuditResultView

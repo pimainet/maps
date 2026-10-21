@@ -5,6 +5,7 @@ import { AUDIT_PROMPT } from '@/lib/prompts'
 import { requireActiveWorkspaceId } from '@/lib/auth'
 import { getClientProgress } from '@/lib/client-memory'
 import { checkAiRateLimit, recordAiUsage, enforceClientAuditQuota } from '@/lib/rate-limit'
+import { saveManualBaselineSnapshot } from '@/lib/gbp-snapshots'
 
 export const maxDuration = 300
 export const runtime = 'nodejs'
@@ -84,6 +85,22 @@ export async function POST(req: Request) {
       raw_input: body,
       workspace_id: workspaceId,
     })
+
+    // Lưu mốc ban đầu (điểm đánh giá, số lượt đánh giá) để trang Kết quả có gì so sánh sau này.
+    // Lỗi ở đây không được làm hỏng kết quả kiểm tra.
+    if (body.client_id) {
+      try {
+        await saveManualBaselineSnapshot({
+          workspace_id: workspaceId,
+          client_id: body.client_id,
+          business_name: body.business_name,
+          rating: body.rating,
+          review_count: body.review_count,
+        })
+      } catch (e: any) {
+        console.error('saveManualBaselineSnapshot:', e?.message)
+      }
+    }
 
     return NextResponse.json({
       audit: saved,

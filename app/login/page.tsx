@@ -4,7 +4,7 @@ import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Sparkles } from 'lucide-react'
+import { Brand } from '@/components/dashboard/brand'
 
 export default function LoginPage() {
   return (
@@ -73,19 +73,11 @@ function LoginForm() {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <div className="auth-brand">
-          <div className="brand-mark">
-            <Sparkles size={18} />
-          </div>
-
-          <span>
-            local growth <strong>os</strong>
-          </span>
-        </div>
+        <Brand className="auth-brand" />
 
         <h1>Đăng nhập</h1>
         <p className="auth-sub">
-          Tiếp tục vận hành Local SEO của bạn
+          Chào mừng bạn quay lại.
         </p>
 
         <button
@@ -164,15 +156,7 @@ function LoginLoading() {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <div className="auth-brand">
-          <div className="brand-mark">
-            <Sparkles size={18} />
-          </div>
-
-          <span>
-            local growth <strong>os</strong>
-          </span>
-        </div>
+        <Brand className="auth-brand" />
 
         <h1>Đăng nhập</h1>
 

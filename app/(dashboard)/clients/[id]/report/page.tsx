@@ -1,9 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { ArrowDown, ArrowUp, CalendarClock, CheckCircle2, FileText, Minus, Star } from 'lucide-react'
-import { Card, Metric } from '@/components/dashboard/shared'
+import { ArrowDown, ArrowRight, ArrowUp, Minus } from 'lucide-react'
+import { Card, ProgressRing } from '@/components/dashboard/shared'
+import { TASK_TYPE_LABEL } from '@/lib/ui-constants'
+import type { ProgressSummary } from '@/lib/progress'
 
 type Report = {
   client: { id: string; name: string }
@@ -16,6 +19,7 @@ type Report = {
   current_captured_at: string | null
   has_enough_data: boolean
   tasks: { total: number; done: number; percent: number }
+  progress: ProgressSummary
   content_published: number
 }
 
@@ -23,14 +27,14 @@ function DeltaBadge({ value, suffix = '' }: { value: number | null; suffix?: str
   if (value == null) return <span className="muted-cell">—</span>
   if (value === 0) {
     return (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#6b7280' }}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--muted-foreground)' }}>
         <Minus size={14} /> Không đổi
       </span>
     )
   }
   const up = value > 0
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: up ? '#059669' : '#dc2626', fontWeight: 600 }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: up ? 'var(--success)' : 'var(--danger)', fontWeight: 600 }}>
       {up ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
       {up ? '+' : ''}
       {value}
@@ -56,7 +60,7 @@ export default function ClientReportPage() {
       try {
         const res = await fetch(`/api/clients/${clientId}/report`)
         const data = await res.json()
-        if (!res.ok) throw new Error(data.error || 'Không tải được báo cáo')
+        if (!res.ok) throw new Error(data.error || 'Không tải được kết quả')
         setReport(data)
       } catch (err: any) {
         setError(err.message || 'Có lỗi xảy ra')
@@ -70,7 +74,7 @@ export default function ClientReportPage() {
   if (loading) {
     return (
       <Card>
-        <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>Đang tổng hợp báo cáo...</div>
+        <div className="empty-note">Đang tổng hợp kết quả…</div>
       </Card>
     )
   }
@@ -78,93 +82,165 @@ export default function ClientReportPage() {
   if (error || !report) {
     return (
       <Card>
-        <div style={{ padding: 40, textAlign: 'center', color: '#b91c1c' }}>{error || 'Không có dữ liệu'}</div>
+        <div className="empty-note error">{error || 'Không có dữ liệu'}</div>
       </Card>
     )
   }
 
+  const p = report.progress
+  const hasBaseline = report.baseline_captured_at != null
+  const planned = report.cycle.started_at != null
+
   return (
     <>
-      <Card className="plan-summary">
-        <div>
-          <p className="overline">Báo cáo chu kỳ</p>
-          <div className="title-line">
+      <Card>
+        <div className="section-head" style={{ marginBottom: 0 }}>
+          <div>
+            <p className="overline">Kết quả của kế hoạch</p>
             <h2>{report.client.name}</h2>
+            <p>
+              {planned
+                ? `Kế hoạch bắt đầu ${fmtDate(report.cycle.started_at)}${report.cycle.status === 'active' ? ', đang chạy' : report.cycle.closed_at ? `, đã đóng ${fmtDate(report.cycle.closed_at)}` : ''}`
+                : 'Chưa có kế hoạch nào. Hãy tạo kế hoạch 30 ngày trước.'}
+            </p>
           </div>
-          <p>
-            {report.cycle.started_at
-              ? `Chu kỳ bắt đầu ${fmtDate(report.cycle.started_at)}${report.cycle.status === 'active' ? ' · đang chạy' : report.cycle.closed_at ? ` · đã đóng ${fmtDate(report.cycle.closed_at)}` : ''}`
-              : 'Chưa có chu kỳ nào — hãy tạo lộ trình 30 ngày trước.'}
-          </p>
         </div>
-
-        {!report.has_enough_data && (
-          <div style={{ marginTop: 12, padding: 12, background: '#fffbeb', borderRadius: 8, fontSize: 13, color: '#92400e' }}>
-            Chưa đủ dữ liệu để so sánh trước/sau — cần ít nhất 2 lần lấy dữ liệu Google Maps (nút "Tự điền từ Google Maps" ở trang Audit)
-            cách nhau theo thời gian. Hiện tại mới có {report.baseline_captured_at ? '1' : '0'} lần ghi nhận.
-          </div>
-        )}
       </Card>
-
-      <div className="metrics-grid">
-        <Metric
-          icon={Star}
-          label="Điểm đánh giá (rating)"
-          value={
-            <>
-              {report.metrics.rating.current ?? '—'}
-              {report.metrics.rating.baseline != null && (
-                <span style={{ fontSize: 14, color: '#9ca3af', fontWeight: 400 }}> (từ {report.metrics.rating.baseline})</span>
-              )}
-            </>
-          }
-          note={<DeltaBadge value={report.metrics.rating.delta} />}
-          tone="orange"
-        />
-        <Metric
-          icon={CheckCircle2}
-          label="Số lượng đánh giá (reviews)"
-          value={
-            <>
-              {report.metrics.review_count.current ?? '—'}
-              {report.metrics.review_count.baseline != null && (
-                <span style={{ fontSize: 14, color: '#9ca3af', fontWeight: 400 }}> (từ {report.metrics.review_count.baseline})</span>
-              )}
-            </>
-          }
-          note={<DeltaBadge value={report.metrics.review_count.delta} />}
-          tone="green"
-        />
-        <Metric
-          icon={CalendarClock}
-          label="Việc đã hoàn thành"
-          value={`${report.tasks.done}/${report.tasks.total}`}
-          note={`${report.tasks.percent}% trong chu kỳ này`}
-        />
-        <Metric icon={FileText} label="Bài đã đăng lên Google" value={String(report.content_published)} note="Trong chu kỳ này" />
-      </div>
 
       <Card>
         <div className="section-head">
           <div>
-            <h2>Nguồn dữ liệu</h2>
-            <p>Để agency/khách hàng có thể kiểm chứng con số ở trên</p>
+            <h2>Tiến bộ của bạn</h2>
+            <p>Số liệu tính từ những việc bạn đã đánh dấu hoàn thành.</p>
           </div>
         </div>
-        <div className="signal-grid">
-          <div>
-            <span>Ảnh chụp "trước"</span>
-            <strong>{fmtDate(report.baseline_captured_at)}</strong>
+
+        {p.total === 0 ? (
+          <div className="empty-note" style={{ padding: '20px 0 8px', textAlign: 'left' }}>
+            Chưa có việc nào trong kế hoạch.
+            <div style={{ marginTop: 16 }}>
+              <Link href={`/clients/${clientId}/plan`} className="primary-button">
+                Tạo kế hoạch 30 ngày <ArrowRight size={18} />
+              </Link>
+            </div>
           </div>
+        ) : (
+          <>
+            <div className="ring-wrap">
+              <ProgressRing percent={p.percent} />
+              <div className="ring-text">
+                <strong>
+                  {p.done} trong {p.total} việc đã xong
+                </strong>
+                <span>
+                  {p.nextMilestone
+                    ? `Còn ${p.nextMilestone.remaining} việc nữa là đạt ${p.nextMilestone.target}%.`
+                    : 'Bạn đã hoàn thành toàn bộ kế hoạch.'}
+                </span>
+                {p.doneThisWeek ? <span>Tuần này bạn đã xong {p.doneThisWeek} việc.</span> : null}
+              </div>
+            </div>
+
+            {p.byType.length > 1 && (
+              <ul className="type-progress" aria-label="Tiến độ theo loại việc">
+                {p.byType.map((t) => (
+                  <li key={t.type}>
+                    <span>{TASK_TYPE_LABEL[t.type] || t.type}</span>
+                    <div className="progress" aria-hidden="true">
+                      <i style={{ width: `${(t.done / t.total) * 100}%` }} />
+                    </div>
+                    <b>
+                      {t.done}/{t.total}
+                    </b>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <div className="stats-strip" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+              <div>
+                <strong>{report.content_published}</strong>
+                <span>bài đã đăng lên Google</span>
+              </div>
+              <div>
+                <strong>{p.pending}</strong>
+                <span>việc còn lại</span>
+              </div>
+            </div>
+          </>
+        )}
+      </Card>
+
+      <Card>
+        <div className="section-head">
           <div>
-            <span>Ảnh chụp "hiện tại"</span>
-            <strong>{fmtDate(report.current_captured_at)}</strong>
+            <h2>Số liệu trên Google</h2>
+            <p>Điểm đánh giá và số lượt đánh giá, so với lúc bắt đầu.</p>
           </div>
         </div>
-        <p style={{ marginTop: 12, fontSize: 13, color: '#6b7280' }}>
-          Số liệu lấy từ Google Maps công khai của doanh nghiệp (qua nút "Tự điền từ Google Maps" ở trang Audit) — không phải AI ước
-          tính.
-        </p>
+
+        {report.has_enough_data ? (
+          <>
+            <div className="signal-grid two">
+              <div>
+                <span>Điểm đánh giá</span>
+                <strong>
+                  {report.metrics.rating.current ?? '—'}
+                  {report.metrics.rating.baseline != null && <small> (từ {report.metrics.rating.baseline})</small>}
+                </strong>
+                <DeltaBadge value={report.metrics.rating.delta} />
+              </div>
+              <div>
+                <span>Số lượt đánh giá</span>
+                <strong>
+                  {report.metrics.review_count.current ?? '—'}
+                  {report.metrics.review_count.baseline != null && <small> (từ {report.metrics.review_count.baseline})</small>}
+                </strong>
+                <DeltaBadge value={report.metrics.review_count.delta} />
+              </div>
+            </div>
+            <p className="rail-sub" style={{ margin: '16px 0 0' }}>
+              So sánh dữ liệu ngày {fmtDate(report.baseline_captured_at)} với ngày {fmtDate(report.current_captured_at)}. Số liệu lấy từ trang Google Maps công khai của
+              doanh nghiệp hoặc từ điểm bạn nhập khi kiểm tra hồ sơ, không phải con số ước tính.
+            </p>
+          </>
+        ) : hasBaseline ? (
+          <>
+            <div className="signal-grid">
+              <div>
+                <span>Điểm đánh giá lúc bắt đầu</span>
+                <strong>{report.metrics.rating.baseline ?? '—'}</strong>
+              </div>
+              <div>
+                <span>Số lượt đánh giá lúc bắt đầu</span>
+                <strong>{report.metrics.review_count.baseline ?? '—'}</strong>
+              </div>
+              <div>
+                <span>Ghi nhận ngày</span>
+                <strong>{fmtDate(report.baseline_captured_at)}</strong>
+              </div>
+            </div>
+            <p className="rail-sub" style={{ margin: '16px 0 0' }}>
+              Đây là mốc ban đầu của bạn. Số liệu Google thay đổi chậm, hãy kiểm tra lại hồ sơ sau 2–4 tuần để thấy khác biệt so với mốc này.
+            </p>
+            <div style={{ marginTop: 16 }}>
+              <Link href={`/clients/${clientId}/audit`} className="secondary-button">
+                Kiểm tra hồ sơ lại
+              </Link>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="rail-sub" style={{ margin: 0 }}>
+              Chưa có mốc ban đầu. Khi kiểm tra hồ sơ, hãy điền điểm đánh giá và số lượt đánh giá. Hệ thống sẽ lưu làm mốc để bạn thấy sự thay đổi sau này.
+            </p>
+            <div style={{ marginTop: 16 }}>
+              <Link href={`/clients/${clientId}/audit`} className="primary-button">
+                Kiểm tra hồ sơ <ArrowRight size={18} />
+              </Link>
+            </div>
+          </>
+        )}
       </Card>
     </>
   )

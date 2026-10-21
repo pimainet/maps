@@ -15,7 +15,7 @@ export default function NewWorkspacePage() {
 
   async function handleCreate() {
     if (!name.trim()) {
-      setError('Tên workspace là bắt buộc')
+      setError('Hãy nhập tên cho không gian làm việc')
       return
     }
     setError('')
@@ -27,8 +27,8 @@ export default function NewWorkspacePage() {
         body: JSON.stringify({ name }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Tạo workspace thất bại')
-      showToast('Đã tạo workspace mới')
+      if (!res.ok) throw new Error(data.error || 'Không tạo được không gian làm việc')
+      showToast('Đã tạo không gian làm việc mới')
       window.location.href = '/clients/new'
     } catch (err: any) {
       setError(err.message || 'Có lỗi xảy ra')
@@ -44,19 +44,19 @@ export default function NewWorkspacePage() {
           <BriefcaseBusiness size={21} />
         </div>
         <div>
-          <h2>Tạo workspace mới</h2>
-          <p>Workspace là nơi chứa toàn bộ khách hàng, lộ trình và nội dung của một đội nhóm. Bạn sẽ là owner.</p>
+          <h2>Tạo không gian làm việc</h2>
+          <p>Đây là nơi chứa doanh nghiệp, kế hoạch và bài viết của bạn và đội ngũ. Bạn sẽ là chủ sở hữu.</p>
         </div>
       </div>
 
       <label className="field wide">
         <span>
-          Tên workspace <em>*</em>
+          Tên không gian làm việc <em>*</em>
         </span>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ví dụ: Growth Studio" />
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ví dụ: Công ty Tâm An" />
       </label>
 
-      {error && <div style={{ color: '#b91c1c', background: '#fef2f2', padding: 12, borderRadius: 8, marginTop: 16 }}>{error}</div>}
+      {error && <div style={{ color: 'var(--danger)', background: 'var(--danger-soft)', padding: 12, borderRadius: 8, marginTop: 16 }}>{error}</div>}
 
       <div className="form-actions">
         <button className="secondary-button" onClick={() => router.push('/workspaces')} disabled={loading}>
@@ -64,10 +64,10 @@ export default function NewWorkspacePage() {
         </button>
         <button className="primary-button" onClick={handleCreate} disabled={loading}>
           {loading ? (
-            'Đang tạo...'
+            'Đang tạo…'
           ) : (
             <>
-              <Check size={17} /> Tạo workspace
+              <Check size={18} /> Tạo không gian
             </>
           )}
         </button>

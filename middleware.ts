@@ -38,7 +38,10 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/signup') ||
     pathname.startsWith('/auth') ||
     pathname.startsWith('/demo') ||
-    pathname.startsWith('/api/public/')
+    pathname.startsWith('/api/public/') ||
+    // Cron tự xác thực bằng CRON_SECRET; link hủy nhắc việc xác thực bằng chữ ký HMAC (người nhận chưa chắc đang đăng nhập)
+    pathname.startsWith('/api/cron/') ||
+    pathname.startsWith('/api/notifications/unsubscribe')
 
   // Chưa login mà vào trang bảo vệ → redirect về /login
   if (!user && !isPublic) {

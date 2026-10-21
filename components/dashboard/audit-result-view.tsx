@@ -28,7 +28,7 @@ export function AuditResultView({
             <span>/10</span>
           </div>
         </div>
-        <p style={{ margin: '0 0 18px', color: '#6b7280', fontSize: 13, lineHeight: 1.55 }}>{audit.overallNote}</p>
+        <p style={{ margin: '0 0 18px', color: 'var(--muted-foreground)', fontSize: 13, lineHeight: 1.55 }}>{audit.overallNote}</p>
         <div className="score-bars">
           {audit.groups.map((g) => (
             <div className="score-row" key={g.key}>
@@ -88,7 +88,7 @@ export function AuditResultView({
                 <Lock size={14} />
                 <h2 style={{ margin: 0 }}>{h.title}</h2>
               </div>
-              <p style={{ filter: 'blur(3px)', userSelect: 'none', color: '#6b7280', fontSize: 12 }}>{h.teaser}</p>
+              <p style={{ filter: 'blur(3px)', userSelect: 'none', color: 'var(--muted-foreground)', fontSize: 12 }}>{h.teaser}</p>
               <p style={{ marginTop: 10, fontSize: 12, fontWeight: 700, color: 'var(--primary)' }}>Mở khi chạy audit đầy đủ trong OS</p>
             </Card>
           ))}

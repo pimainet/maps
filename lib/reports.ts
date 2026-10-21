@@ -8,6 +8,7 @@
 // "hiện tại", cộng thêm tỉ lệ hoàn thành việc trong chu kỳ.
 import { createClient as createSupabaseServerClient } from '@/lib/supabase/server'
 import { getClientById, getLatestCycle, getTasks, getContents } from '@/lib/db'
+import { summarizeProgress, type ProgressSummary } from '@/lib/progress'
 
 export type ClientCycleReport = {
   client: { id: string; name: string }
@@ -25,6 +26,8 @@ export type ClientCycleReport = {
   current_captured_at: string | null
   has_enough_data: boolean
   tasks: { total: number; done: number; percent: number }
+  /** Tiến bộ chi tiết (theo loại việc, tuần này, mốc tiếp theo) tính từ cùng danh sách việc. */
+  progress: ProgressSummary
   content_published: number
 }
 
@@ -70,7 +73,7 @@ function round1(n: number | null | undefined): number | null {
 
 export async function getClientCycleReport(clientId: string, workspaceId: string): Promise<ClientCycleReport> {
   const client = await getClientById(clientId, workspaceId)
-  if (!client) throw new Error('Không tìm thấy khách hàng')
+  if (!client) throw new Error('Không tìm thấy doanh nghiệp này')
 
   const cycle = await getLatestCycle(clientId, workspaceId)
   const cycleStart = cycle?.started_at || null
@@ -138,6 +141,7 @@ export async function getClientCycleReport(clientId: string, workspaceId: string
       done: doneCount,
       percent: tasksInCycle.length > 0 ? Math.round((doneCount / tasksInCycle.length) * 100) : 0,
     },
+    progress: summarizeProgress(tasksInCycle),
     content_published: publishedInCycle,
   }
 }

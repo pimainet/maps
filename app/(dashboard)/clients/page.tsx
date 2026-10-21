@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { MoreHorizontal, Search } from 'lucide-react'
+import { ChevronRight, Search } from 'lucide-react'
 import { Card } from '@/components/dashboard/shared'
 
 export default function ClientsPage() {
@@ -35,26 +35,18 @@ export default function ClientsPage() {
       <div className="toolbar">
         <div className="search-field">
           <Search size={16} />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Tìm theo tên doanh nghiệp..." />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Tìm theo tên doanh nghiệp" aria-label="Tìm doanh nghiệp" />
         </div>
-        <select>
-          <option>Tất cả trạng thái</option>
-          <option>Đang hoạt động</option>
-          <option>Tạm dừng</option>
-        </select>
-        <button className="secondary-button">
-          <MoreHorizontal size={16} /> Bộ lọc khác
-        </button>
       </div>
 
-      {loading && <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>Đang tải danh sách khách hàng...</div>}
+      {loading && <div className="empty-note">Đang tải doanh nghiệp của bạn…</div>}
 
       {error && (
-        <div style={{ padding: 20, color: '#b91c1c', background: '#fef2f2', margin: 16, borderRadius: 8 }}>{error}</div>
+        <div style={{ padding: 20, color: 'var(--danger)', background: 'var(--danger-soft)', margin: 16, borderRadius: 8 }}>{error}</div>
       )}
 
       {!loading && !error && filtered.length === 0 && (
-        <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>Chưa có khách hàng nào. Hãy thêm khách hàng mới.</div>
+        <div className="empty-note">Chưa có doanh nghiệp nào. Bấm “Thêm doanh nghiệp” để bắt đầu.</div>
       )}
 
       {!loading && filtered.length > 0 && (
@@ -66,7 +58,7 @@ export default function ClientsPage() {
                 <th>Ngành / Khu vực</th>
                 <th>Số điện thoại</th>
                 <th>Người liên hệ</th>
-                <th>Cập nhật</th>
+                <th>Ngày thêm</th>
                 <th />
               </tr>
             </thead>
@@ -87,9 +79,7 @@ export default function ClientsPage() {
                   <td className="muted-cell">{c.contact_name || '—'}</td>
                   <td className="muted-cell">{c.created_at ? new Date(c.created_at).toLocaleDateString('vi-VN') : '—'}</td>
                   <td>
-                    <button className="icon-button">
-                      <MoreHorizontal size={17} />
-                    </button>
+                    <ChevronRight size={18} style={{ color: 'var(--faint)' }} />
                   </td>
                 </tr>
               ))}

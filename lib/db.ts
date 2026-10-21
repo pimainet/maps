@@ -482,13 +482,24 @@ export async function getTaskById(id: string, workspaceId?: string) {
 // workspace khác nếu biết id). Giờ có cả filter code lẫn RLS chặn.
 export async function updateTaskStatus(id: string, status: string, workspaceId?: string) {
   const supabase = await createSupabaseServerClient()
-  let query = supabase.from('tasks').update({ status }).eq('id', id)
 
-  if (workspaceId) {
-    query = query.eq('workspace_id', workspaceId)
+  const run = (patch: Record<string, unknown>) => {
+    let query = supabase.from('tasks').update(patch).eq('id', id)
+    if (workspaceId) {
+      query = query.eq('workspace_id', workspaceId)
+    }
+    return query.select().single()
   }
 
-  const { data, error } = await query.select().single()
+  // Ghi thêm ngày hoàn thành (hiện "tuần này bạn đã xong N việc"). Cột
+  // completed_at chỉ có sau migration 014 — nếu chưa chạy thì vẫn phải cập
+  // nhật được trạng thái như trước, không được làm hỏng việc đánh dấu xong.
+  const completedAt = status === 'done' ? new Date().toISOString() : null
+  let { data, error } = await run({ status, completed_at: completedAt })
+  if (error && (error.code === 'PGRST204' || error.code === '42703' || /completed_at/.test(error.message || ''))) {
+    ;({ data, error } = await run({ status }))
+  }
+
   if (error) throw error
   return data
 }
