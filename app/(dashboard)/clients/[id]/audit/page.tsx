@@ -1,5 +1,6 @@
 'use client'
 
+import { snapshotToAuditFields, mergeGbpBlock } from '@/lib/gbp-audit-fields'
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
@@ -73,24 +74,19 @@ export default function ClientAuditPage() {
       if (!res.ok) throw new Error(data.error || 'Không lấy được dữ liệu')
 
       const s = data.snapshot || {}
+      const f = snapshotToAuditFields(s)
       setForm((prev) => ({
         ...prev,
-        description: s.description || prev.description,
-        primary_category: s.primary_category || prev.primary_category,
-        review_count: s.review_count != null && s.review_count !== '' ? String(s.review_count) : prev.review_count,
-        rating: s.rating != null && s.rating !== '' ? String(s.rating) : prev.rating,
-        recent_posts: s.posts_signal || prev.recent_posts,
-        photos_status: s.photos_signal || prev.photos_status,
-        additional_info: [
-          prev.additional_info,
-          s.address_text ? `Địa chỉ (Maps): ${s.address_text}` : '',
-          s.phone ? `SĐT (Maps): ${s.phone}` : '',
-          Array.isArray(s.recent_posts) && s.recent_posts.length
-            ? 'Bài đăng:\n' + s.recent_posts.map((p: any, i: number) => `${i + 1}. ${(p.text || '').slice(0, 120)}`).join('\n')
-            : '',
-        ]
-          .filter(Boolean)
-          .join('\n'),
+        description: f.description || prev.description,
+        primary_category: f.primary_category || prev.primary_category,
+        // chỉ điền khi trang Maps thực sự hiển thị danh mục phụ; không thì giữ nguyên ô đang có
+        additional_categories: f.additional_categories || prev.additional_categories,
+        review_count: f.review_count ?? prev.review_count,
+        rating: f.rating ?? prev.rating,
+        recent_posts: f.recent_posts || prev.recent_posts,
+        photos_status: f.photos_status || prev.photos_status,
+        // thay khối dữ liệu Maps cũ (nếu có) thay vì nối thêm -> bấm nhiều lần không bị lặp
+        additional_info: f.additional_info ? mergeGbpBlock(prev.additional_info, f.additional_info) : prev.additional_info,
       }))
       showToast(data.message || 'Đã chạy quan sát')
     } catch (err: any) {
@@ -163,7 +159,7 @@ export default function ClientAuditPage() {
           </button>
           {fetching && (
             <span style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>
-              Đang đọc hồ sơ trên Google Maps. Việc này mất 20–40 giây, bạn đừng tắt trang.
+              Đang đọc hồ sơ trên Google Maps. Agent đọc từng tab (tổng quan, giới thiệu, đánh giá, bài đăng, ảnh) nên mất khoảng 1–2 phút, bạn đừng tắt trang.
             </span>
           )}
         </div>

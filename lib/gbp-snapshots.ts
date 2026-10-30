@@ -56,22 +56,65 @@ export async function updateSnapshot(
     reviews?: unknown
     competitors?: unknown
     raw_json?: unknown
+    // cột mới (migration 015)
+    opening_hours?: string | null
+    additional_categories?: string | null
+    services?: unknown
+    attributes?: unknown
+    action_links?: unknown
+    photo_categories?: unknown
+    business_status?: string | null
+    claim_signal?: string | null
+    rating_distribution?: unknown
+    review_stats?: unknown
+    coverage?: unknown
   }
 ) {
   const supabase = await createSupabaseServerClient()
-  const { data, error } = await supabase
-    .from('gbp_snapshots')
-    .update({
-      ...patch,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', id)
-    .eq('workspace_id', workspaceId)
-    .select()
-    .single()
+
+  const run = (body: Record<string, unknown>) =>
+    supabase
+      .from('gbp_snapshots')
+      .update({ ...body, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('workspace_id', workspaceId)
+      .select()
+      .single()
+
+  let { data, error } = await run(patch)
+
+  // Chưa chạy migration 015 -> PostgREST báo thiếu cột. Lưu lại phần cột cũ thay vì làm hỏng cả lần quan sát.
+  if (error && isMissingColumnError(error)) {
+    const legacy: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(patch)) {
+      if (!NEW_COLUMNS.has(k)) legacy[k] = v
+    }
+    console.warn('gbp_snapshots: thiếu cột migration 015, chỉ lưu cột cũ.')
+    ;({ data, error } = await run(legacy))
+  }
 
   if (error) throw error
   return data
+}
+
+const NEW_COLUMNS = new Set([
+  'opening_hours',
+  'additional_categories',
+  'services',
+  'attributes',
+  'action_links',
+  'photo_categories',
+  'business_status',
+  'claim_signal',
+  'rating_distribution',
+  'review_stats',
+  'coverage',
+])
+
+function isMissingColumnError(err: any): boolean {
+  const code = String(err?.code || '')
+  const msg = String(err?.message || '')
+  return code === 'PGRST204' || code === '42703' || /column .* (does not exist|of relation)|Could not find the '.*' column/i.test(msg)
 }
 
 export async function getLatestSnapshotForClient(
@@ -112,58 +155,17 @@ export async function getFreshSnapshotForClient(
   })
   if (!latest?.captured_at) return null
 
+  // Snapshot cũ do agent đọc nông (chưa có coverage) -> coi như hết hạn để lần sau chạy agent mới.
+  // Chỉ áp dụng khi cột coverage đã tồn tại (đã chạy migration 015), tránh chạy lại mãi khi chưa migrate.
+  if ('coverage' in latest && !latest.coverage) return null
+
   const captured = new Date(latest.captured_at).getTime()
   const maxAge = GBP_SNAPSHOT_CACHE_DAYS * 24 * 60 * 60 * 1000
   if (Date.now() - captured > maxAge) return null
   return latest
 }
 
-export function snapshotToAuditFields(snapshot: any): {
-  description?: string
-  primary_category?: string
-  review_count?: string
-  rating?: string
-  recent_posts?: string
-  photos_status?: string
-  additional_info?: string
-} {
-  if (!snapshot) return {}
-
-  const posts = Array.isArray(snapshot.recent_posts)
-    ? snapshot.recent_posts
-    : []
-  const postsPreview =
-    posts.length > 0
-      ? posts
-          .slice(0, 3)
-          .map((p: any, i: number) => `${i + 1}. ${(p.text || '').slice(0, 120)}`)
-          .join('\n')
-      : ''
-
-  const additionalParts: string[] = []
-  if (snapshot.posts_signal) {
-    additionalParts.push(`Tín hiệu bài đăng (quan sát): ${snapshot.posts_signal}`)
-  }
-  if (postsPreview) {
-    additionalParts.push(`Bài gần đây:\n${postsPreview}`)
-  }
-  if (snapshot.photos_signal) {
-    additionalParts.push(`Tín hiệu ảnh: ${snapshot.photos_signal}`)
-  }
-
-  return {
-    description: snapshot.description || undefined,
-    primary_category: snapshot.primary_category || undefined,
-    review_count:
-      snapshot.review_count != null ? String(snapshot.review_count) : undefined,
-    rating: snapshot.rating != null ? String(snapshot.rating) : undefined,
-    recent_posts: snapshot.posts_signal || undefined,
-    photos_status: snapshot.photos_signal || undefined,
-    additional_info: additionalParts.length
-      ? additionalParts.join('\n\n')
-      : undefined,
-  }
-}
+export { snapshotToAuditFields } from '@/lib/gbp-audit-fields'
 
 export type { GbpSnapshotPayload }
 

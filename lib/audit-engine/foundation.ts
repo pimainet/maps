@@ -34,7 +34,48 @@ function checkF01(input: AuditInput): CheckResult {
  * F02 — Trạng thái profile. Hệ thống hiện CHƯA thu thập observedFlags (dấu hiệu
  * hạn chế/bị từ chối nội dung...) — đúng nguyên tắc, trả insufficient thay vì suy diễn.
  */
-function checkF02(): CheckResult {
+function checkF02(input: AuditInput): CheckResult {
+  const s = input.snapshot
+  const st = s.business_status
+  if (st === 'permanently_closed' || st === 'temporarily_closed') {
+    return {
+      id: 'F02',
+      group: 'foundation',
+      label: 'Trạng thái profile',
+      severity: 'critical',
+      confidence: 'verified',
+      passed: false,
+      message:
+        st === 'permanently_closed'
+          ? 'Google đang hiển thị hồ sơ là ĐÓNG CỬA VĨNH VIỄN.'
+          : 'Google đang hiển thị hồ sơ là TẠM THỜI ĐÓNG CỬA.',
+      action:
+        'Nếu doanh nghiệp vẫn hoạt động, cập nhật lại trạng thái trong Business Profile ngay — hồ sơ bị đánh dấu đóng cửa gần như không nhận được khách từ Maps.',
+    }
+  }
+  if (s.claim_signal === 'unclaimed') {
+    return {
+      id: 'F02',
+      group: 'foundation',
+      label: 'Trạng thái profile',
+      severity: 'critical',
+      confidence: 'estimated',
+      passed: false,
+      message: 'Trên hồ sơ còn nút "Nhận quyền sở hữu doanh nghiệp này" — hồ sơ có thể chưa được xác nhận/quản lý.',
+      action: 'Xác minh quyền sở hữu hồ sơ để chỉnh sửa thông tin, đăng bài và trả lời review.',
+    }
+  }
+  if (st === 'operational') {
+    return {
+      id: 'F02',
+      group: 'foundation',
+      label: 'Trạng thái profile',
+      severity: 'critical',
+      confidence: 'estimated',
+      passed: true,
+      message: 'Hồ sơ đang hoạt động; không thấy dấu hiệu chưa xác nhận quyền sở hữu.',
+    }
+  }
   return insufficient('F02', 'Trạng thái profile', 'critical')
 }
 
@@ -176,5 +217,5 @@ function checkF07(input: AuditInput): CheckResult {
 }
 
 export function runFoundationChecks(input: AuditInput): CheckResult[] {
-  return [checkF01(input), checkF02(), checkF03(input), checkF04(input), checkF05(input), checkF06(input), checkF07(input)]
+  return [checkF01(input), checkF02(input), checkF03(input), checkF04(input), checkF05(input), checkF06(input), checkF07(input)]
 }

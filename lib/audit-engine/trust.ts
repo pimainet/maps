@@ -61,12 +61,25 @@ function checkT02(input: AuditInput): CheckResult {
 }
 
 /**
- * T03 — Review Recency: cần timestamp review gần nhất, snapshot hiện tại
- * KHÔNG thu thập trường này (chỉ có review_count tổng, không có review
- * riêng lẻ kèm ngày).
+ * T03 — Review Recency: dựa trên review_stats do agent tính từ tab Bài đánh giá
+ * (tuổi review mới nhất). Không có review_stats (vd chỉ có Places) -> insufficient.
  */
-function checkT03(): CheckResult {
-  return insufficient('T03', 'Review Recency', 'high')
+function checkT03(input: AuditInput): CheckResult {
+  const st = input.snapshot.review_stats
+  if (!st || st.newest_age_days == null) return insufficient('T03', 'Review Recency', 'high')
+  const ok = st.newest_age_days <= 45
+  return {
+    id: 'T03',
+    group: 'trust',
+    label: 'Review Recency',
+    severity: 'high',
+    confidence: 'estimated',
+    passed: ok,
+    message: `Review mới nhất cách đây khoảng ${st.newest_age_days} ngày${
+      st.last_90d != null ? `; ${st.window_complete ? '' : 'ít nhất '}${st.last_90d} review trong 90 ngày gần đây` : ''
+    }.`,
+    action: ok ? undefined : 'Review mới đã thưa — đặt quy trình xin review đều đặn sau mỗi lượt phục vụ.',
+  }
 }
 
 /** T04 — Review Velocity: dùng lịch sử thật từ bảng gbp_snapshots nếu caller truyền vào (cần ≥2 điểm). */
@@ -94,18 +107,29 @@ function checkT04(input: AuditInput): CheckResult {
 }
 
 /**
- * T05 — Review Response: cần nội dung PHẢN HỒI của chủ doanh nghiệp.
- * Places API (New) — nguồn chính thức duy nhất đang dùng — KHÔNG trả
- * trường này (xem ghi chú trong gbp-snapshot-types.ts). Muốn làm thật cần
- * Google Business Profile API (OAuth + khách xác minh quyền sở hữu hồ sơ) —
- * ngoài phạm vi snapshot public hiện tại. Giữ insufficient, KHÔNG suy diễn.
+ * T05 — Review Response: tỉ lệ review (trong số đã tải từ tab Bài đánh giá) có phản hồi của chủ.
+ * Cần ≥5 review từ browser; Places API không có phản hồi nên không dùng được cho check này.
  */
-function checkT05(): CheckResult {
+function checkT05(input: AuditInput): CheckResult {
+  const st = input.snapshot.review_stats
+  if (!st || st.loaded < 5 || st.reply_rate == null) {
+    return {
+      ...insufficient('T05', 'Review Response', 'high'),
+      message: 'Chưa đọc đủ review (cần ≥5 từ tab Bài đánh giá) để tính tỉ lệ chủ phản hồi.',
+    }
+  }
+  const ok = st.reply_rate >= 0.5
   return {
-    ...insufficient('T05', 'Review Response', 'high'),
-    message:
-      'Cần nội dung phản hồi của chủ doanh nghiệp — Places API (nguồn hiện tại) không cung cấp trường này. ' +
-      'Cần tích hợp Google Business Profile API (OAuth, khách phải xác minh quyền sở hữu hồ sơ) để làm thật.',
+    id: 'T05',
+    group: 'trust',
+    label: 'Review Response',
+    severity: 'high',
+    confidence: 'estimated',
+    passed: ok,
+    message: `Chủ phản hồi ${st.replied}/${st.loaded} review gần nhất (${Math.round(st.reply_rate * 100)}%).`,
+    action: ok
+      ? undefined
+      : 'Tỉ lệ phản hồi review còn thấp — trả lời mọi review, ưu tiên review thấp sao trước, giọng chuyên nghiệp.',
   }
 }
 
@@ -128,7 +152,7 @@ async function checkT06(input: AuditInput, ai: AIClassifier): Promise<CheckResul
   if (!reviews || reviews.length < 3) {
     return {
       ...insufficient('T06', 'Review Insight', 'medium'),
-      message: `Chỉ có ${reviews?.length ?? 0} review (Places API giới hạn ~5 review/lượt) — chưa đủ để rút pattern đáng tin.`,
+      message: `Chỉ có ${reviews?.length ?? 0} review (Places API chỉ trả ~5 review; tab Bài đánh giá chưa đọc được) — chưa đủ để rút pattern đáng tin.`,
     }
   }
 
@@ -172,5 +196,5 @@ async function checkT06(input: AuditInput, ai: AIClassifier): Promise<CheckResul
 
 export async function runTrustChecks(input: AuditInput, ai: AIClassifier): Promise<CheckResult[]> {
   const t06 = await checkT06(input, ai)
-  return [checkT01(input), checkT02(input), checkT03(), checkT04(input), checkT05(), t06]
+  return [checkT01(input), checkT02(input), checkT03(input), checkT04(input), checkT05(input), t06]
 }

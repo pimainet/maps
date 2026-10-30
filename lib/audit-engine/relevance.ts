@@ -62,8 +62,23 @@ function checkR02(): CheckResult {
 }
 
 /** R03 — Services: trường `services` KHÔNG có trong GbpSnapshotPayload hiện tại. */
-function checkR03(): CheckResult {
-  return insufficient('R03', 'Services', 'medium')
+function checkR03(input: AuditInput): CheckResult {
+  const services = input.snapshot.services
+  if (!services || services.length === 0) {
+    // Nhiều ngành không hiển thị dịch vụ công khai -> rỗng KHÔNG đồng nghĩa với thiếu
+    return insufficient('R03', 'Services', 'medium')
+  }
+  const ok = services.length >= 3
+  return {
+    id: 'R03',
+    group: 'relevance',
+    label: 'Services',
+    severity: 'medium',
+    confidence: 'estimated',
+    passed: ok,
+    message: `Hồ sơ liệt kê ${services.length} dịch vụ/sản phẩm: ${services.slice(0, 6).join(', ')}${services.length > 6 ? '…' : ''}.`,
+    action: ok ? undefined : 'Mới liệt kê rất ít dịch vụ — thêm đủ các dịch vụ chính, kèm mô tả ngắn, theo cách khách hay tìm.',
+  }
 }
 
 interface DescriptionAssessment {
@@ -120,11 +135,24 @@ async function checkR04(input: AuditInput, ai: AIClassifier): Promise<CheckResul
 }
 
 /** R05 — Attributes: trường `attributes` KHÔNG có trong GbpSnapshotPayload hiện tại. */
-function checkR05(): CheckResult {
-  return insufficient('R05', 'Attributes', 'low')
+function checkR05(input: AuditInput): CheckResult {
+  const groups = input.snapshot.attributes
+  const total = (groups || []).reduce((n, g) => n + g.items.length, 0)
+  if (!groups || total === 0) return insufficient('R05', 'Attributes', 'low')
+  const ok = total >= 3
+  return {
+    id: 'R05',
+    group: 'relevance',
+    label: 'Attributes',
+    severity: 'low',
+    confidence: 'estimated',
+    passed: ok,
+    message: `Hồ sơ có ${total} thuộc tính/tiện ích (${groups.map((g) => g.group).slice(0, 4).join(', ')}).`,
+    action: ok ? undefined : 'Bổ sung thêm thuộc tính phù hợp (thanh toán, tiện ích, đối tượng phục vụ…).',
+  }
 }
 
 export async function runRelevanceChecks(input: AuditInput, ai: AIClassifier): Promise<CheckResult[]> {
   const [r01, r04] = await Promise.all([checkR01(input, ai), checkR04(input, ai)])
-  return [r01, checkR02(), checkR03(), r04, checkR05()]
+  return [r01, checkR02(), checkR03(input), r04, checkR05(input)]
 }
