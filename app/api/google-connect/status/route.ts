@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { publicError } from '@/lib/api-error'
 import { requireActiveWorkspaceId } from '@/lib/auth'
 import { getGoogleConnection } from '@/lib/db'
 
@@ -23,6 +24,6 @@ export async function GET(req: Request) {
     })
   } catch (error: any) {
     const status = error.message?.includes('Unauthorized') ? 401 : error.message?.includes('NoWorkspace') ? 409 : 500
-    return NextResponse.json({ error: error.message || 'Lỗi kiểm tra kết nối.' }, { status })
+    return NextResponse.json({ error: publicError(error, 'Lỗi kiểm tra kết nối.') }, { status })
   }
 }

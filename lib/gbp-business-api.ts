@@ -163,7 +163,8 @@ export async function createLocalPost(
 
   if (!res.ok) {
     const body = await res.text().catch(() => '')
-    throw new GbpApiError(`Đăng bài thất bại (${res.status}): ${body}`, 'api_error')
+    console.error('Google localPosts.create failed:', res.status, body.slice(0, 300))
+    throw new GbpApiError(`Đăng bài thất bại (mã ${res.status}). Vui lòng thử lại sau.`, 'api_error')
   }
 
   const data = await res.json()

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { publicError } from '@/lib/api-error'
 import { getTasks } from '@/lib/db'
 import { requireActiveWorkspaceId } from '@/lib/auth'
 
@@ -12,6 +13,6 @@ export async function GET(req: Request) {
     return NextResponse.json(data)
   } catch (error: any) {
     const status = error.message?.includes('Unauthorized') ? 401 : error.message?.includes('NoWorkspace') ? 409 : 500
-    return NextResponse.json({ error: error.message }, { status })
+    return NextResponse.json({ error: publicError(error) }, { status })
   }
 }

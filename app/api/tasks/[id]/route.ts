@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { publicError } from '@/lib/api-error'
 import { getTaskById, updateTaskStatus } from '@/lib/db'
 import { requireActiveWorkspaceId } from '@/lib/auth'
 
@@ -15,7 +16,7 @@ export async function GET(
     return NextResponse.json(data)
   } catch (error: any) {
     const status = error.message?.includes('Unauthorized') ? 401 : error.message?.includes('NoWorkspace') ? 409 : 404
-    return NextResponse.json({ error: error.message }, { status })
+    return NextResponse.json({ error: publicError(error) }, { status })
   }
 }
 
@@ -40,7 +41,7 @@ export async function PATCH(
     const status = error.message?.includes('Unauthorized') ? 401 : error.message?.includes('NoWorkspace') ? 409 : 500
     return NextResponse.json(
       {
-        error: `${error.message} (kiểm tra đã chạy migration thêm cột status vào bảng tasks chưa)`,
+        error: publicError(error, 'Không cập nhật được trạng thái công việc.'),
       },
       { status }
     )

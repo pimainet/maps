@@ -7,6 +7,7 @@
  */
 
 import { NextResponse } from 'next/server'
+import { publicError } from '@/lib/api-error'
 import { requireActiveWorkspaceId } from '@/lib/auth'
 import { getClientById } from '@/lib/db'
 import {
@@ -231,12 +232,13 @@ export async function POST(req: Request) {
     } catch (err: any) {
       const failed = await updateSnapshot(pending.id, workspaceId, {
         status: 'failed',
-        error_message: err?.message || String(err),
+        error_message: 'Không đọc được hồ sơ Google Maps lần này.',
       })
+      console.error('gbp-snapshot run failed:', err?.message || err)
       return NextResponse.json(
         {
           snapshot: failed,
-          error: err?.message || 'Lỗi khi quan sát GBP',
+          error: 'Lỗi khi quan sát GBP. Vui lòng thử lại sau.',
           diagnostics: sanitizeDiagnostics({
             ...diagnostics,
             run_error: err?.message || String(err),
@@ -254,7 +256,7 @@ export async function POST(req: Request) {
           ? 429
           : 500
     return NextResponse.json(
-      { error: error.message, diagnostics: sanitizeDiagnostics(diagnostics) },
+      { error: publicError(error), diagnostics: sanitizeDiagnostics(diagnostics) },
       { status }
     )
   }
@@ -273,6 +275,6 @@ export async function GET(req: Request) {
     return NextResponse.json({ snapshot })
   } catch (error: any) {
     const status = error.message?.includes('Unauthorized') ? 401 : 500
-    return NextResponse.json({ error: error.message }, { status })
+    return NextResponse.json({ error: publicError(error) }, { status })
   }
 }

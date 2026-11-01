@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { publicError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
 import { requireActiveWorkspaceId, requireActiveWorkspaceAdmin } from '@/lib/auth'
 
@@ -43,7 +44,7 @@ export async function GET() {
 
     return NextResponse.json(result)
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: statusFor(error) })
+    return NextResponse.json({ error: publicError(error) }, { status: statusFor(error) })
   }
 }
 
@@ -53,7 +54,7 @@ export async function POST(req: Request) {
   try {
     const workspaceId = await requireActiveWorkspaceAdmin()
     const body = await req.json()
-    const email = (body.email || '').trim()
+    const email = typeof body.email === 'string' ? body.email.trim().slice(0, 254) : ''
     const role = ['member', 'admin'].includes(body.role) ? body.role : 'member'
 
     if (!email) {
@@ -62,7 +63,10 @@ export async function POST(req: Request) {
 
     const supabase = await createClient()
 
-    const { data: userId, error: lookupError } = await supabase.rpc(
+    // Hàm tra email chỉ cấp cho service_role (migration 017). Quyền admin đã được
+    // kiểm tra ở requireActiveWorkspaceAdmin() phía trên.
+    const { supabaseAdmin } = await import('@/lib/supabase/admin')
+    const { data: userId, error: lookupError } = await supabaseAdmin.rpc(
       'find_user_id_by_email',
       { p_email: email }
     )
@@ -93,6 +97,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json(data)
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: statusFor(error) })
+    return NextResponse.json({ error: publicError(error) }, { status: statusFor(error) })
   }
 }

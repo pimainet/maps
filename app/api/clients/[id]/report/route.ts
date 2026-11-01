@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { publicError } from '@/lib/api-error'
 import { requireActiveWorkspaceId } from '@/lib/auth'
 import { getClientCycleReport } from '@/lib/reports'
 
@@ -16,6 +17,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         : error.message?.includes('Không tìm thấy')
           ? 404
           : 500
-    return NextResponse.json({ error: error.message }, { status })
+    return NextResponse.json({ error: publicError(error) }, { status })
   }
 }

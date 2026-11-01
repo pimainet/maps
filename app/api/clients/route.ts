@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { publicError } from '@/lib/api-error'
 import {
   getClients,
   createClient,
@@ -23,7 +24,7 @@ export async function GET() {
       : error.message?.includes('NoWorkspace')
         ? 409
         : 500
-    return NextResponse.json({ error: error.message }, { status })
+    return NextResponse.json({ error: publicError(error) }, { status })
   }
 }
 
@@ -116,6 +117,6 @@ export async function POST(req: Request) {
       : error.message?.includes('NoWorkspace')
         ? 409
         : 500
-    return NextResponse.json({ error: error.message }, { status })
+    return NextResponse.json({ error: publicError(error) }, { status })
   }
 }

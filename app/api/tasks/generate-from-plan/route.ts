@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { publicError } from '@/lib/api-error'
 import { askClaude } from '@/lib/claude'
 import { createTasks, getClientById, findClientInWorkspace, findPlanInWorkspace, getTasks, getActiveCycle, openCycle, updateCycle } from '@/lib/db'
 import { TASKS_FROM_PLAN_PROMPT } from '@/lib/prompts'
@@ -332,6 +333,6 @@ export async function POST(req: Request) {
         : error.message?.includes('RateLimited')
           ? 429
           : 500
-    return NextResponse.json({ error: error.message }, { status })
+    return NextResponse.json({ error: publicError(error) }, { status })
   }
 }

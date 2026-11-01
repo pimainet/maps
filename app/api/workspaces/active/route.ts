@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { publicError } from '@/lib/api-error'
 import { getCurrentUser, setActiveWorkspaceId, getActiveWorkspaceId } from '@/lib/auth'
 
 export async function GET() {
@@ -10,7 +11,7 @@ export async function GET() {
     const activeWorkspaceId = await getActiveWorkspaceId()
     return NextResponse.json({ activeWorkspaceId })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: publicError(error) }, { status: 500 })
   }
 }
 
@@ -37,6 +38,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true, activeWorkspaceId: workspaceId })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: publicError(error) }, { status: 500 })
   }
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { publicError } from '@/lib/api-error'
 import { requireActiveWorkspaceId } from '@/lib/auth'
 import { getClientById } from '@/lib/db'
 import { buildAuthorizationUrl, createOAuthState } from '@/lib/google-oauth'
@@ -41,6 +42,6 @@ export async function GET(req: Request) {
     return response
   } catch (error: any) {
     const status = error.message?.includes('Unauthorized') ? 401 : error.message?.includes('NoWorkspace') ? 409 : 500
-    return NextResponse.json({ error: error.message || 'Lỗi bắt đầu kết nối Google.' }, { status })
+    return NextResponse.json({ error: publicError(error, 'Lỗi bắt đầu kết nối Google.') }, { status })
   }
 }

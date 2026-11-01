@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { publicError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
 import { getActiveWorkspaceRole, isSuperAdmin, requireActiveWorkspaceAdmin } from '@/lib/auth'
 import { readJsonObject } from '@/lib/request-body'
@@ -70,7 +71,7 @@ export async function PATCH(
     if (error) throw error
     return NextResponse.json(data)
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: statusFor(error) })
+    return NextResponse.json({ error: publicError(error) }, { status: statusFor(error) })
   }
 }
 
@@ -125,6 +126,6 @@ export async function DELETE(
     if (error) throw error
     return NextResponse.json({ ok: true })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: statusFor(error) })
+    return NextResponse.json({ error: publicError(error) }, { status: statusFor(error) })
   }
 }

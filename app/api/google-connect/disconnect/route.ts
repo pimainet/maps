@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { publicError } from '@/lib/api-error'
 import { requireActiveWorkspaceId } from '@/lib/auth'
 import { deleteGoogleConnection } from '@/lib/db'
 
@@ -25,6 +26,6 @@ export async function POST(req: Request) {
     })
   } catch (error: any) {
     const status = error.message?.includes('Unauthorized') ? 401 : error.message?.includes('NoWorkspace') ? 409 : 500
-    return NextResponse.json({ error: error.message || 'Lỗi ngắt kết nối.' }, { status })
+    return NextResponse.json({ error: publicError(error, 'Lỗi ngắt kết nối.') }, { status })
   }
 }

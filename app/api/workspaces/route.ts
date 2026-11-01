@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { publicError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
 import { getUserWorkspaces, getCurrentUser, setActiveWorkspaceId } from '@/lib/auth'
 import { readJsonObject } from '@/lib/request-body'
@@ -19,7 +20,7 @@ export async function GET() {
       }))
     )
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: publicError(error) }, { status: 500 })
   }
 }
 

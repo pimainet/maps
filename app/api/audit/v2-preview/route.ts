@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { publicError } from '@/lib/api-error'
 import { requireActiveWorkspaceId } from '@/lib/auth'
 import { checkAiRateLimit, recordAiUsage } from '@/lib/rate-limit'
 import { getClientById, saveAuditV2, getAuditV2History } from '@/lib/db'
@@ -65,7 +66,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: true, history, diff })
   } catch (error: any) {
     const status = error.message?.includes('Unauthorized') ? 401 : error.message?.includes('NoWorkspace') ? 409 : 500
-    return NextResponse.json({ error: error.message || 'Lỗi lấy lịch sử audit v2.' }, { status })
+    return NextResponse.json({ error: publicError(error, 'Lỗi lấy lịch sử audit v2.') }, { status })
   }
 }
 
@@ -185,6 +186,6 @@ export async function POST(req: Request) {
         : error.message?.includes('RateLimited')
           ? 429
           : 500
-    return NextResponse.json({ error: error.message || 'Lỗi chạy audit v2 preview.' }, { status })
+    return NextResponse.json({ error: publicError(error, 'Lỗi chạy audit v2 preview.') }, { status })
   }
 }

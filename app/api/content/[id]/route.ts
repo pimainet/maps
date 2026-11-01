@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { publicError } from '@/lib/api-error'
 import {
   getContentById,
   updateContentStatus,
@@ -52,7 +53,7 @@ export async function GET(
       : error.message?.includes('NoWorkspace')
         ? 409
         : 404
-    return NextResponse.json({ error: error.message }, { status })
+    return NextResponse.json({ error: publicError(error) }, { status })
   }
 }
 
@@ -162,6 +163,6 @@ export async function PATCH(
       : error.message?.includes('NoWorkspace')
         ? 409
         : 500
-    return NextResponse.json({ error: error.message }, { status })
+    return NextResponse.json({ error: publicError(error) }, { status })
   }
 }

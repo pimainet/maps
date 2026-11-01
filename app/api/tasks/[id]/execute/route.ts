@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { publicError } from '@/lib/api-error'
 import { requireActiveWorkspaceId } from '@/lib/auth'
 import {
   getTaskById,
@@ -112,9 +113,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       // Lỗi đã được phân loại rõ (not_verified/posts_disabled/token_revoked) —
       // trả thẳng message tiếng Việt đã viết sẵn cho khách đọc được, không
       // phải lỗi kỹ thuật mù mờ.
-      return NextResponse.json({ error: error.message, code: error.code }, { status: 422 })
+      return NextResponse.json({ error: publicError(error), code: error.code }, { status: 422 })
     }
     const status = error.message?.includes('Unauthorized') ? 401 : error.message?.includes('NoWorkspace') ? 409 : 500
-    return NextResponse.json({ error: error.message || 'Lỗi thực thi công việc.' }, { status })
+    return NextResponse.json({ error: publicError(error, 'Lỗi thực thi công việc.') }, { status })
   }
 }

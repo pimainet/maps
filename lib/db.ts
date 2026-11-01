@@ -72,7 +72,8 @@ export async function getClientById(id: string, workspaceId?: string) {
     query = query.eq('workspace_id', workspaceId)
   }
 
-  const { data, error } = await query.single()
+  // maybeSingle: không có dòng nào -> null (caller tự trả 404), thay vì ném lỗi PGRST116.
+  const { data, error } = await query.maybeSingle()
   if (error) throw error
   return data
 }

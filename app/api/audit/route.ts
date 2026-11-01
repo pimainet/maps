@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { publicError } from '@/lib/api-error'
 import { askClaude } from '@/lib/claude'
 import { saveAudit, getLatestAuditByClient, getAllAudits, findClientInWorkspace } from '@/lib/db'
 import { AUDIT_PROMPT } from '@/lib/prompts'
@@ -29,7 +30,7 @@ export async function GET(req: Request) {
         : error.message?.includes('RateLimited')
           ? 429
           : 500
-    return NextResponse.json({ error: error.message }, { status })
+    return NextResponse.json({ error: publicError(error) }, { status })
   }
 }
 
@@ -119,6 +120,6 @@ export async function POST(req: Request) {
         : error.message?.includes('RateLimited')
           ? 429
           : 500
-    return NextResponse.json({ error: error.message }, { status })
+    return NextResponse.json({ error: publicError(error) }, { status })
   }
 }
