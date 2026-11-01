@@ -24,7 +24,7 @@ export async function GET() {
 }
 
 // Tạo workspace bằng user session để trigger on_workspace_created có auth.uid().
-// Database cần có policy INSERT phù hợp; các migration đóng gói hiện chưa định nghĩa policy này.
+// Migration 016 cho phép tạo workspace free và chặn client tự gán gói trả phí.
 export async function POST(req: Request) {
   try {
     const user = await getCurrentUser()

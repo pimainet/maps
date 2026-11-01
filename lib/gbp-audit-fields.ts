@@ -159,19 +159,27 @@ export function snapshotToAuditFields(snapshot: any): {
   additional_categories?: string
   review_count?: string
   rating?: string
+  opening_hours?: string
   recent_posts?: string
   photos_status?: string
   additional_info?: string
 } {
   if (!snapshot) return {}
   const block = buildGbpObservationBlock(snapshot)
+  const posts = Array.isArray(snapshot.recent_posts)
+    ? snapshot.recent_posts
+        .filter((post: any) => post?.text)
+        .slice(0, 8)
+        .map((post: any, index: number) => `${index + 1}. ${post.approx_date ? `[${clip(post.approx_date, 30)}] ` : ''}${clip(post.text, 500)}`)
+    : []
   return {
     description: snapshot.description || undefined,
     primary_category: snapshot.primary_category || undefined,
     additional_categories: snapshot.additional_categories || undefined,
     review_count: snapshot.review_count != null ? String(snapshot.review_count) : undefined,
     rating: snapshot.rating != null ? String(snapshot.rating) : undefined,
-    recent_posts: snapshot.posts_signal || undefined,
+    opening_hours: snapshot.opening_hours || snapshot.hours_today || undefined,
+    recent_posts: posts.length ? posts.join('\n') : snapshot.posts_signal || 'Chưa đọc thấy bài đăng trong lần quan sát này.',
     photos_status: snapshot.photos_signal || undefined,
     additional_info: block || undefined,
   }

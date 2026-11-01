@@ -66,6 +66,9 @@ export async function PATCH(
     const body = await req.json()
 
     let updatedStatus = null
+    const hasFinalContent = typeof body.final_content === 'string'
+    let existingContent: any = null
+    let latestHistory: any = null
     if (body.status !== undefined) {
       if (!ALLOWED_STATUS.includes(body.status)) {
         return NextResponse.json(
@@ -76,12 +79,12 @@ export async function PATCH(
 
       // published = xác nhận đã đăng trên Google → bắt buộc có nội dung
       if (body.status === 'published') {
-        const existing = await getContentById(id, workspaceId)
-        const latest = await getLatestContentHistory(id, workspaceId)
+        existingContent = await getContentById(id, workspaceId)
+        latestHistory = await getLatestContentHistory(id, workspaceId)
         const text =
-          (typeof body.final_content === 'string' && body.final_content.trim()) ||
-          latest?.human_edited_version ||
-          latest?.ai_version ||
+          (hasFinalContent && body.final_content.trim()) ||
+          latestHistory?.human_edited_version ||
+          latestHistory?.ai_version ||
           ''
         if (!text.trim()) {
           return NextResponse.json(
@@ -94,27 +97,13 @@ export async function PATCH(
         }
       }
 
-      updatedStatus = await updateContentStatus(id, body.status, workspaceId)
-
-      if (body.status === 'published' && typeof body.final_content !== 'string') {
-        const content = updatedStatus || (await getContentById(id, workspaceId))
-        const latest = await getLatestContentHistory(id, workspaceId)
-        await saveContentHistory({
-          content_id: id,
-          client_id: content.client_id,
-          ai_version: latest?.ai_version ?? '',
-          human_edited_version:
-            latest?.human_edited_version || latest?.ai_version || '',
-          edit_note: `Xác nhận đã đăng trên Google Maps · ${new Date().toISOString()}`,
-          workspace_id: workspaceId,
-        })
-      }
     }
 
-    if (typeof body.final_content === 'string') {
-      const content = updatedStatus || (await getContentById(id, workspaceId))
-      const latest = await getLatestContentHistory(id, workspaceId)
-
+    // Persist the exact text before changing the status. Otherwise a history
+    // write failure could leave a stale draft marked approved/published.
+    if (hasFinalContent || body.status === 'published') {
+      existingContent ||= await getContentById(id, workspaceId)
+      latestHistory ||= await getLatestContentHistory(id, workspaceId)
       const note =
         body.status === 'published'
           ? `Xác nhận đã đăng trên Google Maps · ${new Date().toISOString()}`
@@ -124,15 +113,21 @@ export async function PATCH(
 
       await saveContentHistory({
         content_id: id,
-        client_id: content.client_id,
-        ai_version: latest?.ai_version ?? '',
-        human_edited_version: body.final_content,
+        client_id: existingContent.client_id,
+        ai_version: latestHistory?.ai_version ?? '',
+        human_edited_version: hasFinalContent
+          ? body.final_content
+          : latestHistory?.human_edited_version || latestHistory?.ai_version || '',
         edit_note: note,
         workspace_id: workspaceId,
       })
     }
 
-    if (!updatedStatus && typeof body.final_content !== 'string') {
+    if (body.status !== undefined) {
+      updatedStatus = await updateContentStatus(id, body.status, workspaceId)
+    }
+
+    if (!updatedStatus && !hasFinalContent) {
       return NextResponse.json(
         { error: 'Không có dữ liệu để cập nhật' },
         { status: 400 }

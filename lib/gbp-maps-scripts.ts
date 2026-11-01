@@ -203,7 +203,7 @@ export const FACTS = fn(String.raw`
  */
 export const HOURS = fn(String.raw`
   const main = mainEl();
-  const DAY = '(Thứ\\s*(?:Hai|Ba|Tư|Năm|Sáu|Bảy)|Chủ\\s*nhật|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)';
+  const DAY = '(Thứ\\s*(?:Hai|Ba|Tư|Năm|Sáu|Bảy|[2-7])|Th\\s*[2-7]|T[2-7]|Chủ\\s*nhật|CN|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)';
   const dayStart = new RegExp('^' + DAY, 'i');
   const dayOnly = new RegExp('^' + DAY + '\\s*$', 'i');
   const dayAny = new RegExp(DAY, 'ig');

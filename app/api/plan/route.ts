@@ -12,10 +12,11 @@ import {
   openCycle,
   rotateCycle,
   updateCycle,
+  getCycleHistory,
 } from '@/lib/db'
 import { PLAN_30_DAYS_PROMPT } from '@/lib/prompts'
 import { requireActiveWorkspaceId } from '@/lib/auth'
-import { getClientProgress } from '@/lib/client-memory'
+import { cycleStrategy, getClientProgress } from '@/lib/client-memory'
 import { checkAiRateLimit, recordAiUsage } from '@/lib/rate-limit'
 import { isValidIsoDate, readJsonObject } from '@/lib/request-body'
 
@@ -111,6 +112,8 @@ export async function POST(req: Request) {
     }
 
     const active = await getActiveCycle(input.client_id, workspaceId)
+    const cycleHistory = await getCycleHistory(input.client_id, workspaceId)
+    const nextCycleNumber = (cycleHistory || []).length + 1
 
     // Đang có chu kỳ active + chưa force → không tạo lộ trình “chu kỳ mới” ngầm
     if (active && !forceNewCycle) {
@@ -153,6 +156,10 @@ export async function POST(req: Request) {
       .replaceAll('{{area}}', input.area || '')
       .replaceAll('{{audit_result}}', input.audit_result)
       .replaceAll('{{progress_context}}', progress_context)
+      .replaceAll(
+        '{{cycle_strategy_context}}',
+        `### Chiến lược cho chu kỳ ${nextCycleNumber}\n${cycleStrategy(nextCycleNumber)}\nĐây là bước phát triển kế tiếp, không phải cam kết rằng thứ hạng sẽ tăng. Ưu tiên khoảng trống còn tồn tại trong audit mới; đo kết quả và giữ/đổi chiến thuật dựa trên dữ liệu.`
+      )
 
     const plan_result = await askClaude(prompt, {
       maxTokens: 3000,

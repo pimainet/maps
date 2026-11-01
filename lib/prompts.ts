@@ -85,6 +85,8 @@ Thông tin đầu vào:
 
 {{progress_context}}
 
+{{cycle_strategy_context}}
+
 Hãy trả về đúng cấu trúc sau:
 
 ### 1. Mục tiêu 30 ngày
@@ -119,6 +121,9 @@ Yêu cầu bắt buộc:
 - Bám sát kết quả Audit, ưu tiên vấn đề Quan trọng trước.
 - Kế hoạch phải khả thi, không dàn trải.
 - Phân biệt rõ việc làm một lần và việc duy trì.
+- Mỗi chu kỳ kế tiếp phải xử lý nút thắt mới dựa trên audit và kết quả chu kỳ trước; không tăng cường độ bằng cách tăng số bài vô căn cứ.
+- Chỉ đề xuất địa điểm, dịch vụ, ưu đãi, số liệu hoặc trải nghiệm có thật; không nhồi từ khóa, tạo địa chỉ/đánh giá giả hoặc hứa hẹn thứ hạng.
+- Bài viết phải tiến từ giải đáp thông tin cơ bản sang chủ đề chuyên sâu/khác biệt khi phù hợp, nhưng mỗi bài vẫn hữu ích độc lập và không lặp chủ đề cũ.
 - Không giả định thông tin không có trong Audit.
 - Viết ngắn gọn, cụ thể, có tính hành động.
 - Nếu có tiến độ hệ thống: không đưa việc one-shot đã done vào lộ trình; ưu tiên task còn mở và chủ đề nội dung chưa đăng; việc duy trì (đăng bài) phải đề xuất góc/chủ đề mới, không trùng bài đã có.
@@ -309,6 +314,9 @@ Trước khi viết, tự suy nghĩ ngắn (KHÔNG in ra phần suy nghĩ): các
 Yêu cầu bài viết:
 - 1 bài GBP hoàn chỉnh, 150–280 từ.
 - Có yếu tố địa phương tự nhiên, CTA rõ.
+- Chọn góc viết theo mục tiêu và cấp độ trong phần Mục tiêu; chuyên sâu hơn bằng câu hỏi, quy trình, tiêu chí lựa chọn hoặc tình huống thực tế phù hợp ngành — không chỉ đổi từ khóa của bài cũ.
+- Chỉ dùng chi tiết địa phương và bằng chứng có trong dữ liệu đầu vào; nếu không có thì viết khái quát, không tự dựng trải nghiệm/case.
+- Không nhồi từ khóa, lặp tên địa danh, tạo nội dung hàng loạt gần giống, hoặc hứa hẹn thứ hạng.
 - Giọng văn đúng yêu cầu.
 
 CẤM:

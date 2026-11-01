@@ -19,17 +19,19 @@ export default function ClientAuditPage() {
   const [loadingClient, setLoadingClient] = useState(true)
   const [running, setRunning] = useState(false)
   const [fetching, setFetching] = useState(false)
+  const [fetchDiagnostics, setFetchDiagnostics] = useState<any>(null)
   const [error, setError] = useState('')
   const [result, setResult] = useState<string | null>(null)
   const [form, setForm] = useState({
     output_language: 'Tiếng Việt',
     description: '',
+    opening_hours: '',
     primary_category: '',
     additional_categories: '',
     review_count: '',
     rating: '',
-    recent_posts: 'Đăng đều hàng tuần',
-    photos_status: 'Có ảnh mới trong 3 tháng',
+    recent_posts: '',
+    photos_status: '',
     additional_info: '',
   })
 
@@ -63,6 +65,7 @@ export default function ClientAuditPage() {
     if (!client) return
     setFetching(true)
     setError('')
+    setFetchDiagnostics(null)
     try {
       const res = await fetch('/api/gbp-snapshot', {
         method: 'POST',
@@ -72,19 +75,21 @@ export default function ClientAuditPage() {
       const data = await res.json()
 
       if (!res.ok) throw new Error(data.error || 'Không lấy được dữ liệu')
+      setFetchDiagnostics(data.diagnostics || null)
 
       const s = data.snapshot || {}
       const f = snapshotToAuditFields(s)
       setForm((prev) => ({
         ...prev,
         description: f.description || prev.description,
+        opening_hours: f.opening_hours || '',
         primary_category: f.primary_category || prev.primary_category,
         // chỉ điền khi trang Maps thực sự hiển thị danh mục phụ; không thì giữ nguyên ô đang có
         additional_categories: f.additional_categories || prev.additional_categories,
         review_count: f.review_count ?? prev.review_count,
         rating: f.rating ?? prev.rating,
-        recent_posts: f.recent_posts || prev.recent_posts,
-        photos_status: f.photos_status || prev.photos_status,
+        recent_posts: f.recent_posts || '',
+        photos_status: f.photos_status || '',
         // thay khối dữ liệu Maps cũ (nếu có) thay vì nối thêm -> bấm nhiều lần không bị lặp
         additional_info: f.additional_info ? mergeGbpBlock(prev.additional_info, f.additional_info) : prev.additional_info,
       }))
@@ -173,6 +178,10 @@ export default function ClientAuditPage() {
             <span>Phần giới thiệu trên Google</span>
             <textarea value={form.description} onChange={(e) => update('description', e.target.value)} rows={3} />
           </label>
+          <label className="field wide">
+            <span>Giờ mở cửa trên Google Maps</span>
+            <textarea value={form.opening_hours} onChange={(e) => update('opening_hours', e.target.value)} rows={2} placeholder="Sẽ được điền khi Google Maps cung cấp dữ liệu" />
+          </label>
           <label className="field">
             <span>Danh mục chính</span>
             <input value={form.primary_category} onChange={(e) => update('primary_category', e.target.value)} />
@@ -191,7 +200,7 @@ export default function ClientAuditPage() {
           </label>
           <label className="field wide">
             <span>Tình trạng bài đăng gần đây</span>
-            <input value={form.recent_posts} onChange={(e) => update('recent_posts', e.target.value)} />
+            <textarea value={form.recent_posts} onChange={(e) => update('recent_posts', e.target.value)} rows={4} placeholder="Nội dung bài đăng và thời gian đăng sẽ hiển thị tại đây" />
           </label>
           <label className="field wide">
             <span>Tình trạng hình ảnh</span>
@@ -204,6 +213,16 @@ export default function ClientAuditPage() {
         </div>
 
         {error && <div style={{ color: 'var(--danger)', background: 'var(--danger-soft)', padding: 12, borderRadius: 8, marginTop: 12 }}>{error}</div>}
+        {fetchDiagnostics && (
+          <div role="status" style={{ marginTop: 12, padding: 12, borderRadius: 8, background: 'var(--surface-muted, #f5f5f5)', fontSize: 13 }}>
+            <strong>Kết quả đọc Google Maps</strong>
+            <p style={{ margin: '6px 0' }}>
+              Mô tả: {fetchDiagnostics.has_description ? 'đã đọc' : 'chưa đọc được'} · Bài đăng: {fetchDiagnostics.posts_count ?? 0} · Giờ mở cửa: {fetchDiagnostics.hours_strategy || (form.opening_hours ? 'đã đọc' : 'chưa đọc được')}
+            </p>
+            {fetchDiagnostics.coverage_sections && <p style={{ margin: '6px 0' }}>Các mục: {Object.entries(fetchDiagnostics.coverage_sections).map(([key, value]) => `${key}: ${value}`).join(' · ')}</p>}
+            {Array.isArray(fetchDiagnostics.coverage_warnings) && fetchDiagnostics.coverage_warnings.length > 0 && <p style={{ margin: '6px 0' }}>Lưu ý: {fetchDiagnostics.coverage_warnings.join(' · ')}</p>}
+          </div>
+        )}
 
         <div style={{ marginTop: 16 }}>
           <button className="primary-button" onClick={handleRunAudit} disabled={running}>

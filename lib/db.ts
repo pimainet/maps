@@ -794,6 +794,19 @@ export async function getLatestCycle(clientId: string, workspaceId: string) {
   return data
 }
 
+/** Lịch sử chu kỳ theo client, dùng để xây chiến lược tăng trưởng theo giai đoạn. */
+export async function getCycleHistory(clientId: string, workspaceId: string) {
+  const supabase = await createSupabaseServerClient()
+  const { data, error } = await supabase
+    .from('cycles')
+    .select('id, status, started_at, closed_at, opening_audit_id, plan_id, snapshot')
+    .eq('client_id', clientId)
+    .eq('workspace_id', workspaceId)
+    .order('started_at', { ascending: true })
+  if (error) throw error
+  return data || []
+}
+
 export async function openCycle(input: {
   client_id: string
   workspace_id: string

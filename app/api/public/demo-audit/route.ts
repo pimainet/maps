@@ -4,7 +4,7 @@ import { askClaude } from '@/lib/claude'
 import { AUDIT_PROMPT } from '@/lib/prompts'
 import { runGbpPublicSnapshot } from '@/lib/gbp-browser-snapshot'
 import { parseAuditResult } from '@/lib/audit-parse'
-import { extractPlaceIdFromUrl } from '@/lib/place-identity'
+import { extractPlaceIdFromUrl, isSupportedGoogleMapsUrl } from '@/lib/place-identity'
 import type { DemoAudit } from '@/lib/demo-audit'
 import { clientIp, clientIpHash, publicCorsHeaders, requestText } from '@/lib/public-request-safety'
 
@@ -52,6 +52,12 @@ export async function POST(req: Request) {
     if (!mapsUrl && business.length < 3) {
       return NextResponse.json(
         { error: 'Cần link Google Maps hoặc tên cửa hàng để đọc hồ sơ thật.' },
+        { status: 400, headers },
+      )
+    }
+    if (mapsUrl && !isSupportedGoogleMapsUrl(mapsUrl)) {
+      return NextResponse.json(
+        { error: 'Link phải là Google Maps HTTPS hợp lệ.' },
         { status: 400, headers },
       )
     }

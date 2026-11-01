@@ -8,6 +8,7 @@ import {
   getLatestAuditByClient,
   getLatestPlanByClient,
   getLatestContentHistory,
+  getCycleHistory,
 } from '@/lib/db'
 
 export type ClientProgress = {
@@ -59,11 +60,15 @@ export async function getClientProgress(
   clientId: string,
   workspaceId: string
 ): Promise<ClientProgress> {
-  const [tasks, contents, prevAudit, prevPlan] = await Promise.all([
+  const [tasks, contents, prevAudit, prevPlan, cycles] = await Promise.all([
     getTasks({ clientId, workspaceId }),
     getContents(clientId, workspaceId),
     getLatestAuditByClient(clientId, workspaceId),
     getLatestPlanByClient(clientId, workspaceId),
+    getCycleHistory(clientId, workspaceId).catch((error) => {
+      console.error('getCycleHistory progress:', error?.message)
+      return []
+    }),
   ])
 
   const taskList = tasks || []
@@ -120,6 +125,9 @@ export async function getClientProgress(
 
   const previous_audit_excerpt = excerpt(prevAudit?.audit_result, 1500)
   const previous_plan_excerpt = excerpt(prevPlan?.plan_result, 1200)
+  const activeCycleIndex = (cycles || []).findIndex((cycle: any) => cycle.status === 'active')
+  const currentCycleNumber = activeCycleIndex >= 0 ? activeCycleIndex + 1 : null
+  const nextCycleNumber = (cycles || []).length + 1
 
   const has_history =
     tasks_done.length > 0 ||
@@ -168,6 +176,14 @@ export async function getClientProgress(
   }
 
   lines.push('')
+  if (currentCycleNumber) {
+    lines.push(`### Giai đoạn SEO đang chạy (chu kỳ ${currentCycleNumber})`)
+    lines.push(cycleStrategy(currentCycleNumber))
+  }
+  lines.push(`### Giai đoạn SEO kế tiếp (chu kỳ ${nextCycleNumber})`)
+  lines.push(cycleStrategy(nextCycleNumber))
+  lines.push('Không tăng “cấp độ” bằng cách nhồi từ khóa, đăng dày cho đủ số lượng, tạo nội dung địa phương giả, hoặc hứa hẹn thứ hạng. Chỉ nâng chiến thuật khi dữ liệu audit/hiệu quả trước đó hỗ trợ; nếu thiếu dữ liệu thì ghi rõ và ưu tiên đo lường.')
+  lines.push('')
   lines.push('Quy tắc bắt buộc khi có lịch sử:')
   lines.push(
     '- Không đề xuất lại các việc one-shot đã status=done (ví dụ cập nhật category, thêm dịch vụ đã làm), trừ khi dữ liệu GBP hiện tại vẫn cho thấy chưa được xử lý trên hồ sơ thật.'
@@ -192,6 +208,13 @@ export async function getClientProgress(
     previous_plan_excerpt,
     has_history,
   }
+}
+
+export function cycleStrategy(cycleNumber: number): string {
+  if (cycleNumber <= 1) return '- Giai đoạn 1 — Nền móng: xác minh thông tin doanh nghiệp, danh mục/dịch vụ, khu vực phục vụ, tính nhất quán và các thiếu sót ảnh hưởng chuyển đổi.'
+  if (cycleNumber === 2) return '- Giai đoạn 2 — Mức liên quan: xử lý khoảng trống còn lại; làm rõ dịch vụ và nhu cầu tìm kiếm thật; xây các chủ đề bài viết hữu ích, khác nhau, gắn với trải nghiệm và câu hỏi khách hàng.'
+  if (cycleNumber === 3) return '- Giai đoạn 3 — Độ tin cậy địa phương: củng cố bằng chứng chuyên môn, ảnh/case thực tế có đồng ý, phản hồi đánh giá trung thực, quan hệ/citation địa phương phù hợp; theo dõi tín hiệu gọi, chỉ đường và chuyển đổi.'
+  return '- Giai đoạn 4+ — Tối ưu theo dữ liệu: tìm điểm nghẽn còn lại trong hành trình khách hàng, thử từng cải tiến có thể đo, mở rộng các chủ đề/địa bàn chỉ khi doanh nghiệp thực sự phục vụ ở đó; giữ những gì hiệu quả và dừng những gì không có bằng chứng.'
 }
 
 /** Lọc danh sách task AI đề xuất, bỏ cái trùng việc đã có (mọi status). */

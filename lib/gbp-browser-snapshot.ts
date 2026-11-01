@@ -33,6 +33,7 @@ import { GBP_SNAPSHOT_MAX_POSTS, GBP_SNAPSHOT_MAX_REVIEWS } from '@/lib/gbp-snap
 import { askClaude } from '@/lib/claude'
 import { parseRelativeAgeDays } from '@/lib/gbp-relative-time'
 import * as S from '@/lib/gbp-maps-scripts'
+import { isSupportedGoogleMapsUrl } from '@/lib/place-identity'
 
 export type RunGbpSnapshotInput = {
   mapsUrl?: string
@@ -594,7 +595,10 @@ async function collectFromMaps(url: string, input: RunGbpSnapshotInput): Promise
 
       // ---- 4. Giới thiệu (thuộc tính, tiện ích, mô tả) ----
       await stage('about', async () => {
-        const tab = await openTab(page, 'Giới thiệu|About', coverage.warnings)
+        // Google thử nghiệm nhiều nhãn tiếng Việt cho tab hồ sơ; "Thông tin"
+        // thường thay cho "Giới thiệu". Nếu không bắt được tab, mô tả owner
+        // không xuất hiện trong text của tab Tổng quan.
+        const tab = await openTab(page, 'Giới thiệu|Thông tin|About|From the business', coverage.warnings)
         if (!tab) {
           capture.debug.about_tab = 'not_found'
           return setSec('about', 'not_found')
@@ -605,7 +609,7 @@ async function collectFromMaps(url: string, input: RunGbpSnapshotInput): Promise
         capture.texts.about = await run<string>(page, S.PANEL_TEXT, { max: 8000 })
         capture.aboutDescCandidates = tab.selected ? await run<string[]>(page, S.ABOUT_DESC) : []
         capture.debug.about = await run(page, S.DEBUG_DOM)
-        setSec('about', capture.texts.about.length > 80 ? 'ok' : 'empty')
+        setSec('about', capture.texts.about.length > 80 || capture.aboutDescCandidates.length ? 'ok' : 'empty')
       })
 
       if (depth === 'deep') {
@@ -759,6 +763,7 @@ async function extractWithClaude(cap: BrowserCapture, businessName?: string): Pr
     category: cap.facts?.category ?? null,
     hours_from_dom: cap.hours,
     hours_today_from_dom: cap.hoursToday,
+    owner_description_candidates_from_dom: cap.aboutDescCandidates,
     tabs: cap.coverage.tabs_found,
     updates_tab: cap.coverage.sections.updates,
   }
@@ -781,6 +786,7 @@ Trích xuất JSON ĐÚNG schema sau (không markdown, không giải thích):
 
 Quy tắc:
 - description = phần mô tả/giới thiệu do CHỦ doanh nghiệp viết (thường ở tab Giới thiệu hoặc dòng mô tả dưới tên). Không lấy review của khách, không lấy tóm tắt do AI của Google.
+- Nếu owner_description_candidates_from_dom có một đoạn phù hợp, ưu tiên trích đúng nguyên văn đoạn đó làm description; không diễn đạt lại. Nếu không có đoạn nào thực sự là mô tả doanh nghiệp thì trả null.
 - additional_categories: CHỈ điền khi text ghi rõ danh mục khác của doanh nghiệp. Không suy từ loại hình. Không thấy thì null.
 - opening_hours: nếu hours_from_dom đã có thì để null; nếu chưa có mà text có giờ 7 ngày thì ghi dạng "Thứ Hai: 08:00–17:00 | Thứ Ba: ...". Chỉ có giờ "hôm nay" thì ghi đúng như thấy, không bịa các ngày khác.
 - services: danh sách dịch vụ/sản phẩm/món do doanh nghiệp liệt kê (tối đa 30, ngắn gọn, đúng chữ trên trang). Không thấy thì [].
@@ -1000,6 +1006,12 @@ async function fromBrowser(input: RunGbpSnapshotInput): Promise<RunGbpSnapshotRe
 // ---------------------------------------------------------------------------
 
 export async function runGbpPublicSnapshot(input: RunGbpSnapshotInput): Promise<RunGbpSnapshotResult> {
+  if (input.mapsUrl && !isSupportedGoogleMapsUrl(input.mapsUrl)) {
+    return {
+      error: 'Link không hợp lệ. Chỉ hỗ trợ liên kết Google Maps bảo mật (HTTPS).',
+      source_used: 'browser',
+    }
+  }
   const hasBrowserbase = Boolean(process.env.BROWSERBASE_API_KEY)
   if (!hasBrowserbase) return fromPlaces(input)
 
