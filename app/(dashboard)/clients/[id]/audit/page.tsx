@@ -73,9 +73,9 @@ export default function ClientAuditPage() {
         body: JSON.stringify({ client_id: client.id, force: true }),
       })
       const data = await res.json()
+      setFetchDiagnostics(data.diagnostics || null)
 
       if (!res.ok) throw new Error(data.error || 'Không lấy được dữ liệu')
-      setFetchDiagnostics(data.diagnostics || null)
 
       const s = data.snapshot || {}
       const f = snapshotToAuditFields(s)
