@@ -323,13 +323,28 @@ async function clickMarked(page: Page): Promise<boolean> {
   }
 }
 
-async function openTab(page: Page, pattern: string): Promise<string | null> {
+async function openTab(
+  page: Page,
+  pattern: string,
+  warnings: string[],
+): Promise<{ label: string; selected: boolean } | null> {
   const label = await run<string | null>(page, S.MARK, { css: '[role="tab"]', pattern })
   if (!label) return null
-  const ok = await clickMarked(page)
-  if (!ok) return null
-  await page.waitForTimeout(1400)
-  return label
+  if (!(await clickMarked(page))) return null
+  await page.waitForTimeout(900)
+
+  // Xác nhận tab thật sự đã chuyển (aria-selected). Bấm "trượt" là nguyên nhân hay gặp khiến
+  // agent đọc nhầm nội dung tab Tổng quan thay vì Giới thiệu/Bài đánh giá.
+  let sel = await run<string | null>(page, S.TARGET_SELECTED)
+  if (sel === 'false') {
+    await page.evaluate(`(() => { const e = document.querySelector('[data-gbp-target="1"]'); if (e) e.click(); })()`)
+    await page.waitForTimeout(900)
+    sel = await run<string | null>(page, S.TARGET_SELECTED)
+  }
+  const selected = sel !== 'false'
+  if (!selected) warnings.push(`Đã bấm tab "${label}" nhưng không xác nhận được tab đã chuyển.`)
+  await page.waitForTimeout(700)
+  return { label, selected }
 }
 
 async function handleConsent(page: Page, warnings: string[]) {
@@ -381,6 +396,10 @@ type BrowserCapture = {
   ratingDistribution: Record<string, number> | null
   photoCount: number | null
   photoChips: string[]
+  hoursToday: string | null
+  hoursStrategy: string | null
+  aboutDescCandidates: string[]
+  debug: Record<string, unknown>
   coverage: GbpCoverage
   screenshot?: string
 }
@@ -462,6 +481,10 @@ async function collectFromMaps(url: string, input: RunGbpSnapshotInput): Promise
     ratingDistribution: null,
     photoCount: null,
     photoChips: [],
+    hoursToday: null,
+    hoursStrategy: null,
+    aboutDescCandidates: [],
+    debug: {},
     coverage,
   }
 
@@ -528,6 +551,7 @@ async function collectFromMaps(url: string, input: RunGbpSnapshotInput): Promise
         capture.facts = await run<DomFacts>(page, S.FACTS)
         capture.texts.overview = await run<string>(page, S.PANEL_TEXT, { max: 12000 })
         setSec('overview', capture.facts?.name || capture.texts.overview.length > 200 ? 'ok' : 'empty')
+        capture.debug.overview = await run(page, S.DEBUG_DOM)
       })
 
       // Kiểm tra danh tính: đang đọc đúng doanh nghiệp không
@@ -543,31 +567,44 @@ async function collectFromMaps(url: string, input: RunGbpSnapshotInput): Promise
         }
       }
 
-      // ---- 3. Giờ mở cửa ----
+      // ---- 3. Giờ mở cửa: bảng 7 ngày -> aria-label -> dòng chữ; chưa được thì mở rộng dòng giờ rồi đọc lại ----
       await stage('hours', async () => {
-        capture.hours = await run<string | null>(page, S.HOURS)
-        if (!capture.hours) {
-          // bảng có thể chỉ được dựng sau khi bấm mở
-          const lab = await run<string | null>(page, S.MARK, {
-            css: '[data-item-id="oh"], [aria-label*="Giờ"], [aria-label*="hours" i]',
-            pattern: '.',
-          })
+        type HoursRes = { hours: string | null; strategy: string | null; today: string | null }
+        let h = await run<HoursRes>(page, S.HOURS)
+        if (!h.hours) {
+          await run(page, S.OPEN_HOURS)
+          await page.waitForTimeout(1000)
+          h = await run<HoursRes>(page, S.HOURS)
+        }
+        if (!h.hours) {
+          const lab = await run<string | null>(page, S.MARK, { css: '[data-item-id="oh"]', pattern: '.' })
           if (lab && (await clickMarked(page))) {
-            await page.waitForTimeout(900)
-            capture.hours = await run<string | null>(page, S.HOURS)
+            await page.waitForTimeout(1000)
+            h = await run<HoursRes>(page, S.HOURS)
           }
         }
-        setSec('hours', capture.hours ? 'ok' : 'empty')
+        capture.hours = h.hours
+        capture.hoursStrategy = h.strategy
+        capture.hoursToday = h.today
+        if (!h.hours && h.today) {
+          coverage.warnings.push(`Chỉ đọc được trạng thái giờ hôm nay ("${h.today}"), chưa đọc được bảng 7 ngày.`)
+        }
+        setSec('hours', h.hours ? 'ok' : 'empty')
       })
 
       // ---- 4. Giới thiệu (thuộc tính, tiện ích, mô tả) ----
       await stage('about', async () => {
-        const tab = await openTab(page, 'Giới thiệu|About')
-        if (!tab) return setSec('about', 'not_found')
+        const tab = await openTab(page, 'Giới thiệu|About', coverage.warnings)
+        if (!tab) {
+          capture.debug.about_tab = 'not_found'
+          return setSec('about', 'not_found')
+        }
         await run(page, S.SCROLL_LOAD, { maxSteps: 3, stepMs: 600, budgetMs: 5000 })
         await run(page, S.EXPAND_MORE, { scopeCss: 'div[role="main"]' })
         capture.attributes = await run<GbpAttributeGroup[]>(page, S.ATTRIBUTES)
         capture.texts.about = await run<string>(page, S.PANEL_TEXT, { max: 8000 })
+        capture.aboutDescCandidates = tab.selected ? await run<string[]>(page, S.ABOUT_DESC) : []
+        capture.debug.about = await run(page, S.DEBUG_DOM)
         setSec('about', capture.texts.about.length > 80 ? 'ok' : 'empty')
       })
 
@@ -575,7 +612,7 @@ async function collectFromMaps(url: string, input: RunGbpSnapshotInput): Promise
         // ---- 5. Dịch vụ / Menu / Sản phẩm (chỉ có với một số ngành) ----
         if (timeLeft() > 100_000) {
           await stage('services', async () => {
-            const tab = await openTab(page, '^(Dịch vụ|Services|Menu|Thực đơn|Sản phẩm|Products)')
+            const tab = await openTab(page, '^(Dịch vụ|Services|Menu|Thực đơn|Sản phẩm|Products)', coverage.warnings)
             if (!tab) return setSec('services', 'not_found')
             await run(page, S.SCROLL_LOAD, { maxSteps: 4, stepMs: 600, budgetMs: 6000 })
             capture.texts.services = await run<string>(page, S.PANEL_TEXT, { max: 6000 })
@@ -586,7 +623,7 @@ async function collectFromMaps(url: string, input: RunGbpSnapshotInput): Promise
         // ---- 6. Bài đánh giá: sắp xếp Mới nhất, tải ~30, mở review bị cắt, đọc phản hồi của chủ ----
         if (timeLeft() > 70_000) {
           await stage('reviews', async () => {
-            const tab = await openTab(page, 'Bài đánh giá|Reviews|Đánh giá')
+            const tab = await openTab(page, 'Bài đánh giá|Reviews|Đánh giá', coverage.warnings)
             if (!tab) return setSec('reviews', 'not_found')
             await page
               .waitForSelector('div[data-review-id]', { timeout: 9000 })
@@ -634,7 +671,7 @@ async function collectFromMaps(url: string, input: RunGbpSnapshotInput): Promise
         if (timeLeft() > 35_000) {
           await stage('updates', async () => {
             // Quay lại thanh tab: tab Cập nhật không phải hồ sơ nào cũng có
-            const tab = await openTab(page, '^(Cập nhật|Updates|Bài đăng|Posts|Tin mới|What.?s new)')
+            const tab = await openTab(page, '^(Cập nhật|Updates|Bài đăng|Posts|Tin mới|What.?s new)', coverage.warnings)
             if (!tab) return setSec('updates', 'not_found')
             await run(page, S.SCROLL_LOAD, { maxSteps: 5, stepMs: 700, budgetMs: 8000 })
             await run(page, S.EXPAND_MORE, { scopeCss: 'div[role="main"]' })
@@ -721,6 +758,7 @@ async function extractWithClaude(cap: BrowserCapture, businessName?: string): Pr
     name: cap.facts?.name ?? null,
     category: cap.facts?.category ?? null,
     hours_from_dom: cap.hours,
+    hours_today_from_dom: cap.hoursToday,
     tabs: cap.coverage.tabs_found,
     updates_tab: cap.coverage.sections.updates,
   }
@@ -891,16 +929,25 @@ async function fromBrowser(input: RunGbpSnapshotInput): Promise<RunGbpSnapshotRe
     ? extracted.services.map((s) => String(s).trim()).filter(Boolean).slice(0, 30)
     : []
 
-  // Đối chiếu số liệu
+  // Mô tả: Claude trước; không được thì dùng khối chữ dài nhất ở tab Giới thiệu (heuristic) và ghi cảnh báo
+  let description = extracted.description || null
+  let descriptionSource: string = description ? 'claude' : 'none'
+  if (!description && cap.aboutDescCandidates.length) {
+    description = cap.aboutDescCandidates[0].slice(0, 1500)
+    descriptionSource = 'dom-heuristic'
+    cov.warnings.push('Mô tả doanh nghiệp được suy từ cấu trúc trang (heuristic) — nên đối chiếu với hồ sơ thật.')
+  }
+
   const status: GbpBusinessStatus | null = f?.business_status ?? null
 
   return {
     maps_url: cap.finalUrl || url,
     business_name: f?.name || input.businessName || null,
-    description: extracted.description || null,
+    description,
     primary_category: f?.category || extracted.primary_category || null,
     additional_categories: extracted.additional_categories || null,
     opening_hours: cap.hours || extracted.opening_hours || null,
+    hours_today: cap.hoursToday,
     rating: f?.rating ?? null,
     review_count: f?.review_count ?? null,
     phone: f?.phone || null,
@@ -939,6 +986,9 @@ async function fromBrowser(input: RunGbpSnapshotInput): Promise<RunGbpSnapshotRe
         updates: cap.texts.updates.length,
       },
       extracted,
+      description_source: descriptionSource,
+      hours_strategy: cap.hoursStrategy,
+      debug: cap.debug,
       reviews_raw_sample: cap.reviewsRaw.slice(0, 3).map((r) => r.raw),
       ...(cap.screenshot ? { screenshot_jpeg_base64: cap.screenshot } : {}),
     },

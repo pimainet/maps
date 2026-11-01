@@ -94,7 +94,40 @@ export async function updateSnapshot(
   }
 
   if (error) throw error
-  return data
+  return hydrateSnapshot(data)
+}
+
+/**
+ * Bản sao các trường "sâu" được lưu thêm trong raw_json.deep (cột raw_json có từ trước).
+ * Nhờ vậy dữ liệu mới (giờ mở cửa, dịch vụ, thuộc tính, review_stats, coverage...) vẫn dùng được
+ * ngay cả khi chưa chạy migration 015. Cột thật (nếu có) luôn được ưu tiên.
+ */
+export const GBP_DEEP_KEYS = [
+  'opening_hours',
+  'hours_today',
+  'additional_categories',
+  'services',
+  'attributes',
+  'action_links',
+  'photo_categories',
+  'business_status',
+  'claim_signal',
+  'rating_distribution',
+  'review_stats',
+  'coverage',
+] as const
+
+export function hydrateSnapshot<T extends Record<string, any> | null | undefined>(row: T): T {
+  if (!row) return row
+  const deep = row.raw_json && typeof row.raw_json === 'object' ? (row.raw_json as any).deep : null
+  if (!deep || typeof deep !== 'object') return row
+  const out: Record<string, any> = { ...row }
+  for (const k of GBP_DEEP_KEYS) {
+    const cur = out[k]
+    const empty = cur == null || (Array.isArray(cur) && cur.length === 0)
+    if (empty && deep[k] != null) out[k] = deep[k]
+  }
+  return out as T
 }
 
 const NEW_COLUMNS = new Set([
@@ -142,7 +175,7 @@ export async function getLatestSnapshotForClient(
 
   const { data, error } = await query.maybeSingle()
   if (error) throw error
-  return data
+  return hydrateSnapshot(data)
 }
 
 /** Snapshot ok/partial còn trong TTL cache. */
@@ -156,8 +189,10 @@ export async function getFreshSnapshotForClient(
   if (!latest?.captured_at) return null
 
   // Snapshot cũ do agent đọc nông (chưa có coverage) -> coi như hết hạn để lần sau chạy agent mới.
-  // Chỉ áp dụng khi cột coverage đã tồn tại (đã chạy migration 015), tránh chạy lại mãi khi chưa migrate.
-  if ('coverage' in latest && !latest.coverage) return null
+  // Snapshot do agent mới luôn có coverage (cột hoặc raw_json.deep). Lần chạy chỉ qua Places không có coverage
+  // nhưng vẫn có raw_json.deep -> không bị coi là cũ (tránh chạy lại mãi khi không có Browserbase).
+  const rawDeep = (latest as any).raw_json?.deep
+  if (!latest.coverage && !rawDeep) return null
 
   const captured = new Date(latest.captured_at).getTime()
   const maxAge = GBP_SNAPSHOT_CACHE_DAYS * 24 * 60 * 60 * 1000

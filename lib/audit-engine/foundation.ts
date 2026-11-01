@@ -200,6 +200,19 @@ function checkF06(input: AuditInput): CheckResult {
 function checkF07(input: AuditInput): CheckResult {
   const hours = input.snapshot.opening_hours
   if (!hours) {
+    // Maps hiện trạng thái hôm nay ("Đóng cửa lúc 17:30") nghĩa là hồ sơ CÓ khai giờ, dù chưa đọc được bảng 7 ngày.
+    const today = input.snapshot.hours_today
+    if (today) {
+      return {
+        id: 'F07',
+        group: 'foundation',
+        label: 'Giờ mở cửa',
+        severity: 'medium',
+        confidence: 'estimated',
+        passed: true,
+        message: `Hồ sơ có khai giờ mở cửa (đọc được trạng thái hôm nay: ${today}; chưa đọc được bảng 7 ngày).`,
+      }
+    }
     return {
       ...insufficient('F07', 'Giờ mở cửa', 'medium'),
       message: 'Chưa đọc được giờ mở cửa trên lần quan sát này — không kết luận là hồ sơ thiếu.',

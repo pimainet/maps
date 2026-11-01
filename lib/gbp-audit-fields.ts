@@ -41,6 +41,11 @@ export function buildGbpObservationBlock(s: any): string {
     lines.push('Quyền sở hữu: thấy nút "Nhận quyền sở hữu doanh nghiệp này" -> hồ sơ có thể CHƯA được xác nhận/quản lý')
   }
   if (s.opening_hours) lines.push(`Giờ mở cửa: ${clip(s.opening_hours, 400)}`)
+  else if (s.hours_today) {
+    lines.push(
+      `Giờ mở cửa: hồ sơ CÓ khai giờ (đọc được trạng thái hôm nay: ${clip(s.hours_today, 100)}), chưa đọc được bảng 7 ngày — không kết luận là thiếu giờ.`,
+    )
+  }
 
   const links = Array.isArray(s.action_links) ? s.action_links : []
   if (links.length) {

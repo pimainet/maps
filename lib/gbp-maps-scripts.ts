@@ -55,16 +55,28 @@ export const PANEL_STATE = fn(String.raw`
   };
 `)
 
-/** Đánh dấu 1 phần tử (data-gbp-target=1) để Playwright bấm chuột thật. arg: { css, pattern } */
+/**
+ * Đánh dấu 1 phần tử (data-gbp-target=1) để Playwright bấm chuột thật. arg: { css, pattern, global? }
+ * Tìm trong panel trước; không thấy thì tìm toàn trang (thanh tab đôi khi nằm ngoài div[role=main]).
+ */
 export const MARK = fn(String.raw`
   const re = new RegExp(arg.pattern, 'i');
-  const scope = arg.global ? document : mainEl();
-  const nodes = Array.prototype.slice.call(scope.querySelectorAll(arg.css));
-  const hit = nodes.find((n) => re.test((n.getAttribute('aria-label') || '') + ' ' + T(n)));
+  const test = (n) => re.test((n.getAttribute('aria-label') || '') + ' ' + T(n));
+  let hit = null;
+  if (!arg.global) {
+    hit = Array.prototype.slice.call(mainEl().querySelectorAll(arg.css)).find(test) || null;
+  }
+  if (!hit) hit = Array.prototype.slice.call(document.querySelectorAll(arg.css)).find(test) || null;
   Array.prototype.forEach.call(document.querySelectorAll('[data-gbp-target]'), (e) => e.removeAttribute('data-gbp-target'));
   if (!hit) return null;
   hit.setAttribute('data-gbp-target', '1');
   return (hit.getAttribute('aria-label') || T(hit)).replace(/\s+/g, ' ').trim().slice(0, 60);
+`)
+
+/** Trạng thái aria-selected của phần tử vừa MARK (để biết bấm tab có thật sự chuyển tab không). */
+export const TARGET_SELECTED = fn(String.raw`
+  const e = document.querySelector('[data-gbp-target="1"]');
+  return e ? e.getAttribute('aria-selected') : null;
 `)
 
 /**
@@ -181,25 +193,135 @@ export const FACTS = fn(String.raw`
   return out;
 `)
 
-/** Giờ mở cửa từ bảng 7 ngày (đọc textContent nên không cần mở rộng nếu bảng chỉ bị ẩn bằng CSS). */
+/**
+ * Giờ mở cửa. Thử 3 cách theo thứ tự, vì Maps hiển thị giờ không cố định:
+ *   table : bảng 7 ngày (đọc textContent nên đọc được cả khi bảng chỉ bị ẩn bằng CSS)
+ *   aria  : aria-label của dòng giờ, dạng "Thứ Hai, 08:00 đến 17:00; Thứ Ba, ..."
+ *   text  : dòng chữ "Thứ Hai" rồi "08:00–17:30" (chỉ có khi bảng đã mở rộng)
+ * Trả { hours, strategy, today }. today = trạng thái hôm nay ("Đang mở cửa ⋅ Đóng cửa lúc 17:30"),
+ * dùng làm bằng chứng "hồ sơ CÓ khai giờ" khi không đọc được bảng 7 ngày.
+ */
 export const HOURS = fn(String.raw`
   const main = mainEl();
-  const dayRe = /^(Thứ\s*(Hai|Ba|Tư|Năm|Sáu|Bảy)|Chủ\s*nhật|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/i;
-  const lines = [];
-  const seen = {};
+  const DAY = '(Thứ\\s*(?:Hai|Ba|Tư|Năm|Sáu|Bảy)|Chủ\\s*nhật|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)';
+  const dayStart = new RegExp('^' + DAY, 'i');
+  const dayOnly = new RegExp('^' + DAY + '\\s*$', 'i');
+  const dayAny = new RegExp(DAY, 'ig');
+  const hoursLike = /\d|đóng cửa|closed|mở cửa cả ngày|open 24|24 giờ|24 hours/i;
+  const clean = (x) => x.replace(ICON_RE, '').replace(/\s+(đến|to)\s+/gi, '–').replace(/\s+/g, ' ').replace(/\s*[·•⋅]\s*$/, '').trim();
+  const finish = (pairs, strategy) => {
+    const seen = {}; const lines = [];
+    pairs.forEach((p) => { const k = p[0].toLowerCase().replace(/\s+/g, ''); if (!seen[k]) { seen[k] = 1; lines.push(p[0] + ': ' + p[1]); } });
+    return lines.length >= 3 ? { hours: lines.join(' | '), strategy: strategy } : null;
+  };
+
+  // today
+  let today = null;
+  const oh = main.querySelector('[data-item-id="oh"]') || document.querySelector('[data-item-id="oh"]');
+  if (oh) {
+    const ls = T(oh).split('\n').map((x) => x.trim()).filter(Boolean);
+    const head = [];
+    for (let i = 0; i < ls.length && head.length < 2; i++) { if (dayStart.test(ls[i])) break; head.push(ls[i]); }
+    today = head.join(' ⋅ ').slice(0, 120) || null;
+  }
+
+  // A. table
+  const pa = [];
   Array.prototype.forEach.call(main.querySelectorAll('tr'), (tr) => {
     const cells = tr.querySelectorAll('td, th');
     if (cells.length < 2) return;
     const day = TC(cells[0]);
-    if (!dayRe.test(day)) return;
-    const hrs = TC(cells[1]).replace(ICON_RE, '').replace(/\s*[·•]\s*$/, '').trim();
-    if (!hrs) return;
-    const key = day.toLowerCase();
-    if (seen[key]) return;
-    seen[key] = 1;
-    lines.push(day + ': ' + hrs);
+    if (!dayStart.test(day)) return;
+    const hrs = clean(TC(cells[1]));
+    if (hrs) pa.push([day, hrs]);
   });
-  return lines.length >= 3 ? lines.join(' | ') : null;
+  let r = finish(pa, 'table');
+
+  // B. aria-label
+  if (!r) {
+    const els = Array.prototype.slice.call(document.querySelectorAll('[aria-label]'));
+    for (let i = 0; i < els.length && !r; i++) {
+      const l = els[i].getAttribute('aria-label') || '';
+      const m = l.match(dayAny);
+      if (!m || m.length < 3) continue;
+      const pb = [];
+      l.split(/;|\n/).forEach((sg) => {
+        const mm = sg.trim().match(new RegExp('^' + DAY + '\\s*[,:]?\\s*(.+)$', 'i'));
+        if (mm && hoursLike.test(mm[2])) pb.push([mm[1], clean(mm[2])]);
+      });
+      r = finish(pb, 'aria');
+    }
+  }
+
+  // C. text lines
+  if (!r) {
+    const lines = T(main).split('\n').map((x) => x.trim()).filter(Boolean);
+    const pc = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (dayOnly.test(lines[i]) && lines[i + 1] && lines[i + 1].length < 60 && hoursLike.test(lines[i + 1])) {
+        pc.push([lines[i], clean(lines[i + 1])]); i++;
+        continue;
+      }
+      const mm = lines[i].match(new RegExp('^' + DAY + '\\s*[:\\t ]\\s*(.{3,50})$', 'i'));
+      if (mm && hoursLike.test(mm[2])) pc.push([mm[1], clean(mm[2])]);
+    }
+    r = finish(pc, 'text');
+  }
+
+  return r ? { hours: r.hours, strategy: r.strategy, today: today } : { hours: null, strategy: null, today: today };
+`)
+
+/** Bấm mở rộng dòng giờ mở cửa (bằng DOM click). Không bấm nếu đang mở sẵn (tránh gập lại). */
+export const OPEN_HOURS = fn(String.raw`
+  const main = mainEl();
+  const sels = [
+    '[data-item-id="oh"] [aria-expanded="false"]',
+    '[data-item-id="oh"][aria-expanded="false"]',
+    '[jsaction*="openhours"]',
+    'button[aria-label*="giờ mở cửa" i]',
+    'button[aria-label*="open hours" i]',
+    '[data-item-id="oh"]',
+  ];
+  for (let i = 0; i < sels.length; i++) {
+    const el = main.querySelector(sels[i]);
+    if (!el || el.getAttribute('aria-expanded') === 'true') continue;
+    try { el.click(); return sels[i]; } catch (e) {}
+  }
+  return null;
+`)
+
+/**
+ * Ứng viên mô tả doanh nghiệp ở tab Giới thiệu theo heuristic DOM: khối chữ dài, nằm SAU thanh tab,
+ * không thuộc danh sách/nút/tiêu đề/review. Chỉ dùng khi Claude không trích được mô tả.
+ */
+export const ABOUT_DESC = fn(String.raw`
+  const main = mainEl();
+  const tablist = main.querySelector('[role="tablist"]');
+  const out = [];
+  Array.prototype.forEach.call(main.querySelectorAll('div, span, p'), (e) => {
+    if (e.children.length > 3) return;
+    if (e.closest('ul, ol, [role="tablist"], button, a, h1, h2, h3, table, [data-review-id]')) return;
+    if (tablist && !(tablist.compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
+    const t = T(e).replace(/\s+/g, ' ');
+    if (t.length < 60 || t.length > 1500) return;
+    if (/^(Chia sẻ|Đề xuất|Nhận quyền|Giờ mở|Địa chỉ|Điện thoại|Tóm tắt|Summary|Gemini|Hỏi)/i.test(t)) return;
+    if (out.indexOf(t) === -1) out.push(t);
+  });
+  return out.slice(0, 3);
+`)
+
+/** Thông tin chẩn đoán để biết Maps đang render thế nào khi đọc lỗi (lưu vào raw_json.debug). */
+export const DEBUG_DOM = fn(String.raw`
+  const main = mainEl();
+  const ids = Array.prototype.slice.call(main.querySelectorAll('[data-item-id]')).map((e) => e.getAttribute('data-item-id')).slice(0, 25);
+  const sel = main.querySelector('[role="tab"][aria-selected="true"]');
+  return {
+    selected_tab: sel ? (sel.getAttribute('aria-label') || T(sel)).slice(0, 40) : null,
+    item_ids: ids,
+    h2: Array.prototype.slice.call(main.querySelectorAll('h2')).map((h) => T(h).slice(0, 40)).slice(0, 14),
+    tr_count: main.querySelectorAll('tr').length,
+    text_head: T(main).replace(/\s+/g, ' ').slice(0, 500),
+  };
 `)
 
 /** Nhóm thuộc tính/tiện ích ở tab Giới thiệu: mỗi h2 + danh sách <li> đứng ngay sau nó. */

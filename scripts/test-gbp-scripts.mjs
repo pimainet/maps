@@ -98,8 +98,65 @@ ok(f.claim_signal === 'unclaimed', 'FACTS claim_signal unclaimed')
 ok(f.action_links.length === 2 && f.action_links.some((l) => l.kind === 'menu') && f.action_links.some((l) => l.kind === 'booking'), `FACTS action_links ${JSON.stringify(f.action_links.map((l) => l.kind))}`)
 ok(f.business_status === null, 'FACTS business_status null khi không có banner đóng cửa')
 
-const hours = await run(S.HOURS)
-ok(hours && hours.split(' | ').length === 7 && hours.startsWith('Thứ Hai: 08:00–17:30'), `HOURS 7 ngày (${hours?.slice(0, 40)}…)`)
+const hr = await run(S.HOURS)
+ok(hr.hours && hr.strategy === 'table' && hr.hours.split(' | ').length === 7 && hr.hours.startsWith('Thứ Hai: 08:00–17:30'), `HOURS table 7 ngày (${hr.strategy})`)
+ok(hr.today === 'Đang mở cửa', `HOURS today = "${hr.today}"`)
+
+// Chiến lược B: không có bảng, giờ nằm trong aria-label
+const mkDom = (inner) => {
+  const d = new JSDOM('<div role="main"><h1>X</h1>' + inner + '</div>', { runScripts: 'outside-only' })
+  Object.defineProperty(d.window.HTMLElement.prototype, 'innerText', { get() { return it(this) } })
+  return (src, arg) => d.window.eval('(' + src + ')(' + JSON.stringify(arg ?? null) + ')')
+}
+{
+  const r2 = mkDom('<div data-item-id="oh" aria-label="Chủ Nhật, 08:00 đến 17:00; Thứ Hai, 08:00 đến 17:00; Thứ Ba, 08:00 đến 17:00; Thứ Tư, Đóng cửa; Ẩn giờ mở cửa trong tuần">Đang mở cửa ⋅ Đóng cửa lúc 17:00</div>')
+  const h = await r2(S.HOURS)
+  ok(h.strategy === 'aria' && h.hours.startsWith('Chủ Nhật: 08:00–17:00') && h.hours.includes('Thứ Tư: Đóng cửa') && !/Ẩn giờ/.test(h.hours), `HOURS aria-label (${h.strategy}): ${h.hours}`)
+  ok(h.today === 'Đang mở cửa ⋅ Đóng cửa lúc 17:00', `HOURS today từ aria case (${h.today})`)
+  const en = mkDom('<div data-item-id="oh" aria-label="Monday, 9 AM to 5 PM; Tuesday, 9 AM to 5 PM; Wednesday, Closed; Hide open hours for the week"></div>')
+  const he = await en(S.HOURS)
+  ok(he.strategy === 'aria' && he.hours === 'Monday: 9 AM–5 PM | Tuesday: 9 AM–5 PM | Wednesday: Closed', `HOURS aria tiếng Anh: ${he.hours}`)
+}
+// Chiến lược C: dòng chữ
+{
+  const r3 = mkDom('<div data-item-id="oh"><div>Đóng cửa</div><div>Mở cửa lúc 08:00</div><div>Thứ Hai</div><div>08:00–17:00</div><div>Thứ Ba</div><div>08:00–17:00</div><div>Thứ Tư</div><div>08:00–17:00</div></div>')
+  const h = await r3(S.HOURS)
+  ok(h.strategy === 'text' && h.hours === 'Thứ Hai: 08:00–17:00 | Thứ Ba: 08:00–17:00 | Thứ Tư: 08:00–17:00', `HOURS text (${h.strategy}): ${h.hours}`)
+  ok(h.today === 'Đóng cửa ⋅ Mở cửa lúc 08:00', `HOURS today (${h.today})`)
+}
+// Không có giờ -> null, không bịa
+{
+  const r4 = mkDom('<div>Không có gì</div>')
+  const h = await r4(S.HOURS)
+  ok(h.hours === null && h.today === null, 'HOURS không có dữ liệu -> null')
+}
+// OPEN_HOURS: bấm khi gập, không bấm khi đã mở
+{
+  const d = new JSDOM('<div role="main"><h1>X</h1><div data-item-id="oh"><button aria-expanded="false" id="b">Giờ</button></div></div>', { runScripts: 'outside-only' })
+  let clicked = 0
+  d.window.document.getElementById('b').addEventListener('click', () => { clicked++ })
+  const r = (src) => d.window.eval('(' + src + ')(null)')
+  const a1 = await r(S.OPEN_HOURS)
+  ok(a1 && clicked === 1, 'OPEN_HOURS bấm nút gập')
+  d.window.document.getElementById('b').setAttribute('aria-expanded', 'true')
+  d.window.document.querySelector('[data-item-id="oh"]').setAttribute('aria-expanded', 'true')
+  const a2 = await r(S.OPEN_HOURS)
+  ok(clicked === 1 && a2 === null, 'OPEN_HOURS không bấm lại khi đã mở')
+}
+// ABOUT_DESC
+{
+  const r5 = mkDom('<div role="tablist"><button role="tab">Tổng quan</button><button role="tab" aria-selected="true">Giới thiệu</button></div><div><div>Chúng tôi chuyên thiết kế và thi công nội thất trọn gói cho căn hộ, văn phòng tại Hà Nội từ năm 2012.</div></div><h2>Dịch vụ</h2><ul><li>Thiết kế một đoạn văn bản rất dài để thử loại trừ danh sách khỏi mô tả chính xác</li></ul>')
+  const c = await r5(S.ABOUT_DESC)
+  ok(c.length === 1 && c[0].startsWith('Chúng tôi chuyên thiết kế'), `ABOUT_DESC chọn đúng mô tả, loại ul/tab (${c.length})`)
+}
+// TARGET_SELECTED + MARK fallback ra ngoài main
+{
+  const d = new JSDOM('<div role="tablist"><button role="tab" aria-selected="false" aria-label="Giới thiệu">Giới thiệu</button></div><div role="main"><h1>X</h1></div>', { runScripts: 'outside-only' })
+  const r = (src, arg) => d.window.eval('(' + src + ')(' + JSON.stringify(arg ?? null) + ')')
+  const lab = await r(S.MARK, { css: '[role="tab"]', pattern: 'Giới thiệu|About' })
+  ok(lab === 'Giới thiệu', 'MARK tìm được tab nằm ngoài div[role=main]')
+  ok((await r(S.TARGET_SELECTED)) === 'false', 'TARGET_SELECTED đọc aria-selected')
+}
 
 const attrs = await run(S.ATTRIBUTES)
 const pay = attrs.find((g) => g.group === 'Thanh toán')

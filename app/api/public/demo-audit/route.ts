@@ -1,3 +1,4 @@
+import { buildGbpObservationBlock } from '@/lib/gbp-audit-fields'
 import { NextResponse } from 'next/server'
 import { askClaude } from '@/lib/claude'
 import { AUDIT_PROMPT } from '@/lib/prompts'
@@ -92,6 +93,8 @@ export async function POST(req: Request) {
       businessName: business || undefined,
       area: city || undefined,
       placeId,
+      // demo công khai: đọc nhanh (tổng quan + giờ + giới thiệu), không chạy đủ tab để giữ thời gian/chi phí
+      depth: 'quick',
     })
 
     const hasProfile = Boolean(
@@ -131,6 +134,7 @@ export async function POST(req: Request) {
             .join('\n')
         : '',
       snapshot.source_used ? `Nguồn quan sát: ${snapshot.source_used}` : '',
+      buildGbpObservationBlock(snapshot),
     ]
       .filter(Boolean)
       .join('\n')

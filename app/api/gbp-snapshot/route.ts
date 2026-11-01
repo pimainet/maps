@@ -116,6 +116,7 @@ export async function POST(req: Request) {
         businessName: client.name,
         area: client.area,
         placeId: client.place_id,
+        depth: 'deep',
       })
       // Chạy tới đây nghĩa là đã tốn phí Browserbase/Places/Claude thật
       // (dù kết quả là 'ok', 'partial' hay 'failed') — khác với lỗi
@@ -155,17 +156,57 @@ export async function POST(req: Request) {
         photos_signal: result.photos_signal || null,
         photos_count_est: result.photos_count_est ?? null,
         reviews: result.reviews || [],
-        raw_json: result.raw || null,
+        // `deep` = bản sao các trường mới trong raw_json để dùng được cả khi chưa chạy migration 015
+        raw_json: {
+          ...(result.raw && typeof result.raw === 'object' ? (result.raw as object) : {}),
+          deep: {
+            agent_version: 2,
+            opening_hours: result.opening_hours || null,
+            hours_today: result.hours_today || null,
+            additional_categories: result.additional_categories || null,
+            services: result.services || [],
+            attributes: result.attributes || [],
+            action_links: result.action_links || [],
+            photo_categories: result.photo_categories || [],
+            business_status: result.business_status || null,
+            claim_signal: result.claim_signal || null,
+            rating_distribution: result.rating_distribution || null,
+            review_stats: result.review_stats || null,
+            coverage: result.coverage || null,
+          },
+        },
+        // v2 — cần migration 015 (chưa chạy thì updateSnapshot tự bỏ qua các cột này)
+        opening_hours: result.opening_hours || null,
+        additional_categories: result.additional_categories || null,
+        services: result.services || [],
+        attributes: result.attributes || [],
+        action_links: result.action_links || [],
+        photo_categories: result.photo_categories || [],
+        business_status: result.business_status || null,
+        claim_signal: result.claim_signal || null,
+        rating_distribution: result.rating_distribution || null,
+        review_stats: result.review_stats || null,
+        coverage: result.coverage || null,
       })
+
+      const cov = result.coverage
+      const unread = cov
+        ? Object.keys(cov.sections).filter((k) => cov.sections[k] === 'error' || cov.sections[k] === 'skipped')
+        : []
+      const detail = cov
+        ? ` — đọc ${cov.reviews_loaded} review, ${result.services?.length || 0} dịch vụ, ${result.attributes?.length || 0} nhóm thuộc tính${
+            unread.length ? `; chưa đọc được: ${unread.join(', ')}` : ''
+          }`
+        : ''
 
       return NextResponse.json({
         snapshot: saved,
         cached: false,
         message:
           status === 'ok'
-            ? 'Đã quan sát thành công'
+            ? `Đã quan sát thành công${detail}`
             : status === 'partial'
-              ? 'Quan sát một phần'
+              ? `Quan sát một phần${detail}`
               : 'Quan sát thất bại',
         diagnostics: sanitizeDiagnostics({
           ...diagnostics,
@@ -177,6 +218,14 @@ export async function POST(req: Request) {
           posts_signal: result.posts_signal || null,
           photos_signal: result.photos_signal || null,
           rating: result.rating ?? null,
+          reviews_loaded: cov?.reviews_loaded ?? 0,
+          coverage_sections: cov?.sections || null,
+          coverage_warnings: cov?.warnings || [],
+          identity: cov?.identity || null,
+          elapsed_ms: cov?.elapsed_ms || null,
+          hours_strategy: (result.raw as any)?.browser?.hours_strategy ?? null,
+          description_source: (result.raw as any)?.browser?.description_source ?? null,
+          debug: (result.raw as any)?.browser?.debug ?? null,
         }),
       })
     } catch (err: any) {

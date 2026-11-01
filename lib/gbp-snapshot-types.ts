@@ -94,6 +94,8 @@ export type GbpSnapshotPayload = {
    */
   additional_categories?: string | null
   opening_hours?: string | null
+  /** Trạng thái giờ hôm nay (vd "Đang mở cửa ⋅ Đóng cửa lúc 17:30"). Chỉ là bằng chứng hồ sơ CÓ khai giờ khi không đọc được bảng 7 ngày. */
+  hours_today?: string | null
   rating?: number | null
   review_count?: number | null
   phone?: string | null
