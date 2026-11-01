@@ -4,6 +4,7 @@ import { getClientById } from '@/lib/db'
 import { buildAuthorizationUrl, createOAuthState } from '@/lib/google-oauth'
 
 export const runtime = 'nodejs'
+const OAUTH_STATE_COOKIE = 'google_oauth_state'
 
 /**
  * GET /api/google-connect/start?client_id=...
@@ -29,7 +30,15 @@ export async function GET(req: Request) {
 
     const state = createOAuthState({ workspaceId, clientId })
     const url = buildAuthorizationUrl(state)
-    return NextResponse.redirect(url)
+    const response = NextResponse.redirect(url)
+    response.cookies.set(OAUTH_STATE_COOKIE, state, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/api/google-connect/callback',
+      maxAge: 10 * 60,
+    })
+    return response
   } catch (error: any) {
     const status = error.message?.includes('Unauthorized') ? 401 : error.message?.includes('NoWorkspace') ? 409 : 500
     return NextResponse.json({ error: error.message || 'Lỗi bắt đầu kết nối Google.' }, { status })

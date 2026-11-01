@@ -48,9 +48,10 @@ export async function getValidAccessToken(conn: GoogleConnectionRow): Promise<st
     })
     return refreshed.access_token
   } catch (err: any) {
+    console.error('Google token refresh failed:', err?.name || 'Error')
     await updateGoogleConnection(conn.id, {
       status: 'revoked',
-      last_error: `Refresh token thất bại: ${err.message}`,
+      last_error: 'Kết nối Google đã hết hiệu lực và cần kết nối lại.',
     })
     throw new GbpApiError(
       'Kết nối Google đã hết hiệu lực (có thể bạn đã thu hồi quyền truy cập bên phía Google) — cần kết nối lại.',

@@ -18,7 +18,8 @@ export async function GET(req: Request) {
       connected: conn?.status === 'connected',
       status: conn?.status ?? 'not_connected',
       google_account_email: conn?.google_account_email ?? null,
-      last_error: conn?.last_error ?? null,
+      // Older rows may contain provider error details from before they were redacted.
+      last_error: conn?.last_error ? 'Kết nối cần được kiểm tra lại.' : null,
     })
   } catch (error: any) {
     const status = error.message?.includes('Unauthorized') ? 401 : error.message?.includes('NoWorkspace') ? 409 : 500

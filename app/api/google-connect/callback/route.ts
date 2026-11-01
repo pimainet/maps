@@ -1,9 +1,21 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
 import { saveGoogleConnection, updateGoogleConnection } from '@/lib/db'
 import { encryptToken, exchangeCodeForTokens, verifyOAuthState } from '@/lib/google-oauth'
 import { resolveAccountAndLocation } from '@/lib/gbp-business-api'
 
 export const runtime = 'nodejs'
+const OAUTH_STATE_COOKIE = 'google_oauth_state'
+
+function clearStateCookie(response: NextResponse) {
+  response.cookies.set(OAUTH_STATE_COOKIE, '', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/api/google-connect/callback',
+    maxAge: 0,
+  })
+  return response
+}
 
 // Khách quay lại trang task/client sau khi kết nối xong (thành công hay lỗi
 // đều quay về đây, kèm query param để UI hiện thông báo phù hợp).
@@ -11,25 +23,25 @@ function redirectTo(clientId: string, status: 'connected' | 'error', message?: s
   const url = new URL(`/clients/${clientId}/plan`, process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000')
   url.searchParams.set('google_connect', status)
   if (message) url.searchParams.set('message', message)
-  return NextResponse.redirect(url)
+  return clearStateCookie(NextResponse.redirect(url))
 }
 
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const code = searchParams.get('code')
   const state = searchParams.get('state')
   const errorParam = searchParams.get('error') // khách bấm "Từ chối" trên màn hình Google
 
   if (!state) {
-    return NextResponse.json({ error: 'Thiếu state — không xác định được yêu cầu kết nối nào.' }, { status: 400 })
+    return clearStateCookie(NextResponse.json({ error: 'Yêu cầu kết nối không hợp lệ. Hãy thử kết nối lại.' }, { status: 400 }))
   }
 
   const verified = verifyOAuthState(state)
-  if (!verified) {
-    return NextResponse.json(
-      { error: 'State không hợp lệ hoặc đã hết hạn (quá 10 phút) — thử kết nối lại.' },
+  if (!verified || req.cookies.get(OAUTH_STATE_COOKIE)?.value !== state) {
+    return clearStateCookie(NextResponse.json(
+      { error: 'Yêu cầu kết nối không hợp lệ hoặc đã hết hạn. Hãy thử kết nối lại.' },
       { status: 400 },
-    )
+    ))
   }
 
   if (errorParam) {
@@ -70,11 +82,13 @@ export async function GET(req: Request) {
         gbp_location_resource: locationResource,
       })
     } catch (resolveErr: any) {
-      await updateGoogleConnection(saved.id, { last_error: `Chưa xác định được địa điểm: ${resolveErr.message}` })
+      console.error('Google location lookup failed:', resolveErr?.name || 'Error')
+      await updateGoogleConnection(saved.id, { last_error: 'Chưa xác định được địa điểm Google Business Profile.' })
     }
 
     return redirectTo(verified.clientId, 'connected')
   } catch (err: any) {
-    return redirectTo(verified.clientId, 'error', err.message || 'Lỗi không xác định khi kết nối Google.')
+    console.error('Google OAuth callback failed:', err?.name || 'Error')
+    return redirectTo(verified.clientId, 'error', 'Không hoàn tất được kết nối Google. Hãy thử lại sau.')
   }
 }

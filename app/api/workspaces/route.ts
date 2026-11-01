@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getUserWorkspaces, getCurrentUser, setActiveWorkspaceId } from '@/lib/auth'
+import { readJsonObject } from '@/lib/request-body'
 
 export async function GET() {
   try {
@@ -22,11 +23,8 @@ export async function GET() {
   }
 }
 
-// Tạo workspace mới. RLS cho phép mọi user đã đăng nhập insert vào
-// `workspaces` (with_check true); trigger `on_workspace_created` ở DB
-// tự động thêm người tạo vào workspace_members với role 'owner' —
-// giải quyết vấn đề "chưa là admin thì không tự thêm mình vào member
-// được" (xem migration 003, phần 5).
+// Tạo workspace bằng user session để trigger on_workspace_created có auth.uid().
+// Database cần có policy INSERT phù hợp; các migration đóng gói hiện chưa định nghĩa policy này.
 export async function POST(req: Request) {
   try {
     const user = await getCurrentUser()
@@ -34,16 +32,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const body = await req.json()
-    const name = (body.name || '').trim()
+    const parsedBody = await readJsonObject(req)
+    if (!parsedBody.ok) {
+      return NextResponse.json({ error: parsedBody.error }, { status: parsedBody.status })
+    }
+    const rawName = parsedBody.value.name
+    if (typeof rawName !== 'string') {
+      return NextResponse.json({ error: 'Tên workspace không hợp lệ.' }, { status: 400 })
+    }
+    const name = rawName.trim()
     if (!name) {
       return NextResponse.json({ error: 'Tên workspace là bắt buộc' }, { status: 400 })
+    }
+    if (name.length > 120) {
+      return NextResponse.json({ error: 'Tên workspace không được vượt quá 120 ký tự.' }, { status: 400 })
     }
 
     const supabase = await createClient()
     const { data, error } = await supabase
       .from('workspaces')
-      .insert({ name, plan: body.plan || 'free' })
+      // Keep plan assignment server-controlled; the database default is free.
+      .insert({ name })
       .select('id, name, plan')
       .single()
 
@@ -54,6 +63,13 @@ export async function POST(req: Request) {
 
     return NextResponse.json(data)
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error('workspace create failed:', error?.message || error)
+    if (error?.code === '42501') {
+      return NextResponse.json(
+        { error: 'Database chưa cấp quyền tạo workspace. Hãy nhờ quản trị viên kiểm tra policy.' },
+        { status: 503 },
+      )
+    }
+    return NextResponse.json({ error: 'Không tạo được workspace lúc này.' }, { status: 500 })
   }
 }

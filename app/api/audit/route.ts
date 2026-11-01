@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { askClaude } from '@/lib/claude'
-import { saveAudit, getLatestAuditByClient, getAllAudits } from '@/lib/db'
+import { saveAudit, getLatestAuditByClient, getAllAudits, findClientInWorkspace } from '@/lib/db'
 import { AUDIT_PROMPT } from '@/lib/prompts'
 import { requireActiveWorkspaceId } from '@/lib/auth'
 import { getClientProgress } from '@/lib/client-memory'
@@ -40,6 +40,10 @@ export async function POST(req: Request) {
     const body = await req.json()
 
     if (body.client_id) {
+      const client = await findClientInWorkspace(body.client_id, workspaceId)
+      if (!client) {
+        return NextResponse.json({ error: 'Không tìm thấy khách hàng trong workspace hiện tại.' }, { status: 404 })
+      }
       await enforceClientAuditQuota(body.client_id, workspaceId)
     }
 

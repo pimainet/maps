@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
 import { askClaude } from '@/lib/claude'
-import { createTasks, getClientById, getTasks, getActiveCycle, openCycle, updateCycle } from '@/lib/db'
+import { createTasks, getClientById, findClientInWorkspace, findPlanInWorkspace, getTasks, getActiveCycle, openCycle, updateCycle } from '@/lib/db'
 import { TASKS_FROM_PLAN_PROMPT } from '@/lib/prompts'
 import { requireActiveWorkspaceId } from '@/lib/auth'
 import { checkAiRateLimit, recordAiUsage } from '@/lib/rate-limit'
 import { autoWriteContentBatch } from '@/lib/write-content'
+import { isValidIsoDate, readJsonObject } from '@/lib/request-body'
 import {
   getClientProgress,
   filterDuplicateTasks,
@@ -53,7 +54,6 @@ function parseTasksJson(raw: string): TaskItem[] {
 
 const VALID_TYPES = ['content', 'profile_update', 'photo', 'review', 'other']
 const VALID_PRIORITIES = ['low', 'medium', 'high']
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 const AUTO_WRITE_COUNT = 1
 
@@ -74,34 +74,53 @@ export async function POST(req: Request) {
     // endpoint này còn tự động viết bài (auto-write) sau khi sinh task
     // — tức có thể kéo theo thêm nhiều lượt gọi Claude nữa.
     const { userId } = await checkAiRateLimit(workspaceId, 'tasks-generate-from-plan')
-    const body = await req.json()
-    const {
-      client_id,
-      plan_id,
-      business_name,
-      industry,
-      area,
-      plan_result,
-      start_date,
-    } = body
+    const parsedBody = await readJsonObject(req)
+    if (!parsedBody.ok) {
+      return NextResponse.json({ error: parsedBody.error }, { status: parsedBody.status })
+    }
+    const body = parsedBody.value
+    const client_id = body.client_id
+    const plan_id = typeof body.plan_id === 'string' ? body.plan_id : undefined
+    const business_name = typeof body.business_name === 'string' ? body.business_name : ''
+    const industry = typeof body.industry === 'string' ? body.industry : ''
+    const area = typeof body.area === 'string' ? body.area : ''
+    const plan_result = body.plan_result
+    const start_date = body.start_date
 
-    if (!client_id || !plan_result) {
+    if (typeof client_id !== 'string' || !client_id.trim() ||
+        typeof plan_result !== 'string' || !plan_result.trim()) {
       return NextResponse.json(
         { error: 'Thiếu client_id hoặc plan_result' },
         { status: 400 }
       )
     }
+    if (plan_result.length > 50_000) {
+      return NextResponse.json({ error: 'Nội dung kế hoạch quá dài.' }, { status: 400 })
+    }
+    if (plan_id !== undefined && plan_id !== null && typeof plan_id !== 'string') {
+      return NextResponse.json({ error: 'plan_id không hợp lệ.' }, { status: 400 })
+    }
+    if (body.force_new_cycle !== undefined && typeof body.force_new_cycle !== 'boolean') {
+      return NextResponse.json({ error: 'force_new_cycle phải là boolean.' }, { status: 400 })
+    }
+    if (start_date !== undefined && start_date !== null && !isValidIsoDate(start_date)) {
+      return NextResponse.json({ error: 'start_date không hợp lệ.' }, { status: 400 })
+    }
 
-    const forceNewCycle = !!body.force_new_cycle
+    const clientExists = await findClientInWorkspace(client_id, workspaceId)
+    if (!clientExists) {
+      return NextResponse.json({ error: 'Không tìm thấy khách hàng trong workspace hiện tại.' }, { status: 404 })
+    }
+    if (plan_id) {
+      const plan = await findPlanInWorkspace(plan_id, client_id, workspaceId)
+      if (!plan) {
+        return NextResponse.json({ error: 'Không tìm thấy kế hoạch của khách hàng trong workspace hiện tại.' }, { status: 404 })
+      }
+    }
+
+    const forceNewCycle = body.force_new_cycle === true
     let cycle = await getActiveCycle(client_id, workspaceId)
-    if (!cycle) {
-      // Lần đầu: mở cycle gắn plan hiện tại
-      cycle = await openCycle({
-        client_id,
-        workspace_id: workspaceId,
-        plan_id: plan_id || null,
-      })
-    } else if (plan_id && cycle.plan_id && cycle.plan_id !== plan_id && !forceNewCycle) {
+    if (cycle && plan_id && cycle.plan_id && cycle.plan_id !== plan_id && !forceNewCycle) {
       // Sinh task từ plan khác trong khi cycle đang gắn plan cũ
       return NextResponse.json(
         {
@@ -115,7 +134,7 @@ export async function POST(req: Request) {
     }
 
     const effectiveStartDate =
-      start_date || new Date().toISOString().slice(0, 10)
+      typeof start_date === 'string' ? start_date : new Date().toISOString().slice(0, 10)
 
     // Bộ nhớ vận hành
     let progress_context = ''
@@ -140,6 +159,9 @@ export async function POST(req: Request) {
       .replaceAll('{{progress_context}}', progress_context)
 
     let raw = await askClaude(prompt, { maxTokens: 4096, temperature: 0.2 })
+    // Count the paid AI attempt even when the response cannot be parsed. If this
+    // is delayed until after parsing, malformed responses bypass the quota.
+    await recordAiUsage(workspaceId, 'tasks-generate-from-plan', userId)
 
     let tasks: TaskItem[]
     let parseError: string | null = null
@@ -169,20 +191,18 @@ export async function POST(req: Request) {
       }
     }
 
-    await recordAiUsage(workspaceId, 'tasks-generate-from-plan', userId)
-
     const normalized = tasks
       .filter((t) => t && typeof t.title === 'string' && t.title.trim())
       .map((t) => ({
         title: t.title!.trim(),
-        description: t.description?.trim(),
+        description: typeof t.description === 'string' ? t.description.trim() : undefined,
         task_type: VALID_TYPES.includes(t.task_type || '')
           ? t.task_type!
           : 'other',
         priority: VALID_PRIORITIES.includes(t.priority || '')
           ? t.priority!
           : 'medium',
-        due_date: DATE_RE.test(t.due_date || '') ? t.due_date : undefined,
+        due_date: isValidIsoDate(t.due_date) ? t.due_date : undefined,
       }))
 
     // Dedup với task đã có trong DB (mọi status)
@@ -233,6 +253,15 @@ export async function POST(req: Request) {
         workspace_id: workspaceId,
       }))
     )
+
+    // Do not leave an empty active cycle behind if AI generation or parsing fails.
+    if (!cycle) {
+      cycle = await openCycle({
+        client_id,
+        workspace_id: workspaceId,
+        plan_id: plan_id || null,
+      })
+    }
 
     let autoWritten: any[] = []
     let autoWriteError: string | null = null

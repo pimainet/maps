@@ -146,6 +146,6 @@ export async function GET(req: Request) {
     return NextResponse.json(summary)
   } catch (e: any) {
     console.error('cron reminders:', e?.message)
-    return NextResponse.json({ ...summary, error: e?.message || 'Lỗi không rõ' }, { status: 500 })
+    return NextResponse.json({ ...summary, error: 'Không thể hoàn tất lượt gửi nhắc việc.' }, { status: 500 })
   }
 }

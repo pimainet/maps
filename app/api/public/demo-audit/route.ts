@@ -6,53 +6,45 @@ import { runGbpPublicSnapshot } from '@/lib/gbp-browser-snapshot'
 import { parseAuditResult } from '@/lib/audit-parse'
 import { extractPlaceIdFromUrl } from '@/lib/place-identity'
 import type { DemoAudit } from '@/lib/demo-audit'
+import { clientIp, clientIpHash, publicCorsHeaders, requestText } from '@/lib/public-request-safety'
 
 export const maxDuration = 300
 export const runtime = 'nodejs'
 
-const ALLOWED = [
-  'https://maps.bgs.com.vn',
-  'https://bgs.com.vn',
-  'https://www.bgs.com.vn',
-  process.env.LANDING_ORIGIN || '',
-].filter(Boolean)
-
-function corsHeaders(origin: string | null) {
-  const extra = process.env.LANDING_ORIGIN
-  const allow =
-    origin &&
-    (ALLOWED.includes(origin) ||
-      origin.endsWith('.bgs.com.vn') ||
-      (extra && origin === extra) ||
-      origin.startsWith('http://localhost'))
-      ? origin
-      : ALLOWED[0] || '*'
-  return {
-    'Access-Control-Allow-Origin': allow,
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-  }
-}
-
-function clientIp(req: Request) {
-  const fwd = req.headers.get('x-forwarded-for') || ''
-  return fwd.split(',')[0]?.trim() || req.headers.get('x-real-ip') || 'unknown'
-}
+const MAX_BODY_BYTES = 16 * 1024
 
 export async function OPTIONS(req: Request) {
-  return new NextResponse(null, { status: 204, headers: corsHeaders(req.headers.get('origin')) })
+  return new NextResponse(null, { status: 204, headers: publicCorsHeaders(req.headers.get('origin')) })
 }
 
 export async function POST(req: Request) {
-  const headers = corsHeaders(req.headers.get('origin'))
+  const headers = publicCorsHeaders(req.headers.get('origin'))
+  let reservationId: string | null = null
+  let admin: any = null
   try {
-    const body = await req.json()
-    const phone = String(body.phone || '').replace(/[\s.\-()]/g, '')
-    const business = String(body.business || body.business_name || '').trim()
-    const mapsUrl = String(body.mapsUrl || body.gbp_link || '').trim()
-    const city = String(body.city || body.area || '').trim()
-    const industryLabel = String(body.industryLabel || body.industry || '').trim()
-    const name = String(body.name || '').trim()
+    const declaredLength = Number(req.headers.get('content-length') || 0)
+    if (declaredLength > MAX_BODY_BYTES) {
+      return NextResponse.json({ error: 'Dữ liệu gửi lên quá lớn.' }, { status: 413, headers })
+    }
+    const rawBody = await req.text()
+    if (new TextEncoder().encode(rawBody).byteLength > MAX_BODY_BYTES) {
+      return NextResponse.json({ error: 'Dữ liệu gửi lên quá lớn.' }, { status: 413, headers })
+    }
+    let body: any
+    try {
+      body = JSON.parse(rawBody)
+    } catch {
+      return NextResponse.json({ error: 'Dữ liệu JSON không hợp lệ.' }, { status: 400, headers })
+    }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ error: 'Dữ liệu JSON không hợp lệ.' }, { status: 400, headers })
+    }
+    const phone = requestText(body.phone, 40).replace(/[\s.\-()]/g, '')
+    const business = requestText(body.business || body.business_name, 160)
+    const mapsUrl = requestText(body.mapsUrl || body.gbp_link, 2048)
+    const city = requestText(body.city || body.area, 160)
+    const industryLabel = requestText(body.industryLabel || body.industry, 100)
+    const name = requestText(body.name, 80)
 
     if (!/^0\d{9}$/.test(phone)) {
       return NextResponse.json({ error: 'Số Zalo không hợp lệ' }, { status: 400, headers })
@@ -64,28 +56,54 @@ export async function POST(req: Request) {
       )
     }
 
-    let admin: any = null
     try {
       const mod = await import('@/lib/supabase/admin')
       admin = mod.supabaseAdmin
     } catch {
-      admin = null
+      return NextResponse.json({ error: 'Dịch vụ demo tạm thời chưa sẵn sàng.' }, { status: 503, headers })
     }
 
-    if (admin) {
-      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-      const { count } = await admin
-        .from('demo_leads')
-        .select('id', { count: 'exact', head: true })
-        .eq('phone', phone)
-        .gte('created_at', since)
-      if ((count || 0) >= 3) {
-        return NextResponse.json(
-          { error: 'Số này đã chạy audit demo 3 lần trong 24 giờ. Nhắn Zalo để xem bản đầy đủ.' },
-          { status: 429, headers },
-        )
-      }
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    const ip = clientIp(req)
+    const ipHash = clientIpHash(ip)
+    const [phoneQuota, ipQuota, legacyIpQuota] = await Promise.all([
+      admin.from('demo_leads').select('id', { count: 'exact', head: true }).eq('phone', phone).gte('created_at', since),
+      admin.from('demo_leads').select('id', { count: 'exact', head: true }).in('source', ['landing-demo-pending', 'landing-demo-live']).contains('raw', { ip_hash: ipHash }).gte('created_at', since),
+      admin.from('demo_leads').select('id', { count: 'exact', head: true }).in('source', ['landing-demo-pending', 'landing-demo-live']).contains('raw', { ip }).gte('created_at', since),
+    ])
+    if (phoneQuota.error || ipQuota.error || legacyIpQuota.error) {
+      console.error('public demo quota check failed:', phoneQuota.error?.message || ipQuota.error?.message || legacyIpQuota.error?.message)
+      return NextResponse.json({ error: 'Không thể xác nhận giới hạn demo lúc này. Vui lòng thử lại sau.' }, { status: 503, headers })
     }
+    if ((phoneQuota.count || 0) >= 3) {
+      return NextResponse.json(
+        { error: 'Số này đã chạy audit demo 3 lần trong 24 giờ. Nhắn Zalo để xem bản đầy đủ.' },
+        { status: 429, headers },
+      )
+    }
+    // Count legacy raw-IP rows through their 24-hour lifetime during rollout.
+    if ((ipQuota.count || 0) + (legacyIpQuota.count || 0) >= 5) {
+      return NextResponse.json(
+        { error: 'Đã đạt giới hạn audit demo trong 24 giờ. Vui lòng thử lại sau.' },
+        { status: 429, headers },
+      )
+    }
+
+    const reservation = await admin.from('demo_leads').insert({
+      name: name.slice(0, 80),
+      phone,
+      business_name: business || null,
+      industry: industryLabel || null,
+      area: city || null,
+      gbp_link: mapsUrl || null,
+      source: 'landing-demo-pending',
+      raw: { ip_hash: ipHash },
+    }).select('id').single()
+    if (reservation.error || !reservation.data?.id) {
+      console.error('public demo quota reservation failed:', reservation.error?.message)
+      return NextResponse.json({ error: 'Không thể bắt đầu audit demo lúc này. Vui lòng thử lại sau.' }, { status: 503, headers })
+    }
+    reservationId = reservation.data.id
 
     const placeId = extractPlaceIdFromUrl(mapsUrl)
     const snapshot = await runGbpPublicSnapshot({
@@ -205,10 +223,8 @@ export async function POST(req: Request) {
       },
     }
 
-    if (admin) {
-      await admin.from('demo_leads').insert({
-        name: name.slice(0, 80),
-        phone,
+    if (admin && reservationId) {
+      const { error: updateError } = await admin.from('demo_leads').update({
         business_name: audit.businessName,
         industry: audit.industryLabel,
         area: audit.area,
@@ -217,7 +233,7 @@ export async function POST(req: Request) {
         overall_score: audit.overall,
         source: 'landing-demo-live',
         raw: {
-          ip: clientIp(req),
+          ip_hash: ipHash,
           snapshot: audit.snapshot,
           source_used: snapshot.source_used,
           audit_preview: {
@@ -225,7 +241,8 @@ export async function POST(req: Request) {
             actions: audit.actions,
           },
         },
-      })
+      }).eq('id', reservationId)
+      if (updateError) console.error('public demo result update failed:', updateError.message)
     }
 
     return NextResponse.json(
@@ -239,7 +256,7 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error('public demo-audit:', error)
     return NextResponse.json(
-      { error: error.message || 'Không chạy được audit trên hồ sơ Maps.' },
+      { error: 'Không chạy được audit trên hồ sơ Maps. Vui lòng thử lại sau.' },
       { status: 500, headers },
     )
   }

@@ -77,6 +77,48 @@ export async function getClientById(id: string, workspaceId?: string) {
   return data
 }
 
+/** Find a client only inside the caller's active workspace. */
+export async function findClientInWorkspace(id: string, workspaceId: string) {
+  const supabase = await createSupabaseServerClient()
+  const { data, error } = await supabase
+    .from('clients')
+    .select('id')
+    .eq('id', id)
+    .eq('workspace_id', workspaceId)
+    .maybeSingle()
+
+  if (error) throw error
+  return data
+}
+
+export async function findAuditInWorkspace(id: string, clientId: string, workspaceId: string) {
+  const supabase = await createSupabaseServerClient()
+  const { data, error } = await supabase
+    .from('audits')
+    .select('id')
+    .eq('id', id)
+    .eq('client_id', clientId)
+    .eq('workspace_id', workspaceId)
+    .maybeSingle()
+
+  if (error) throw error
+  return data
+}
+
+export async function findPlanInWorkspace(id: string, clientId: string, workspaceId: string) {
+  const supabase = await createSupabaseServerClient()
+  const { data, error } = await supabase
+    .from('plans')
+    .select('id')
+    .eq('id', id)
+    .eq('client_id', clientId)
+    .eq('workspace_id', workspaceId)
+    .maybeSingle()
+
+  if (error) throw error
+  return data
+}
+
 export async function createClient(client: {
   name: string
   industry?: string

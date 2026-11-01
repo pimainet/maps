@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getContents } from '@/lib/db'
+import { findClientInWorkspace, findPlanInWorkspace, getContents } from '@/lib/db'
 import { requireActiveWorkspaceId } from '@/lib/auth'
 import { writeContentForTask, writeAdHocContent } from '@/lib/write-content'
 
@@ -61,6 +61,17 @@ export async function POST(req: Request) {
 
     if (!body.client_id || !body.topic) {
       return NextResponse.json({ error: 'Thiếu client_id hoặc topic' }, { status: 400 })
+    }
+
+    const client = await findClientInWorkspace(body.client_id, workspaceId)
+    if (!client) {
+      return NextResponse.json({ error: 'Không tìm thấy khách hàng trong workspace hiện tại.' }, { status: 404 })
+    }
+    if (body.plan_id) {
+      const plan = await findPlanInWorkspace(body.plan_id, body.client_id, workspaceId)
+      if (!plan) {
+        return NextResponse.json({ error: 'Không tìm thấy kế hoạch của khách hàng trong workspace hiện tại.' }, { status: 404 })
+      }
     }
 
     const result = await writeAdHocContent({

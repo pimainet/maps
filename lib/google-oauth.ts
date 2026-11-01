@@ -51,12 +51,32 @@ export function verifyOAuthState(
   state: string,
   maxAgeMs = 10 * 60 * 1000,
 ): { workspaceId: string; clientId: string } | null {
-  const [payloadB64, sig] = state.split('.')
+  if (typeof state !== 'string' || state.length > 4096) return null
+  const parts = state.split('.')
+  if (parts.length !== 2) return null
+  const [payloadB64, sig] = parts
   if (!payloadB64 || !sig) return null
-  if (sig !== signState(payloadB64)) return null // chữ ký sai -> state bị giả mạo hoặc hỏng
   try {
+    const expected = signState(payloadB64)
+    const suppliedBytes = Buffer.from(sig)
+    const expectedBytes = Buffer.from(expected)
+    if (suppliedBytes.length !== expectedBytes.length || !crypto.timingSafeEqual(suppliedBytes, expectedBytes)) {
+      return null
+    }
+
     const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'))
-    if (Date.now() - payload.ts > maxAgeMs) return null // hết hạn -> bắt bấm kết nối lại
+    if (
+      !payload ||
+      typeof payload.workspaceId !== 'string' ||
+      !payload.workspaceId ||
+      typeof payload.clientId !== 'string' ||
+      !payload.clientId ||
+      typeof payload.nonce !== 'string' ||
+      !payload.nonce ||
+      !Number.isFinite(payload.ts) ||
+      payload.ts > Date.now() + 60_000 ||
+      Date.now() - payload.ts > maxAgeMs
+    ) return null
     return { workspaceId: payload.workspaceId, clientId: payload.clientId }
   } catch {
     return null

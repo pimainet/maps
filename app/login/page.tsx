@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Brand } from '@/components/dashboard/brand'
+import { safeInternalPath } from '@/lib/safe-redirect'
 
 export default function LoginPage() {
   return (
@@ -47,7 +48,7 @@ function LoginForm() {
       return
     }
 
-    router.push(next)
+    router.push(safeInternalPath(next, window.location.origin))
     router.refresh()
   }
 
@@ -60,7 +61,7 @@ function LoginForm() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(safeInternalPath(next, window.location.origin))}`,
       },
     })
 
