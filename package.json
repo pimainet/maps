@@ -7,7 +7,7 @@
     "build": "next build --webpack",
     "start": "next start",
     "check:outscraper": "tsx --env-file=.env.local scripts/check-outscraper-live.ts",
-    "test:logic": "tsx scripts/test-outscraper-mapping.ts && tsx scripts/test-review-watch.ts && tsx scripts/test-competitors.ts"
+    "test:logic": "tsx scripts/test-outscraper-mapping.ts && tsx scripts/test-outscraper-fetch.ts && tsx scripts/test-audit-fields.ts && tsx scripts/test-review-watch.ts && tsx scripts/test-competitors.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",
@@ -19,7 +19,6 @@
     "clsx": "^2.1.1",
     "lucide-react": "^1.16.0",
     "next": "16.4.3",
-    "playwright-core": "^1.63.0",
     "react": "^19",
     "react-dom": "^19",
     "tailwind-merge": "^3.3.1",

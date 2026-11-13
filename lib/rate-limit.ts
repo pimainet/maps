@@ -42,7 +42,6 @@ const LIMITS: Record<string, EndpointLimit> = {
   plan: { perUserMax: 5, perUserWindowMinutes: 10, perWorkspaceMax: 20, perWorkspaceWindowMinutes: 60 },
   content: { perUserMax: 10, perUserWindowMinutes: 10, perWorkspaceMax: 40, perWorkspaceWindowMinutes: 60 },
   'tasks-generate-from-plan': { perUserMax: 5, perUserWindowMinutes: 10, perWorkspaceMax: 15, perWorkspaceWindowMinutes: 60 },
-  'gbp-snapshot': { perUserMax: 10, perUserWindowMinutes: 10, perWorkspaceMax: 30, perWorkspaceWindowMinutes: 60 },
   // Route nội bộ để so sánh Audit Engine (Rule+AI theo từng check) với
   // AUDIT_PROMPT hiện tại — KHÔNG phải endpoint khách hàng dùng, nên
   // tách bucket riêng, không đụng tới quota 'audit' thật và không bị

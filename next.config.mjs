@@ -26,7 +26,6 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  serverExternalPackages: ['@browserbasehq/sdk', 'playwright', 'playwright-core'],
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }]
   },

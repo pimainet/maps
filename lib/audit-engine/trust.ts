@@ -63,7 +63,7 @@ function checkT02(input: AuditInput): CheckResult {
 }
 
 /**
- * T03 — Review Recency: dựa trên review_stats do agent tính từ tab Bài đánh giá
+ * T03 — Review Recency: dựa trên review_stats tính từ danh sách review đã tải
  * (tuổi review mới nhất). Không có review_stats (vd chỉ có Places) -> insufficient.
  */
 function checkT03(input: AuditInput): CheckResult {
@@ -109,15 +109,15 @@ function checkT04(input: AuditInput): CheckResult {
 }
 
 /**
- * T05 — Review Response: tỉ lệ review (trong số đã tải từ tab Bài đánh giá) có phản hồi của chủ.
- * Cần ≥5 review từ browser; Places API không có phản hồi nên không dùng được cho check này.
+ * T05 — Review Response: tỉ lệ review (trong số đã tải) có phản hồi của chủ.
+ * Cần ≥5 review từ Outscraper; Places API không có phản hồi nên không dùng được cho check này.
  */
 function checkT05(input: AuditInput): CheckResult {
   const st = input.snapshot.review_stats
   if (!st || st.loaded < 5 || st.reply_rate == null) {
     return {
       ...insufficient('T05', 'Review Response', 'high'),
-      message: 'Chưa đọc đủ review (cần ≥5 từ tab Bài đánh giá) để tính tỉ lệ chủ phản hồi.',
+      message: 'Chưa đọc đủ review (cần ≥5 review từ Outscraper) để tính tỉ lệ chủ phản hồi.',
     }
   }
   const ok = st.reply_rate >= 0.5
@@ -154,7 +154,7 @@ async function checkT06(input: AuditInput, ai: AIClassifier): Promise<CheckResul
   if (!reviews || reviews.length < 3) {
     return {
       ...insufficient('T06', 'Review Insight', 'medium'),
-      message: `Chỉ có ${reviews?.length ?? 0} review (Places API chỉ trả ~5 review; tab Bài đánh giá chưa đọc được) — chưa đủ để rút pattern đáng tin.`,
+      message: `Chỉ có ${reviews?.length ?? 0} review (Places API chỉ trả ~5 review; chưa lấy được review từ Outscraper) — chưa đủ để rút pattern đáng tin.`,
     }
   }
 

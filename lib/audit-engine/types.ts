@@ -9,7 +9,7 @@ import type { GbpSnapshotPayload } from '@/lib/gbp-snapshot-types'
  *  - Thiếu dữ liệu -> confidence: "insufficient", passed: null. KHÔNG bịa.
  *
  * QUAN TRỌNG: input của engine này bám sát đúng field THẬT mà
- * gbp-browser-snapshot.ts thu thập được hôm nay (GbpSnapshotPayload) +
+ * lib/gbp-snapshot.ts (Outscraper + Places) thu thập được hôm nay (GbpSnapshotPayload) +
  * một vài field caller tự cung cấp thêm (tên khách khai, ngành khách khai,
  * lịch sử snapshot từ bảng gbp_snapshots...). Những field framework gốc
  * cần nhưng HỆ THỐNG CHƯA THU THẬP (services, attributes, review text,

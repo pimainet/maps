@@ -13,3 +13,12 @@ export function publicError(error: unknown, fallback = 'Đã có lỗi xảy ra.
   if (message) console.error('API error:', message.slice(0, 300))
   return fallback
 }
+
+/** HTTP status tương ứng với lỗi nghiệp vụ đã biết (Unauthorized/NoWorkspace/RateLimited), còn lại 500. */
+export function errorStatus(error: unknown): number {
+  const message = typeof (error as any)?.message === 'string' ? ((error as any).message as string) : ''
+  if (message.includes('Unauthorized')) return 401
+  if (message.includes('NoWorkspace')) return 409
+  if (message.includes('RateLimited')) return 429
+  return 500
+}

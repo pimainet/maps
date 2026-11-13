@@ -1,6 +1,5 @@
 'use client'
 
-import { snapshotToAuditFields, mergeGbpBlock } from '@/lib/gbp-audit-fields'
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
@@ -8,6 +7,19 @@ import { Card } from '@/components/dashboard/shared'
 import { useToast } from '@/components/dashboard/toast-context'
 import { parseAuditResult } from '@/lib/audit-parse'
 import { AuditResultView } from '@/components/dashboard/audit-result-view'
+import type { SnapshotSummary } from '@/lib/gbp-audit-fields'
+
+type DataInfo = {
+  origin: 'cache' | 'live' | 'stored_after_failure'
+  captured_at: string | null
+  summary: SnapshotSummary
+}
+
+const ORIGIN_NOTE: Record<DataInfo['origin'], string> = {
+  live: 'Vừa lấy từ Google Maps',
+  cache: 'Dùng lại dữ liệu vừa lấy ít phút trước',
+  stored_after_failure: 'Lần lấy mới thất bại — đang dùng dữ liệu đã lưu, có thể đã cũ',
+}
 
 export default function ClientAuditPage() {
   const router = useRouter()
@@ -18,26 +30,11 @@ export default function ClientAuditPage() {
   const [client, setClient] = useState<any>(null)
   const [loadingClient, setLoadingClient] = useState(true)
   const [running, setRunning] = useState(false)
-  const [fetching, setFetching] = useState(false)
-  const [fetchDiagnostics, setFetchDiagnostics] = useState<any>(null)
   const [error, setError] = useState('')
   const [result, setResult] = useState<string | null>(null)
-  const [form, setForm] = useState({
-    output_language: 'Tiếng Việt',
-    description: '',
-    opening_hours: '',
-    primary_category: '',
-    additional_categories: '',
-    review_count: '',
-    rating: '',
-    recent_posts: '',
-    photos_status: '',
-    additional_info: '',
-  })
-
-  function update(key: string, value: string) {
-    setForm((prev) => ({ ...prev, [key]: value }))
-  }
+  const [dataInfo, setDataInfo] = useState<DataInfo | null>(null)
+  const [outputLanguage, setOutputLanguage] = useState('Tiếng Việt')
+  const [note, setNote] = useState('')
 
   useEffect(() => {
     async function load() {
@@ -48,10 +45,6 @@ export default function ClientAuditPage() {
         const found = (Array.isArray(data) ? data : []).find((c: any) => c.id === clientId)
         if (!found) throw new Error('Không tìm thấy doanh nghiệp này')
         setClient(found)
-        setForm((prev) => ({
-          ...prev,
-          primary_category: found.industry || '',
-        }))
       } catch (err: any) {
         setError(err.message || 'Có lỗi xảy ra')
       } finally {
@@ -61,67 +54,22 @@ export default function ClientAuditPage() {
     load()
   }, [clientId])
 
-  async function handleAutoFetch() {
-    if (!client) return
-    setFetching(true)
-    setError('')
-    setFetchDiagnostics(null)
-    try {
-      const res = await fetch('/api/gbp-snapshot', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_id: client.id, force: true }),
-      })
-      const data = await res.json()
-      setFetchDiagnostics(data.diagnostics || null)
-
-      if (!res.ok) throw new Error(data.error || 'Không lấy được dữ liệu')
-
-      const s = data.snapshot || {}
-      const f = snapshotToAuditFields(s)
-      setForm((prev) => ({
-        ...prev,
-        description: f.description || prev.description,
-        opening_hours: f.opening_hours || '',
-        primary_category: f.primary_category || prev.primary_category,
-        // chỉ điền khi trang Maps thực sự hiển thị danh mục phụ; không thì giữ nguyên ô đang có
-        additional_categories: f.additional_categories || prev.additional_categories,
-        review_count: f.review_count ?? prev.review_count,
-        rating: f.rating ?? prev.rating,
-        recent_posts: f.recent_posts || '',
-        photos_status: f.photos_status || '',
-        // thay khối dữ liệu Maps cũ (nếu có) thay vì nối thêm -> bấm nhiều lần không bị lặp
-        additional_info: f.additional_info ? mergeGbpBlock(prev.additional_info, f.additional_info) : prev.additional_info,
-      }))
-      showToast(data.message || 'Đã chạy quan sát')
-    } catch (err: any) {
-      setError(err.message || 'Có lỗi khi lấy dữ liệu Google Maps')
-    } finally {
-      setFetching(false)
-    }
-  }
-
   async function handleRunAudit() {
     if (!client) return
     setError('')
     setRunning(true)
     setResult(null)
+    setDataInfo(null)
     try {
       const res = await fetch('/api/audit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          client_id: client.id,
-          business_name: client.name,
-          industry: client.industry || '',
-          area: client.area || '',
-          gbp_link: client.gbp_link || '',
-          ...form,
-        }),
+        body: JSON.stringify({ client_id: client.id, output_language: outputLanguage, additional_info: note }),
       })
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'Chưa kiểm tra được hồ sơ. Thử lại sau ít phút.')
       setResult(data.audit_result || '')
+      setDataInfo(data.data || null)
       showToast('Đã kiểm tra xong hồ sơ')
     } catch (err: any) {
       setError(err.message || 'Có lỗi xảy ra')
@@ -145,6 +93,8 @@ export default function ClientAuditPage() {
     )
   }
 
+  const summary = dataInfo?.summary
+
   return (
     <>
       <Card>
@@ -152,84 +102,64 @@ export default function ClientAuditPage() {
           <h2>Kiểm tra hồ sơ Google</h2>
         </div>
         <p>
-          Cho <strong>{client.name}</strong>. Điền thông tin hồ sơ, hoặc để hệ thống tự lấy từ Google Maps.
+          Cho <strong>{client.name}</strong>. Hệ thống tự lấy hồ sơ hiện tại trên Google Maps (qua Outscraper) rồi mới kiểm
+          tra — bạn không cần nhập số liệu.
         </p>
-        <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <button className="secondary-button" onClick={handleAutoFetch} disabled={fetching}>
-            {fetching && <Loader2 size={14} className="animate-spin" />}
-            {fetching ? 'Đang lấy từ Google…' : 'Tự điền từ Google Maps'}
-          </button>
-          <button className="secondary-button" onClick={() => router.push(`/clients/${client.id}/plan`)}>
-            Xem kế hoạch 30 ngày
-          </button>
-          {fetching && (
-            <span style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>
-              Đang đọc hồ sơ trên Google Maps. Agent đọc từng tab (tổng quan, giới thiệu, đánh giá, bài đăng, ảnh) nên mất khoảng 1–2 phút, bạn đừng tắt trang.
-            </span>
-          )}
-        </div>
 
         <div className="form-grid" style={{ marginTop: 16 }}>
           <label className="field">
             <span>Ngôn ngữ kết quả</span>
-            <input value={form.output_language} onChange={(e) => update('output_language', e.target.value)} />
+            <input value={outputLanguage} onChange={(e) => setOutputLanguage(e.target.value)} />
           </label>
           <label className="field wide">
-            <span>Phần giới thiệu trên Google</span>
-            <textarea value={form.description} onChange={(e) => update('description', e.target.value)} rows={3} />
-          </label>
-          <label className="field wide">
-            <span>Giờ mở cửa trên Google Maps</span>
-            <textarea value={form.opening_hours} onChange={(e) => update('opening_hours', e.target.value)} rows={2} placeholder="Sẽ được điền khi Google Maps cung cấp dữ liệu" />
-          </label>
-          <label className="field">
-            <span>Danh mục chính</span>
-            <input value={form.primary_category} onChange={(e) => update('primary_category', e.target.value)} />
-          </label>
-          <label className="field">
-            <span>Danh mục phụ</span>
-            <input value={form.additional_categories} onChange={(e) => update('additional_categories', e.target.value)} />
-          </label>
-          <label className="field">
-            <span>Số đánh giá</span>
-            <input value={form.review_count} onChange={(e) => update('review_count', e.target.value)} />
-          </label>
-          <label className="field">
-            <span>Điểm trung bình</span>
-            <input value={form.rating} onChange={(e) => update('rating', e.target.value)} />
-          </label>
-          <label className="field wide">
-            <span>Tình trạng bài đăng gần đây</span>
-            <textarea value={form.recent_posts} onChange={(e) => update('recent_posts', e.target.value)} rows={4} placeholder="Nội dung bài đăng và thời gian đăng sẽ hiển thị tại đây" />
-          </label>
-          <label className="field wide">
-            <span>Tình trạng hình ảnh</span>
-            <input value={form.photos_status} onChange={(e) => update('photos_status', e.target.value)} />
-          </label>
-          <label className="field wide">
-            <span>Thông tin bổ sung</span>
-            <textarea value={form.additional_info} onChange={(e) => update('additional_info', e.target.value)} rows={2} />
+            <span>Ghi chú thêm (không bắt buộc)</span>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={2}
+              maxLength={2000}
+              placeholder="Điều Google Maps không cho thấy, ví dụ: vừa đổi địa chỉ, đang chạy khuyến mãi…"
+            />
           </label>
         </div>
 
-        {error && <div style={{ color: 'var(--danger)', background: 'var(--danger-soft)', padding: 12, borderRadius: 8, marginTop: 12 }}>{error}</div>}
-        {fetchDiagnostics && (
-          <div role="status" style={{ marginTop: 12, padding: 12, borderRadius: 8, background: 'var(--surface-muted, #f5f5f5)', fontSize: 13 }}>
-            <strong>Kết quả đọc Google Maps</strong>
-            <p style={{ margin: '6px 0' }}>
-              Mô tả: {fetchDiagnostics.has_description ? 'đã đọc' : 'chưa đọc được'} · Bài đăng: {fetchDiagnostics.posts_count ?? 0} · Giờ mở cửa: {fetchDiagnostics.hours_strategy || (form.opening_hours ? 'đã đọc' : 'chưa đọc được')}
-            </p>
-            {fetchDiagnostics.coverage_sections && <p style={{ margin: '6px 0' }}>Các mục: {Object.entries(fetchDiagnostics.coverage_sections).map(([key, value]) => `${key}: ${value}`).join(' · ')}</p>}
-            {Array.isArray(fetchDiagnostics.coverage_warnings) && fetchDiagnostics.coverage_warnings.length > 0 && <p style={{ margin: '6px 0' }}>Lưu ý: {fetchDiagnostics.coverage_warnings.join(' · ')}</p>}
+        {error && (
+          <div style={{ color: 'var(--danger)', background: 'var(--danger-soft)', padding: 12, borderRadius: 8, marginTop: 12 }}>
+            {error}
           </div>
         )}
 
-        <div style={{ marginTop: 16 }}>
+        <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <button className="primary-button" onClick={handleRunAudit} disabled={running}>
             {running && <Loader2 size={16} className="animate-spin" />}
-            {running ? 'Đang kiểm tra… (khoảng 10–20 giây)' : 'Kiểm tra hồ sơ'}
+            {running ? 'Đang lấy dữ liệu và kiểm tra…' : 'Kiểm tra hồ sơ'}
           </button>
+          <button className="secondary-button" onClick={() => router.push(`/clients/${client.id}/plan`)}>
+            Xem kế hoạch 30 ngày
+          </button>
+          {running && (
+            <span style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>
+              Lấy hồ sơ và review từ Google Maps rồi chấm điểm, thường mất 30–90 giây. Bạn đừng tắt trang.
+            </span>
+          )}
         </div>
+
+        {summary && dataInfo && (
+          <div role="status" style={{ marginTop: 16, padding: 12, borderRadius: 8, background: 'var(--surface-muted, #f5f5f5)', fontSize: 13 }}>
+            <strong>Dữ liệu Google Maps đã dùng</strong>
+            <p style={{ margin: '6px 0' }}>
+              {ORIGIN_NOTE[dataInfo.origin]}
+              {dataInfo.captured_at ? ` · ${new Date(dataInfo.captured_at).toLocaleString('vi-VN')}` : ''}
+            </p>
+            <p style={{ margin: '6px 0' }}>
+              {summary.rating != null ? `${summary.rating}★` : 'Chưa có sao'} · {summary.review_count ?? 0} đánh giá (đọc{' '}
+              {summary.reviews_loaded} mới nhất) · Bài đăng: {summary.posts_count} · Mô tả:{' '}
+              {summary.has_description ? 'có' : 'chưa đọc được'} · Giờ mở cửa: {summary.has_hours ? 'có' : 'chưa đọc được'}
+            </p>
+            {summary.unread.length > 0 && <p style={{ margin: '6px 0' }}>Chưa lấy được: {summary.unread.join(', ')}</p>}
+            {summary.warnings.length > 0 && <p style={{ margin: '6px 0' }}>Lưu ý: {summary.warnings.join(' · ')}</p>}
+          </div>
+        )}
       </Card>
 
       {result && (

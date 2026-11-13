@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
-import { publicError } from '@/lib/api-error'
+import { errorStatus, publicError } from '@/lib/api-error'
 import { requireActiveWorkspaceId } from '@/lib/auth'
 import { checkAiRateLimit, recordAiUsage } from '@/lib/rate-limit'
 import { getClientById, saveAuditV2, getAuditV2History } from '@/lib/db'
-import { getFreshSnapshotForClient } from '@/lib/gbp-snapshots'
+import { getClientSnapshot } from '@/lib/gbp-snapshot-service'
 import { resolveCompetitorSet } from '@/lib/competitors-store'
-import { runGbpPublicSnapshot } from '@/lib/gbp-browser-snapshot'
+import { runGbpPublicSnapshot, hasProfileData } from '@/lib/gbp-snapshot'
 import { runAudit, createRealAIClassifier, checkWebsiteReachable, diffAuditReports } from '@/lib/audit-engine'
 import type { AuditReport } from '@/lib/audit-engine'
 import type { GbpSnapshotPayload } from '@/lib/gbp-snapshot-types'
@@ -35,8 +35,8 @@ export const runtime = 'nodejs'
  * Body:
  *  - { client_id: string, forceRefresh?: boolean }
  *      Dùng client đã có trong workspace. Mặc định dùng lại snapshot còn
- *      trong TTL cache (gbp_snapshots) nếu có — forceRefresh=true để bắt
- *      chạy observe lại (tốn thêm 1 lượt Browserbase/Places + Claude extract).
+ *      trong TTL cache (gbp_snapshots) nếu có — forceRefresh=true để lấy
+ *      lại từ Outscraper (tốn credit). Snapshot lấy mới được lưu vào gbp_snapshots.
  *  - { business_name?: string, maps_url?: string, area?: string, industry?: string }
  *      Chạy thử nhanh, không cần client có sẵn trong workspace (giống cách
  *      /api/public/demo-audit nhận input) — không lưu gì vào gbp_snapshots.
@@ -66,8 +66,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json({ ok: true, history, diff })
   } catch (error: any) {
-    const status = error.message?.includes('Unauthorized') ? 401 : error.message?.includes('NoWorkspace') ? 409 : 500
-    return NextResponse.json({ error: publicError(error, 'Lỗi lấy lịch sử audit v2.') }, { status })
+    return NextResponse.json({ error: publicError(error, 'Lỗi lấy lịch sử audit v2.') }, { status: errorStatus(error) })
   }
 }
 
@@ -95,20 +94,12 @@ export async function POST(req: Request) {
       declaredIndustry = client.industry || undefined
       declaredArea = client.area || undefined
 
-      const stored = body.forceRefresh ? null : await getFreshSnapshotForClient(body.client_id, workspaceId)
-      if (stored) {
-        snapshot = stored
-        snapshotSource = `cache (gbp_snapshots, captured_at=${stored.captured_at})`
-      } else {
-        const fresh = await runGbpPublicSnapshot({
-          mapsUrl: client.gbp_link || undefined,
-          businessName: client.name || undefined,
-          area: client.area || undefined,
-          placeId: client.place_id || null,
-        })
-        snapshot = fresh
-        snapshotSource = `live (${fresh.source_used || 'unknown'})`
-      }
+      const got = await getClientSnapshot(client, workspaceId, { force: Boolean(body.forceRefresh) })
+      snapshot = (got.snapshot ?? { error: got.error ?? undefined }) as GbpSnapshotPayload
+      snapshotSource =
+        got.origin === 'cache'
+          ? `cache (gbp_snapshots, captured_at=${got.snapshot?.captured_at})`
+          : `${got.origin} (${got.snapshot?.source ?? 'unknown'})`
     } else {
       const business = String(body.business_name || body.business || '').trim()
       const mapsUrl = String(body.maps_url || body.mapsUrl || '').trim()
@@ -131,10 +122,7 @@ export async function POST(req: Request) {
       snapshotSource = `live (${fresh.source_used || 'unknown'})`
     }
 
-    const hasProfile = Boolean(
-      snapshot.business_name || snapshot.rating != null || snapshot.review_count != null || snapshot.address_text || snapshot.place_id,
-    )
-    if (!hasProfile) {
+    if (!hasProfileData(snapshot)) {
       return NextResponse.json(
         {
           error: (snapshot as any).error || 'Không đọc được hồ sơ Google Maps cho input này.',
@@ -200,13 +188,6 @@ export async function POST(req: Request) {
     })
   } catch (error: any) {
     console.error('audit v2-preview:', error)
-    const status = error.message?.includes('Unauthorized')
-      ? 401
-      : error.message?.includes('NoWorkspace')
-        ? 409
-        : error.message?.includes('RateLimited')
-          ? 429
-          : 500
-    return NextResponse.json({ error: publicError(error, 'Lỗi chạy audit v2 preview.') }, { status })
+    return NextResponse.json({ error: publicError(error, 'Lỗi chạy audit v2 preview.') }, { status: errorStatus(error) })
   }
 }

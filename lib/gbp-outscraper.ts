@@ -1,5 +1,5 @@
 /**
- * Nguồn dữ liệu GBP qua Outscraper API (thay cho Browserbase + Playwright).
+ * Nguồn dữ liệu GBP qua Outscraper API.
  *
  * Hai lời gọi chạy song song:
  *   - GET /maps/search-v3   -> thông tin hồ sơ (tên, giờ, about, subtypes, verified, posts, ảnh, phân bố sao...)
@@ -7,9 +7,10 @@
  *
  * File này tách 2 phần:
  *   - mapOutscraperToPayload(): hàm THUẦN, map JSON Outscraper -> GbpSnapshotPayload. Test được bằng fixture
- *     (scripts/test-outscraper-mapping.mjs). Đọc TÊN TRƯỜNG PHÒNG THỦ: tài liệu công khai của Outscraper không liệt kê
+ *     (scripts/test-outscraper-mapping.ts). Đọc TÊN TRƯỜNG PHÒNG THỦ: tài liệu công khai của Outscraper không liệt kê
  *     hết trường của từng review, nên mỗi trường có vài tên dự phòng và thiếu thì ghi vào coverage, không ném lỗi.
  *   - fetchOutscraperSnapshot(): gọi mạng, xử lý chế độ async (Pending -> poll).
+ * Test: scripts/test-outscraper-mapping.ts (hàm thuần) và scripts/test-outscraper-fetch.ts (lớp mạng, fetch giả).
  *
  * Env:
  *   OUTSCRAPER_API_KEY   bắt buộc
@@ -497,24 +498,40 @@ export async function fetchOutscraperSnapshot(
 ): Promise<OutscraperMapped> {
   const t0 = Date.now()
   const deep = (opts.depth ?? 'deep') === 'deep'
-  const [place, reviewsPlace] = await Promise.all([
-    fetchOutscraperPlace(opts),
-    deep
-      ? fetchOutscraperReviews(opts).catch(() => null) // review lỗi không làm hỏng cả snapshot
-      : Promise.resolve(null),
-  ])
+  const fetchPair = (o: FetchOutscraperOptions) =>
+    Promise.all([
+      fetchOutscraperPlace(o),
+      deep ? fetchOutscraperReviews(o).catch(() => null) : Promise.resolve(null), // review lỗi không làm hỏng cả snapshot
+    ])
+
+  let [place, reviewsPlace] = await fetchPair(opts)
+
+  // Link/place_id không ra kết quả (vd link rút gọn Outscraper không đọc được) -> thử lại theo tên + khu vực.
+  // Kết quả theo tên có thể là doanh nghiệp khác nên KHÔNG coi là "matched" và có cảnh báo.
+  let usedNameFallback = false
+  if (!place && (opts.placeId || opts.mapsUrl) && opts.businessName) {
+    const byName = { businessName: opts.businessName, area: opts.area, budgetMs: opts.budgetMs, reviewsLimit: opts.reviewsLimit }
+    ;[place, reviewsPlace] = await fetchPair(byName)
+    usedNameFallback = Boolean(place)
+  }
   if (!place) throw new Error('Outscraper: không tìm thấy địa điểm')
 
   const mapped = mapOutscraperToPayload(place, reviewsPlace, {
     claimedName: opts.businessName,
-    placeIdGiven: Boolean(opts.placeId),
+    placeIdGiven: Boolean(opts.placeId) && !usedNameFallback,
   })
-  if (!deep && mapped.coverage) mapped.coverage.depth = 'quick'
-  if (deep && !reviewsPlace && mapped.coverage) {
-    mapped.coverage.warnings.push('Không lấy được review từ Outscraper lần này.')
-    mapped.coverage.sections.reviews = 'error'
+  const cov = mapped.coverage
+  if (cov) {
+    if (!deep) cov.depth = 'quick'
+    if (deep && !reviewsPlace) {
+      cov.warnings.push('Không lấy được review từ Outscraper lần này.')
+      cov.sections.reviews = 'error'
+    }
+    if (usedNameFallback) {
+      cov.warnings.push('Không tìm thấy bằng link/place_id nên đã tìm theo tên + khu vực — kiểm tra lại đúng doanh nghiệp.')
+    }
+    cov.elapsed_ms = Date.now() - t0
   }
-  if (mapped.coverage) mapped.coverage.elapsed_ms = Date.now() - t0
   return mapped
 }
 

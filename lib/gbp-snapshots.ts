@@ -1,10 +1,7 @@
-/**
- * DB helpers cho gbp_snapshots — Giai đoạn A.
- * Copy vào: lib/gbp-snapshots.ts
- */
+/** DB helpers cho bảng gbp_snapshots. */
 
 import { createClient as createSupabaseServerClient } from '@/lib/supabase/server'
-import type { GbpSnapshotPayload, GbpSnapshotStatus } from '@/lib/gbp-snapshot-types'
+import type { GbpSnapshotStatus } from '@/lib/gbp-snapshot-types'
 import { GBP_SNAPSHOT_CACHE_DAYS } from '@/lib/gbp-snapshot-types'
 
 export async function createPendingSnapshot(input: {
@@ -22,7 +19,7 @@ export async function createPendingSnapshot(input: {
       client_id: input.client_id,
       place_id: input.place_id ?? null,
       maps_url: input.maps_url ?? null,
-      source: input.source || 'browser',
+      source: input.source || 'outscraper',
       status: 'pending' as GbpSnapshotStatus,
     })
     .select()
@@ -161,9 +158,8 @@ export async function getLatestSnapshotForClient(
     .select('*')
     .eq('client_id', clientId)
     .eq('workspace_id', workspaceId)
-    // Mốc ban đầu nhập tay (source = 'manual') chỉ có điểm đánh giá + số lượt đánh giá,
-    // không đủ để tự điền hồ sơ hay làm ngữ cảnh viết bài — bỏ qua ở đây,
-    // báo cáo Kết quả có truy vấn riêng nên vẫn dùng được.
+    // Dòng cũ source = 'manual' (mốc nhập tay từ phiên bản trước) chỉ có sao + số review,
+    // không đủ làm snapshot hồ sơ — bỏ qua ở đây; báo cáo Kết quả (lib/reports.ts) có truy vấn riêng.
     .neq('source', 'manual')
     .order('captured_at', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false })
@@ -178,96 +174,20 @@ export async function getLatestSnapshotForClient(
   return hydrateSnapshot(data)
 }
 
-/** Snapshot ok/partial còn trong TTL cache. */
+/** Snapshot ok/partial còn trong TTL cache (mặc định GBP_SNAPSHOT_CACHE_DAYS ngày, hoặc `maxAgeMs` nếu truyền). */
 export async function getFreshSnapshotForClient(
   clientId: string,
-  workspaceId: string
+  workspaceId: string,
+  maxAgeMs: number = GBP_SNAPSHOT_CACHE_DAYS * 24 * 60 * 60 * 1000
 ) {
-  const latest = await getLatestSnapshotForClient(clientId, workspaceId, {
-    onlyOk: true,
-  })
+  const latest = await getLatestSnapshotForClient(clientId, workspaceId, { onlyOk: true })
   if (!latest?.captured_at) return null
 
-  // Snapshot cũ do agent đọc nông (chưa có coverage) -> coi như hết hạn để lần sau chạy agent mới.
-  // Snapshot do agent mới luôn có coverage (cột hoặc raw_json.deep). Lần chạy chỉ qua Places không có coverage
-  // nhưng vẫn có raw_json.deep -> không bị coi là cũ (tránh chạy lại mãi khi không có Browserbase).
+  // Snapshot cũ (trước khi có coverage) -> coi như hết hạn để lần sau lấy lại bằng pipeline mới.
+  // Snapshot mới luôn có coverage (cột hoặc raw_json.deep).
   const rawDeep = (latest as any).raw_json?.deep
   if (!latest.coverage && !rawDeep) return null
 
-  const captured = new Date(latest.captured_at).getTime()
-  const maxAge = GBP_SNAPSHOT_CACHE_DAYS * 24 * 60 * 60 * 1000
-  if (Date.now() - captured > maxAge) return null
-  return latest
-}
-
-export { snapshotToAuditFields } from '@/lib/gbp-audit-fields'
-
-export type { GbpSnapshotPayload }
-
-function parseRating(value: unknown): number | null {
-  const n = parseFloat(String(value ?? '').trim().replace(',', '.'))
-  return Number.isFinite(n) && n > 0 && n <= 5 ? Math.round(n * 10) / 10 : null
-}
-
-function parseCount(value: unknown): number | null {
-  const digits = String(value ?? '').replace(/[^\d]/g, '')
-  if (!digits) return null
-  const n = parseInt(digits, 10)
-  return Number.isFinite(n) ? n : null
-}
-
-/**
- * Lưu "mốc ban đầu" từ chính điểm đánh giá + số lượt đánh giá khách nhập khi kiểm tra hồ sơ.
- * Nhẹ hơn hẳn lấy dữ liệu bằng trình duyệt, nên có mốc ngay từ ngày đầu để trang Kết quả
- * so sánh được sau này. Không ghi gì nếu không có số hợp lệ, hoặc nếu số y hệt lần lưu gần nhất
- * trong 24 giờ (tránh trùng khi bấm kiểm tra nhiều lần).
- */
-export async function saveManualBaselineSnapshot(input: {
-  workspace_id: string
-  client_id: string
-  business_name?: string | null
-  rating?: unknown
-  review_count?: unknown
-}) {
-  const rating = parseRating(input.rating)
-  const reviewCount = parseCount(input.review_count)
-  if (rating == null && reviewCount == null) return null
-
-  const supabase = await createSupabaseServerClient()
-
-  const { data: last } = await supabase
-    .from('gbp_snapshots')
-    .select('rating, review_count, captured_at')
-    .eq('client_id', input.client_id)
-    .eq('workspace_id', input.workspace_id)
-    .in('status', ['ok', 'partial'])
-    .not('captured_at', 'is', null)
-    .order('captured_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  if (last?.captured_at) {
-    const recent = Date.now() - new Date(last.captured_at).getTime() < 24 * 60 * 60 * 1000
-    const sameRating = (last.rating != null ? Number(last.rating) : null) === rating
-    const sameReviews = (last.review_count != null ? Number(last.review_count) : null) === reviewCount
-    if (recent && sameRating && sameReviews) return null
-  }
-
-  const { data, error } = await supabase
-    .from('gbp_snapshots')
-    .insert({
-      workspace_id: input.workspace_id,
-      client_id: input.client_id,
-      source: 'manual',
-      status: 'ok' as GbpSnapshotStatus,
-      captured_at: new Date().toISOString(),
-      business_name: input.business_name ?? null,
-      rating,
-      review_count: reviewCount,
-    })
-    .select()
-    .single()
-
-  if (error) throw error
-  return data
+  const age = Date.now() - new Date(latest.captured_at).getTime()
+  return age >= 0 && age <= maxAgeMs ? latest : null
 }

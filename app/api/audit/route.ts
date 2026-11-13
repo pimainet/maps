@@ -1,125 +1,123 @@
 import { NextResponse } from 'next/server'
-import { publicError } from '@/lib/api-error'
+import { errorStatus, publicError } from '@/lib/api-error'
 import { askClaude } from '@/lib/claude'
-import { saveAudit, getLatestAuditByClient, getAllAudits, findClientInWorkspace } from '@/lib/db'
-import { AUDIT_PROMPT } from '@/lib/prompts'
+import { saveAudit, getLatestAuditByClient, getAllAudits, getClientById } from '@/lib/db'
 import { requireActiveWorkspaceId } from '@/lib/auth'
 import { getClientProgress } from '@/lib/client-memory'
 import { checkAiRateLimit, recordAiUsage, enforceClientAuditQuota } from '@/lib/rate-limit'
-import { saveManualBaselineSnapshot } from '@/lib/gbp-snapshots'
+import { getClientSnapshot } from '@/lib/gbp-snapshot-service'
+import { hasProfileData } from '@/lib/gbp-snapshot'
+import { summarizeSnapshot } from '@/lib/gbp-audit-fields'
+import { buildAuditPrompt } from '@/lib/audit-prompt'
 
 export const maxDuration = 300
 export const runtime = 'nodejs'
 
+/**
+ * Bấm kiểm tra lại liên tiếp (vd Claude lỗi tạm thời rồi thử lại) thì dùng lại dữ liệu Maps vừa lấy,
+ * không gọi Outscraper thêm lần nữa. Quá khung này thì luôn lấy mới — audit phải dựa trên dữ liệu hiện tại.
+ */
+const SNAPSHOT_REUSE_MS = 30 * 60_000
+
+const MAX_NOTE_CHARS = 2000
+
 export async function GET(req: Request) {
   try {
     const workspaceId = await requireActiveWorkspaceId()
-    const { searchParams } = new URL(req.url)
-    const clientId = searchParams.get('client_id')
-    if (!clientId) {
-      const all = await getAllAudits(workspaceId)
-      return NextResponse.json(all)
-    }
-    const data = await getLatestAuditByClient(clientId, workspaceId)
+    const clientId = new URL(req.url).searchParams.get('client_id')
+    const data = clientId ? await getLatestAuditByClient(clientId, workspaceId) : await getAllAudits(workspaceId)
     return NextResponse.json(data)
   } catch (error: any) {
-    const status = error.message?.includes('Unauthorized')
-      ? 401
-      : error.message?.includes('NoWorkspace')
-        ? 409
-        : error.message?.includes('RateLimited')
-          ? 429
-          : 500
-    return NextResponse.json({ error: publicError(error) }, { status })
+    return NextResponse.json({ error: publicError(error) }, { status: errorStatus(error) })
   }
 }
 
+/**
+ * POST { client_id, output_language?, additional_info? }
+ * Tự lấy hồ sơ Google Maps của doanh nghiệp qua Outscraper (xem lib/gbp-snapshot-service.ts), rồi mới chạy audit.
+ * additional_info chỉ là ghi chú thêm của người dùng (điều Maps không cho thấy), không còn là số liệu nhập tay.
+ */
 export async function POST(req: Request) {
   try {
     const workspaceId = await requireActiveWorkspaceId()
     const { userId } = await checkAiRateLimit(workspaceId, 'audit')
-    const body = await req.json()
+    const body = await req.json().catch(() => null)
 
-    if (body.client_id) {
-      const client = await findClientInWorkspace(body.client_id, workspaceId)
-      if (!client) {
-        return NextResponse.json({ error: 'Không tìm thấy khách hàng trong workspace hiện tại.' }, { status: 404 })
-      }
-      await enforceClientAuditQuota(body.client_id, workspaceId)
+    const clientId = typeof body?.client_id === 'string' ? body.client_id : ''
+    if (!clientId) {
+      return NextResponse.json({ error: 'Thiếu client_id.' }, { status: 400 })
+    }
+    const client = await getClientById(clientId, workspaceId)
+    if (!client) {
+      return NextResponse.json({ error: 'Không tìm thấy khách hàng trong workspace hiện tại.' }, { status: 404 })
+    }
+    await enforceClientAuditQuota(clientId, workspaceId)
+
+    // 1) Dữ liệu thật từ Google Maps. Không có dữ liệu thì KHÔNG gọi Claude (tránh audit "đoán mò" và tốn quota).
+    const { snapshot, origin, error: sourceError } = await getClientSnapshot(client, workspaceId, {
+      maxAgeMs: SNAPSHOT_REUSE_MS,
+    })
+    if (!snapshot || !hasProfileData(snapshot)) {
+      return NextResponse.json(
+        {
+          error:
+            'Không lấy được dữ liệu từ Google Maps cho doanh nghiệp này. Kiểm tra lại link Google Maps / Place ID của khách rồi thử lại.',
+          data: { origin, source_error: sourceError },
+        },
+        { status: 422 },
+      )
     }
 
-    let progress_context = ''
-    if (body.client_id) {
-      try {
-        const progress = await getClientProgress(body.client_id, workspaceId)
-        progress_context = progress.summary_text
-      } catch (e: any) {
-        console.error('getClientProgress audit:', e?.message)
-        progress_context =
-          '### Tiến độ đã ghi nhận trong hệ thống\n- Không lấy được tiến độ (bỏ qua).'
-      }
-    } else {
-      progress_context =
-        '### Tiến độ đã ghi nhận trong hệ thống\n- Chưa gắn client_id — không có lịch sử.'
+    // 2) Ngữ cảnh tiến độ (lỗi ở đây không được làm hỏng audit).
+    let progressContext: string
+    try {
+      progressContext = (await getClientProgress(clientId, workspaceId)).summary_text
+    } catch (e: any) {
+      console.error('getClientProgress audit:', e?.message)
+      progressContext = '### Tiến độ đã ghi nhận trong hệ thống\n- Không lấy được tiến độ (bỏ qua).'
     }
 
-    const prompt = AUDIT_PROMPT.replaceAll(
-      '{{output_language}}',
-      body.output_language || 'Tiếng Việt'
-    )
-      .replaceAll('{{business_name}}', body.business_name || '')
-      .replaceAll('{{industry}}', body.industry || '')
-      .replaceAll('{{area}}', body.area || '')
-      .replaceAll('{{gbp_link}}', body.gbp_link || '')
-      .replaceAll('{{description}}', body.description || '')
-      .replaceAll('{{primary_category}}', body.primary_category || '')
-      .replaceAll('{{additional_categories}}', body.additional_categories || '')
-      .replaceAll('{{review_count}}', body.review_count || '')
-      .replaceAll('{{rating}}', body.rating || '')
-      .replaceAll('{{recent_posts}}', body.recent_posts || '')
-      .replaceAll('{{photos_status}}', body.photos_status || '')
-      .replaceAll('{{additional_info}}', body.additional_info || '')
-      .replaceAll('{{progress_context}}', progress_context)
-
+    // 3) Audit.
+    const userNote = typeof body.additional_info === 'string' ? body.additional_info.slice(0, MAX_NOTE_CHARS) : ''
+    const staleNote =
+      origin === 'stored_after_failure'
+        ? `LƯU Ý: lần lấy dữ liệu mới từ Google Maps thất bại; dữ liệu dưới đây là bản đã lưu ngày ${String(snapshot.captured_at || '').slice(0, 10)}, có thể đã cũ.`
+        : ''
+    const prompt = buildAuditPrompt({
+      snapshot,
+      declared: client,
+      progressContext,
+      outputLanguage: typeof body.output_language === 'string' ? body.output_language.slice(0, 40) : undefined,
+      note: [staleNote, userNote].filter(Boolean).join('\n'),
+    })
     const audit_result = await askClaude(prompt, { maxTokens: 3000, temperature: 0.4 })
     await recordAiUsage(workspaceId, 'audit', userId)
 
     const saved = await saveAudit({
-      client_id: body.client_id,
+      client_id: clientId,
       audit_result,
-      raw_input: body,
+      raw_input: {
+        data_origin: origin,
+        snapshot_id: snapshot.id ?? null,
+        captured_at: snapshot.captured_at ?? null,
+        note: userNote || null,
+      },
       workspace_id: workspaceId,
     })
-
-    // Lưu mốc ban đầu (điểm đánh giá, số lượt đánh giá) để trang Kết quả có gì so sánh sau này.
-    // Lỗi ở đây không được làm hỏng kết quả kiểm tra.
-    if (body.client_id) {
-      try {
-        await saveManualBaselineSnapshot({
-          workspace_id: workspaceId,
-          client_id: body.client_id,
-          business_name: body.business_name,
-          rating: body.rating,
-          review_count: body.review_count,
-        })
-      } catch (e: any) {
-        console.error('saveManualBaselineSnapshot:', e?.message)
-      }
-    }
 
     return NextResponse.json({
       audit: saved,
       audit_result,
-      used_progress: !!body.client_id,
+      used_progress: true,
+      data: {
+        origin,
+        source: snapshot.source ?? null,
+        captured_at: snapshot.captured_at ?? null,
+        source_error: sourceError,
+        summary: summarizeSnapshot(snapshot),
+      },
     })
   } catch (error: any) {
-    const status = error.message?.includes('Unauthorized')
-      ? 401
-      : error.message?.includes('NoWorkspace')
-        ? 409
-        : error.message?.includes('RateLimited')
-          ? 429
-          : 500
-    return NextResponse.json({ error: publicError(error) }, { status })
+    return NextResponse.json({ error: publicError(error) }, { status: errorStatus(error) })
   }
 }

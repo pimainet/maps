@@ -1,11 +1,9 @@
 /**
  * Schema cố định cho snapshot GBP public.
- * Dùng chung cho browser extract, API response, Audit prompt, Audit engine.
+ * Dùng chung cho nguồn Outscraper / Places, API response, Audit prompt, Audit engine.
  *
- * v2 (agent đọc sâu): thêm services, attributes, action_links, review_stats,
- * rating_distribution, business_status, claim_signal, photo_categories và
- * `coverage` — bản đồ cho biết agent ĐÃ đọc được phần nào / KHÔNG đọc được phần nào,
- * để audit không nhầm "agent chưa lấy được" với "hồ sơ thật sự thiếu".
+ * `coverage` cho biết ĐÃ đọc được phần nào / KHÔNG đọc được phần nào,
+ * để audit không nhầm "chưa lấy được" với "hồ sơ thật sự thiếu".
  */
 
 export type GbpPostItem = {
@@ -16,9 +14,9 @@ export type GbpPostItem = {
 
 /**
  * 1 review. Hai nguồn:
- *  - Browser (tab Bài đánh giá, sắp xếp Mới nhất): tối đa ~30 review, CÓ ngày + CÓ phản hồi của chủ.
+ *  - Outscraper (reviews-v3, sắp xếp Mới nhất): tối đa ~30 review, CÓ ngày + phản hồi của chủ (nếu Outscraper trả về).
  *  - Places API (New): tối đa ~5 review "liên quan nhất", KHÔNG có phản hồi của chủ.
- * Browser ưu tiên; Places chỉ là fallback khi browser không lấy được review.
+ * Outscraper ưu tiên; Places chỉ là dự phòng khi Outscraper không lấy được review.
  */
 export type GbpReviewItem = {
   rating: number
@@ -53,7 +51,7 @@ export type GbpBusinessStatus =
 /** 'claimed' = Outscraper báo hồ sơ đã xác minh. 'unclaimed' = thấy nút "Nhận quyền sở hữu". 'unknown' = không thấy, KHÔNG có nghĩa đã được xác minh. */
 export type GbpClaimSignal = 'unclaimed' | 'claimed' | 'unknown'
 
-/** Thống kê review tính từ danh sách review browser đã tải (sắp xếp mới nhất). */
+/** Thống kê review tính từ danh sách review đã tải (sắp xếp mới nhất). */
 export type GbpReviewStats = {
   loaded: number
   with_text: number
@@ -92,9 +90,8 @@ export type GbpSnapshotPayload = {
   description?: string | null
   primary_category?: string | null
   /**
-   * Chỉ điền khi trang Maps HIỂN THỊ danh mục phụ. Giao diện công khai của Maps thường chỉ
-   * hiện danh mục chính; danh mục phụ chuẩn chỉ có qua Business Profile API (OAuth).
-   * `types` của Places API KHÔNG phải danh mục phụ của hồ sơ nên không được đưa vào đây.
+   * Lấy từ `subtypes` của Outscraper (chưa xác minh với dữ liệu thật). Danh mục phụ chuẩn chỉ có qua
+   * Business Profile API (OAuth). `types` của Places API KHÔNG phải danh mục phụ của hồ sơ nên không được đưa vào đây.
    */
   additional_categories?: string | null
   opening_hours?: string | null
@@ -117,7 +114,7 @@ export type GbpSnapshotPayload = {
   action_links?: GbpActionLink[]
   business_status?: GbpBusinessStatus | null
   claim_signal?: GbpClaimSignal | null
-  /** { '5': 120, '4': 30, ... } lấy từ biểu đồ phân bố sao ở tab Bài đánh giá. */
+  /** { '5': 120, '4': 30, ... } phân bố sao của toàn bộ review. */
   rating_distribution?: Record<string, number> | null
   review_stats?: GbpReviewStats | null
   photo_categories?: string[]
@@ -126,11 +123,32 @@ export type GbpSnapshotPayload = {
 
 export type GbpSnapshotStatus = 'pending' | 'running' | 'ok' | 'partial' | 'failed'
 
-/** TTL cache: không chạy browser lại nếu snapshot ok còn hạn (ngày). */
+/** TTL cache: không gọi lại nguồn dữ liệu nếu snapshot ok còn hạn (ngày). */
 export const GBP_SNAPSHOT_CACHE_DAYS = 7
 
 /** Số bài đăng tối đa lưu trong recent_posts. */
 export const GBP_SNAPSHOT_MAX_POSTS = 8
 
-/** Số review tối đa agent tải ở chế độ deep. */
+/** Số review tối đa tải ở chế độ deep. */
 export const GBP_SNAPSHOT_MAX_REVIEWS = 30
+
+// ---------------------------------------------------------------------------
+// Đầu vào / đầu ra của lib/gbp-snapshot.ts
+// ---------------------------------------------------------------------------
+
+export type RunGbpSnapshotInput = {
+  mapsUrl?: string
+  businessName?: string
+  area?: string
+  placeId?: string | null
+  /** 'deep' (mặc định): hồ sơ + review. 'quick': chỉ hồ sơ (không gọi reviews-v3), dùng cho demo công khai. */
+  depth?: 'quick' | 'deep'
+}
+
+export type GbpSnapshotSource = 'outscraper' | 'places' | 'outscraper+places'
+
+export type RunGbpSnapshotResult = GbpSnapshotPayload & {
+  error?: string
+  raw?: unknown
+  source_used?: GbpSnapshotSource
+}

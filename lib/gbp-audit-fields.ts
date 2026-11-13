@@ -1,9 +1,9 @@
 /**
- * Chuyển snapshot GBP (payload hoặc dòng DB) thành các trường form Audit.
- * File THUẦN (không import server) để dùng được cả ở client component lẫn server route.
+ * Chuyển snapshot GBP (payload hoặc dòng DB) thành các trường đưa vào AUDIT_PROMPT.
+ * File THUẦN (không import server) nên test được bằng fixture (scripts/test-audit-fields.ts).
  */
 
-export const GBP_BLOCK_START = '[[DỮ LIỆU QUAN SÁT TỪ GOOGLE MAPS]]'
+export const GBP_BLOCK_START = '[[DỮ LIỆU LẤY TỪ GOOGLE MAPS]]'
 export const GBP_BLOCK_END = '[[HẾT DỮ LIỆU GOOGLE MAPS]]'
 
 const SECTION_LABEL: Record<string, string> = {
@@ -26,7 +26,7 @@ function clip(s: unknown, n: number): string {
   return String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n)
 }
 
-/** Khối text đưa vào additional_info: mọi thứ agent quan sát được ngoài các trường form riêng. */
+/** Khối text đưa vào additional_info: mọi thứ đọc được từ Maps ngoài các trường riêng của prompt. */
 export function buildGbpObservationBlock(s: any): string {
   if (!s) return ''
   const lines: string[] = []
@@ -38,13 +38,15 @@ export function buildGbpObservationBlock(s: any): string {
     lines.push(`Trạng thái hoạt động: ${STATUS_LABEL[s.business_status]}`)
   }
   if (s.claim_signal === 'unclaimed') {
-    lines.push('Quyền sở hữu: thấy nút "Nhận quyền sở hữu doanh nghiệp này" -> hồ sơ có thể CHƯA được xác nhận/quản lý')
+    lines.push('Quyền sở hữu: hồ sơ chưa được xác minh (verified = false) -> có thể CHƯA được xác nhận/quản lý')
   }
   if (s.opening_hours) lines.push(`Giờ mở cửa: ${clip(s.opening_hours, 400)}`)
   else if (s.hours_today) {
     lines.push(
       `Giờ mở cửa: hồ sơ CÓ khai giờ (đọc được trạng thái hôm nay: ${clip(s.hours_today, 100)}), chưa đọc được bảng 7 ngày — không kết luận là thiếu giờ.`,
     )
+  } else {
+    lines.push('Giờ mở cửa: chưa đọc được trong lần lấy dữ liệu này — không kết luận là thiếu.')
   }
 
   const links = Array.isArray(s.action_links) ? s.action_links : []
@@ -123,7 +125,7 @@ export function buildGbpObservationBlock(s: any): string {
     const noTab = Object.keys(cov.sections).filter((k) => cov.sections[k] === 'not_found')
     if (failed.length) {
       lines.push(
-        `LƯU Ý — agent KHÔNG đọc được: ${failed.map((k) => SECTION_LABEL[k] || k).join(', ')}. Không kết luận các mục này là "thiếu" khi chưa có dữ liệu.`,
+        `LƯU Ý — KHÔNG đọc được: ${failed.map((k) => SECTION_LABEL[k] || k).join(', ')}. Không kết luận các mục này là "thiếu" khi chưa có dữ liệu.`,
       )
     }
     if (noTab.length) {
@@ -141,46 +143,67 @@ export function buildGbpObservationBlock(s: any): string {
   return `${GBP_BLOCK_START}\n${lines.join('\n')}\n${GBP_BLOCK_END}`
 }
 
-/** Thay khối cũ (nếu có) bằng khối mới, giữ nguyên phần người dùng tự gõ. */
-export function mergeGbpBlock(prevInfo: string | undefined, block: string): string {
-  const prev = String(prevInfo || '')
-  const re = new RegExp(`${escapeRe(GBP_BLOCK_START)}[\\s\\S]*?${escapeRe(GBP_BLOCK_END)}`, 'g')
-  const stripped = prev.replace(re, '').trim()
-  return [stripped, block].filter(Boolean).join('\n\n')
+const NOT_READ = 'Chưa đọc được trong lần lấy dữ liệu này — không kết luận là thiếu.'
+
+export type AuditFields = {
+  description: string
+  primary_category: string
+  additional_categories: string
+  review_count: string
+  rating: string
+  recent_posts: string
+  photos_status: string
+  additional_info: string
 }
 
-function escapeRe(s: string) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-export function snapshotToAuditFields(snapshot: any): {
-  description?: string
-  primary_category?: string
-  additional_categories?: string
-  review_count?: string
-  rating?: string
-  opening_hours?: string
-  recent_posts?: string
-  photos_status?: string
-  additional_info?: string
-} {
-  if (!snapshot) return {}
-  const block = buildGbpObservationBlock(snapshot)
-  const posts = Array.isArray(snapshot.recent_posts)
-    ? snapshot.recent_posts
+export function snapshotToAuditFields(snapshot: any): AuditFields {
+  const s = snapshot || {}
+  const posts: string[] = Array.isArray(s.recent_posts)
+    ? s.recent_posts
         .filter((post: any) => post?.text)
         .slice(0, 8)
         .map((post: any, index: number) => `${index + 1}. ${post.approx_date ? `[${clip(post.approx_date, 30)}] ` : ''}${clip(post.text, 500)}`)
     : []
   return {
-    description: snapshot.description || undefined,
-    primary_category: snapshot.primary_category || undefined,
-    additional_categories: snapshot.additional_categories || undefined,
-    review_count: snapshot.review_count != null ? String(snapshot.review_count) : undefined,
-    rating: snapshot.rating != null ? String(snapshot.rating) : undefined,
-    opening_hours: snapshot.opening_hours || snapshot.hours_today || undefined,
-    recent_posts: posts.length ? posts.join('\n') : snapshot.posts_signal || 'Chưa đọc thấy bài đăng trong lần quan sát này.',
-    photos_status: snapshot.photos_signal || undefined,
-    additional_info: block || undefined,
+    description: s.description || '',
+    primary_category: s.primary_category || '',
+    additional_categories: s.additional_categories || NOT_READ,
+    review_count: s.review_count != null ? String(s.review_count) : '',
+    rating: s.rating != null ? String(s.rating) : '',
+    recent_posts: posts.length ? posts.join('\n') : s.posts_signal || NOT_READ,
+    photos_status: s.photos_signal || '',
+    additional_info: buildGbpObservationBlock(s),
+  }
+}
+
+export type SnapshotSummary = {
+  business_name: string | null
+  rating: number | null
+  review_count: number | null
+  reviews_loaded: number
+  posts_count: number
+  has_description: boolean
+  has_hours: boolean
+  /** Các mục KHÔNG đọc được (nhãn tiếng Việt) — để người dùng biết đâu là "chưa lấy được" chứ không phải "hồ sơ thiếu". */
+  unread: string[]
+  warnings: string[]
+}
+
+/** Tóm tắt ngắn những gì đã lấy được, hiển thị cho người dùng sau khi audit. */
+export function summarizeSnapshot(snapshot: any): SnapshotSummary {
+  const s = snapshot || {}
+  const sections: Record<string, string> = s.coverage?.sections || {}
+  return {
+    business_name: s.business_name || null,
+    rating: s.rating != null ? Number(s.rating) : null,
+    review_count: s.review_count != null ? Number(s.review_count) : null,
+    reviews_loaded: s.coverage?.reviews_loaded ?? (Array.isArray(s.reviews) ? s.reviews.length : 0),
+    posts_count: Array.isArray(s.recent_posts) ? s.recent_posts.length : 0,
+    has_description: Boolean(s.description),
+    has_hours: Boolean(s.opening_hours || s.hours_today),
+    unread: Object.keys(sections)
+      .filter((k) => sections[k] === 'error' || sections[k] === 'skipped')
+      .map((k) => SECTION_LABEL[k] || k),
+    warnings: Array.isArray(s.coverage?.warnings) ? s.coverage.warnings.slice(0, 4).map((w: any) => clip(w, 200)) : [],
   }
 }

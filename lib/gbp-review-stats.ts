@@ -1,6 +1,6 @@
 import type { GbpReviewItem, GbpReviewStats } from '@/lib/gbp-snapshot-types'
 
-/** Thống kê review từ danh sách đã tải (sắp xếp mới nhất). Dùng chung cho nguồn browser và Outscraper. */
+/** Thống kê review từ danh sách đã tải (sắp xếp mới nhất). Từ review Outscraper (và Places khi dự phòng). */
 export function computeReviewStats(reviews: GbpReviewItem[]): GbpReviewStats | null {
   if (!reviews.length) return null
   const ages = reviews.map((r) => r.age_days_est).filter((d): d is number => typeof d === 'number')

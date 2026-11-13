@@ -19,7 +19,7 @@ export type { AuditDiff, AuditDiffEntry } from './diff'
  * Audit Engine — 34/34 checks, hoạt động trên ĐÚNG dữ liệu hệ thống thật sự
  * thu thập được hôm nay (GbpSnapshotPayload). Nhiều check sẽ trả
  * "insufficient" KHÔNG phải vì logic sai, mà vì Data Collector hiện tại
- * (gbp-browser-snapshot.ts) chưa thu thập trường đó — đây là input có giá
+ * (lib/gbp-snapshot.ts: Outscraper + Places) chưa thu thập trường đó — đây là input có giá
  * trị cho việc ưu tiên nâng cấp collector tiếp theo (xem check nào insufficient
  * nhiều nhất).
  *

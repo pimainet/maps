@@ -1,8 +1,7 @@
-import { buildGbpObservationBlock } from '@/lib/gbp-audit-fields'
 import { NextResponse } from 'next/server'
 import { askClaude } from '@/lib/claude'
-import { AUDIT_PROMPT } from '@/lib/prompts'
-import { runGbpPublicSnapshot } from '@/lib/gbp-browser-snapshot'
+import { buildAuditPrompt } from '@/lib/audit-prompt'
+import { runGbpPublicSnapshot, hasProfileData } from '@/lib/gbp-snapshot'
 import { parseAuditResult } from '@/lib/audit-parse'
 import { extractPlaceIdFromUrl, isSupportedGoogleMapsUrl } from '@/lib/place-identity'
 import type { DemoAudit } from '@/lib/demo-audit'
@@ -117,72 +116,24 @@ export async function POST(req: Request) {
       businessName: business || undefined,
       area: city || undefined,
       placeId,
-      // demo công khai: đọc nhanh (tổng quan + giờ + giới thiệu), không chạy đủ tab để giữ thời gian/chi phí
+      // demo công khai: chỉ lấy hồ sơ (không gọi reviews-v3) để giữ thời gian/chi phí
       depth: 'quick',
     })
 
-    const hasProfile = Boolean(
-      snapshot.business_name ||
-        snapshot.rating != null ||
-        snapshot.review_count != null ||
-        snapshot.address_text ||
-        snapshot.place_id,
-    )
-
-    if (!hasProfile) {
+    if (!hasProfileData(snapshot)) {
+      // Lỗi chi tiết (có thể chứa thông báo của nhà cung cấp) chỉ ghi log, không trả ra endpoint công khai.
+      console.error('public demo snapshot failed:', snapshot.error)
       return NextResponse.json(
-        {
-          error:
-            snapshot.error ||
-            'Không đọc được hồ sơ Google Maps. Kiểm tra lại link hoặc tên cửa hàng + khu vực.',
-          snapshot,
-        },
+        { error: 'Không đọc được hồ sơ Google Maps. Kiểm tra lại link hoặc tên cửa hàng + khu vực.' },
         { status: 422, headers },
       )
     }
 
-    const additional = [
-      snapshot.address_text ? `Địa chỉ (Maps): ${snapshot.address_text}` : '',
-      snapshot.phone ? `SĐT (Maps): ${snapshot.phone}` : '',
-      snapshot.website_url ? `Website: ${snapshot.website_url}` : '',
-      snapshot.opening_hours
-        ? `Giờ mở cửa (Maps, ĐÃ CÓ): ${snapshot.opening_hours}`
-        : 'Giờ mở cửa: Chưa đọc được trên lần quan sát này — không kết luận là thiếu.',
-      snapshot.additional_categories
-        ? `Danh mục phụ (Maps, ĐÃ CÓ): ${snapshot.additional_categories}`
-        : 'Danh mục phụ: Chưa đọc được trên lần quan sát này — không kết luận là thiếu.',
-      Array.isArray(snapshot.recent_posts) && snapshot.recent_posts.length
-        ? 'Bài đăng:\n' +
-          snapshot.recent_posts
-            .map((p: any, i: number) => `${i + 1}. ${String(p.text || '').slice(0, 160)}`)
-            .join('\n')
-        : '',
-      snapshot.source_used ? `Nguồn quan sát: ${snapshot.source_used}` : '',
-      buildGbpObservationBlock(snapshot),
-    ]
-      .filter(Boolean)
-      .join('\n')
-
-    const prompt = AUDIT_PROMPT.replaceAll('{{output_language}}', 'Tiếng Việt')
-      .replaceAll('{{business_name}}', snapshot.business_name || business)
-      .replaceAll('{{industry}}', snapshot.primary_category || industryLabel)
-      .replaceAll('{{area}}', snapshot.address_text || city)
-      .replaceAll('{{gbp_link}}', snapshot.maps_url || mapsUrl)
-      .replaceAll('{{description}}', snapshot.description || '')
-      .replaceAll('{{primary_category}}', snapshot.primary_category || '')
-      .replaceAll(
-        '{{additional_categories}}',
-        snapshot.additional_categories || 'Chưa đọc được trên lần quan sát này — không kết luận là thiếu',
-      )
-      .replaceAll('{{review_count}}', snapshot.review_count != null ? String(snapshot.review_count) : '')
-      .replaceAll('{{rating}}', snapshot.rating != null ? String(snapshot.rating) : '')
-      .replaceAll('{{recent_posts}}', snapshot.posts_signal || '')
-      .replaceAll('{{photos_status}}', snapshot.photos_signal || '')
-      .replaceAll('{{additional_info}}', additional)
-      .replaceAll(
-        '{{progress_context}}',
-        '### Tiến độ đã ghi nhận trong hệ thống\n- Audit demo công khai từ landing — chưa có lịch sử chu kỳ.',
-      )
+    const prompt = buildAuditPrompt({
+      snapshot,
+      declared: { name: business, industry: industryLabel, area: city, gbp_link: mapsUrl },
+      progressContext: '### Tiến độ đã ghi nhận trong hệ thống\n- Audit demo công khai từ landing — chưa có lịch sử chu kỳ.',
+    })
 
     const auditText = await askClaude(prompt, { maxTokens: 2200, temperature: 0.3 })
     const parsed = parseAuditResult(auditText, {

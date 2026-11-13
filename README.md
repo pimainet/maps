@@ -28,21 +28,27 @@ Lịch chạy nằm ở `vercel.json` (`0 1 * * *` = 08:00 giờ Việt Nam).
 
 ## Nguồn dữ liệu Google Maps: Outscraper
 
-Hồ sơ Google Maps giờ được lấy qua [Outscraper](https://outscraper.com) thay cho trình duyệt Browserbase.
+Mỗi lần bấm **Kiểm tra hồ sơ** (`POST /api/audit`), hệ thống tự lấy hồ sơ + tối đa 30 review mới nhất của doanh nghiệp qua
+[Outscraper](https://outscraper.com), lưu vào `gbp_snapshots`, rồi mới chạy audit. Không còn nhập số liệu tay.
+
+- Bấm lại trong vòng 30 phút thì dùng lại dữ liệu vừa lấy (không tốn thêm credit).
+- Lấy mới thất bại -> dùng bản đã lưu gần nhất và báo rõ là có thể cũ. Không có dữ liệu nào -> trả lỗi 422, **không** gọi Claude.
+- Link/place_id không ra kết quả -> tự thử lại theo tên + khu vực (có cảnh báo trong dữ liệu).
+- Chi phí mỗi audit bị chặn bởi hạn mức sẵn có: 3 audit/khách/30 ngày và rate-limit `audit`.
 
 | Biến | Ý nghĩa |
 | --- | --- |
-| `OUTSCRAPER_API_KEY` | API key. Có biến này thì Outscraper là nguồn mặc định. |
-| `GBP_PROVIDER` | Tùy chọn: `outscraper`, `browser` (nguồn Browserbase cũ, cần `BROWSERBASE_API_KEY`) hoặc `places`. Bỏ trống = tự chọn theo key có sẵn. |
+| `OUTSCRAPER_API_KEY` | API key. Thiếu thì chỉ dùng Places API (ít dữ liệu hơn: ~5 review, không có phản hồi của chủ). |
 | `OUTSCRAPER_LANGUAGE`, `OUTSCRAPER_REGION` | Mặc định `vi`, `VN`. |
+| `GOOGLE_PLACES_API_KEY` | Tuỳ chọn: đối chiếu số liệu, bù trường thiếu và làm dự phòng khi Outscraper lỗi. |
 
-Places API (`GOOGLE_PLACES_API_KEY`) vẫn dùng để đối chiếu số liệu và làm dự phòng khi Outscraper lỗi.
+Biến `GBP_PROVIDER` và nguồn Browserbase/Playwright đã bị gỡ; biến này nếu còn trên Vercel sẽ bị bỏ qua.
 
 **Chưa xác minh với dữ liệu thật** (làm 1 request thử trước khi tin): trường `owner_answer` của review, trường `posts`,
 và `subtypes` có đúng là danh mục phụ không. Thiếu `owner_answer` thì hệ thống ghi cảnh báo và không kết luận tỉ lệ phản hồi;
 thiếu `posts` thì ghi "không kết luận là chưa đăng bài". Danh sách dịch vụ chi tiết không có từ Outscraper (coverage ghi `skipped`).
 
-Kiểm tra mapping: `npx tsx scripts/test-outscraper-mapping.ts`.
+Kiểm tra: `npm run test:logic` (mapping Outscraper, lớp mạng với fetch giả, dựng prompt audit...).
 
 ## Review Watch (theo dõi review hàng tuần)
 
@@ -76,7 +82,6 @@ Kiểm tra: `npx tsx scripts/test-competitors.ts`.
 
 ```
 OUTSCRAPER_API_KEY=...        # bắt buộc, lấy ở app.outscraper.com > Profile > API
-GBP_PROVIDER=outscraper       # tuỳ chọn, bỏ trống cũng tự chọn Outscraper khi có key
 REVIEW_WATCH_ENABLED=false    # bật true sau khi thử xong
 CRON_SECRET=...               # chuỗi ngẫu nhiên dài, dùng cho route cron
 ```

@@ -27,7 +27,7 @@ const GOOGLE_MAPS_HOSTS = new Set([
   'maps.app.goo.gl', 'goo.gl', 'g.page',
 ])
 
-/** Permit only secure Google Maps share URLs before opening them in Browserbase. */
+/** Chỉ cho phép link Google Maps HTTPS hợp lệ (chặn URL lạ trước khi gửi sang Outscraper/Places). */
 export function isSupportedGoogleMapsUrl(input: string | null | undefined): boolean {
   if (!input) return false
   try {
@@ -116,4 +116,23 @@ export function canonicalizePlaceId(
   // API mới trả "places/ChIJ..."
   if (id.startsWith('places/')) id = id.slice('places/'.length)
   return id || null
+}
+
+/** Link Maps tìm theo tên (+ khu vực), dùng làm maps_url dự phòng khi nguồn dữ liệu không trả link. */
+export function buildMapsSearchUrl(input: {
+  mapsUrl?: string
+  placeId?: string | null
+  businessName?: string
+  area?: string
+}): string | null {
+  if (input.mapsUrl) return input.mapsUrl
+  if (input.placeId) {
+    const id = canonicalizePlaceId(input.placeId)
+    if (id) return `https://www.google.com/maps/place/?q=place_id:${id}`
+  }
+  if (input.businessName) {
+    const q = [input.businessName, input.area].filter(Boolean).join(' ')
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`
+  }
+  return null
 }
