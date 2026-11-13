@@ -177,6 +177,15 @@ async function main() {
   assert.match(r.error || '', /Thiếu/)
   assert.equal(calls.length, 0)
 
+  // 14) Link lạ + có tên -> bỏ link, vẫn tìm theo tên; link share.google được chấp nhận
+  installFetch(outscraperHandler)
+  r = await runGbpPublicSnapshot({ mapsUrl: 'http://evil.example.com/x', businessName: 'Tiệm Nail Hoa' })
+  assert.equal(r.business_name, 'Tiệm Nail Hoa')
+  assert.ok(!calls.some((c) => c.includes('evil')), 'link lạ không được gửi đi')
+  installFetch(outscraperHandler)
+  await runGbpPublicSnapshot({ mapsUrl: 'https://share.google/abc123', businessName: 'Tiệm Nail Hoa' })
+  assert.ok(calls.some((c) => c.includes('share.google')), 'share.google phải được chấp nhận')
+
   console.log('OK: lớp mạng Outscraper + điều phối nguồn dữ liệu — tất cả kiểm tra đều qua')
 }
 

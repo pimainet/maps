@@ -38,6 +38,12 @@ export type ClientSnapshot = {
 
 const GENERIC_FAILURE = 'Không đọc được hồ sơ Google Maps lần này.'
 
+/**
+ * Lấy mới thất bại thì chỉ dùng bản đã lưu nếu còn tương đối mới. Bản quá cũ (vd tên/ảnh/bài đăng từ nhiều tháng trước)
+ * sẽ khiến audit kết luận sai về hồ sơ hiện tại — thà báo lỗi để người dùng xử lý nguyên nhân.
+ */
+const STALE_FALLBACK_MAX_MS = 30 * 24 * 60 * 60 * 1000
+
 function statusOf(result: RunGbpSnapshotResult): GbpSnapshotStatus {
   if (!hasProfileData(result)) return 'failed'
   const reviewsFailed = result.coverage?.sections.reviews === 'error'
@@ -133,5 +139,8 @@ export async function getClientSnapshot(
   }
 
   const stored = await getLatestSnapshotForClient(client.id, workspaceId, { onlyOk: true }).catch(() => null)
-  return stored ? { snapshot: stored, origin: 'stored_after_failure', error } : { snapshot: null, origin: 'none', error }
+  const age = stored?.captured_at ? Date.now() - new Date(stored.captured_at).getTime() : Infinity
+  return stored && age <= STALE_FALLBACK_MAX_MS
+    ? { snapshot: stored, origin: 'stored_after_failure', error }
+    : { snapshot: null, origin: 'none', error }
 }

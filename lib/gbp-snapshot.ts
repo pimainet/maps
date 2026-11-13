@@ -37,9 +37,14 @@ async function fromOutscraper(input: RunGbpSnapshotInput): Promise<RunGbpSnapsho
   }
 }
 
-export async function runGbpPublicSnapshot(input: RunGbpSnapshotInput): Promise<RunGbpSnapshotResult> {
+export async function runGbpPublicSnapshot(rawInput: RunGbpSnapshotInput): Promise<RunGbpSnapshotResult> {
+  let input = rawInput
   if (input.mapsUrl && !isSupportedGoogleMapsUrl(input.mapsUrl)) {
-    return { error: 'Link không hợp lệ. Chỉ hỗ trợ liên kết Google Maps bảo mật (HTTPS).' }
+    // Link lạ không được gửi đi. Còn tên doanh nghiệp thì vẫn tìm được -> bỏ link, không từ chối cả lần lấy dữ liệu.
+    if (!input.businessName && !input.placeId) {
+      return { error: 'Link không hợp lệ. Chỉ hỗ trợ liên kết Google Maps bảo mật (HTTPS).' }
+    }
+    input = { ...input, mapsUrl: undefined }
   }
   if (!input.mapsUrl && !input.placeId && !input.businessName) {
     return { error: 'Thiếu link Google Maps, Place ID hoặc tên doanh nghiệp để tìm hồ sơ.' }

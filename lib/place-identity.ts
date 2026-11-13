@@ -24,7 +24,7 @@ const GOOGLE_MAPS_HOSTS = new Set([
   'google.com.hk', 'www.google.com.hk', 'maps.google.com.hk',
   'google.com.br', 'www.google.com.br', 'maps.google.com.br',
   'google.com.mx', 'www.google.com.mx', 'maps.google.com.mx',
-  'maps.app.goo.gl', 'goo.gl', 'g.page',
+  'maps.app.goo.gl', 'goo.gl', 'g.page', 'share.google',
 ])
 
 /** Chỉ cho phép link Google Maps HTTPS hợp lệ (chặn URL lạ trước khi gửi sang Outscraper/Places). */

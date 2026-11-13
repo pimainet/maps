@@ -67,7 +67,10 @@ export default function ClientAuditPage() {
         body: JSON.stringify({ client_id: client.id, output_language: outputLanguage, additional_info: note }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || 'Chưa kiểm tra được hồ sơ. Thử lại sau ít phút.')
+      if (!res.ok) {
+        const reason = data?.data?.source_error ? ` Chi tiết: ${data.data.source_error}` : ''
+        throw new Error((data.error || 'Chưa kiểm tra được hồ sơ. Thử lại sau ít phút.') + reason)
+      }
       setResult(data.audit_result || '')
       setDataInfo(data.data || null)
       showToast('Đã kiểm tra xong hồ sơ')
