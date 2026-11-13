@@ -75,6 +75,17 @@ export interface AuditInput {
     photoCountEst?: number
   }>
 
+  /**
+   * Thứ hạng khi tìm "<danh mục> <khu vực>" (ước lượng, từ Outscraper — xem lib/competitors.ts).
+   * undefined = chưa lấy được (thiếu danh mục/khu vực hoặc chưa cấu hình Outscraper).
+   */
+  visibility?: {
+    query: string
+    /** 1-based; null = không nằm trong `total` kết quả đầu. */
+    selfRank: number | null
+    total: number
+  }
+
   now?: Date
 }
 

@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",
-    "start": "next start"
+    "start": "next start",
+    "check:outscraper": "tsx --env-file=.env.local scripts/check-outscraper-live.ts",
+    "test:logic": "tsx scripts/test-outscraper-mapping.ts && tsx scripts/test-review-watch.ts && tsx scripts/test-competitors.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",

@@ -4,6 +4,7 @@ import { requireActiveWorkspaceId } from '@/lib/auth'
 import { checkAiRateLimit, recordAiUsage } from '@/lib/rate-limit'
 import { getClientById, saveAuditV2, getAuditV2History } from '@/lib/db'
 import { getFreshSnapshotForClient } from '@/lib/gbp-snapshots'
+import { resolveCompetitorSet } from '@/lib/competitors-store'
 import { runGbpPublicSnapshot } from '@/lib/gbp-browser-snapshot'
 import { runAudit, createRealAIClassifier, checkWebsiteReachable, diffAuditReports } from '@/lib/audit-engine'
 import type { AuditReport } from '@/lib/audit-engine'
@@ -80,6 +81,7 @@ export async function POST(req: Request) {
     let claimedBusinessName: string | undefined
     let declaredIndustry: string | undefined
     let snapshotSource: string
+    let declaredArea: string | undefined
 
     if (body.client_id) {
       const client = await getClientById(body.client_id, workspaceId)
@@ -91,6 +93,7 @@ export async function POST(req: Request) {
       }
       claimedBusinessName = client.name || undefined
       declaredIndustry = client.industry || undefined
+      declaredArea = client.area || undefined
 
       const stored = body.forceRefresh ? null : await getFreshSnapshotForClient(body.client_id, workspaceId)
       if (stored) {
@@ -118,6 +121,7 @@ export async function POST(req: Request) {
       }
       claimedBusinessName = business || undefined
       declaredIndustry = String(body.industry || body.industryLabel || '').trim() || undefined
+      declaredArea = area || undefined
       const fresh = await runGbpPublicSnapshot({
         mapsUrl: mapsUrl || undefined,
         businessName: business || undefined,
@@ -143,8 +147,24 @@ export async function POST(req: Request) {
     // Kiểm tra website sống thật — request HTTP tới chính website khách, không phải scrape Google.
     const websiteReachable = await checkWebsiteReachable(snapshot.website_url)
 
+    // Đối thủ + thứ hạng tìm kiếm (Outscraper, cache 14 ngày). Thiếu dữ liệu -> VY01/VY03/T01/T02 giữ "insufficient".
+    const comp = await resolveCompetitorSet({
+      snapshot,
+      clientId: body.client_id || null,
+      workspaceId,
+      declaredArea,
+      force: Boolean(body.forceRefresh),
+    })
+    const competitors = comp.set?.items.length ? comp.set.items : undefined
+    const visibility = comp.set
+      ? { query: comp.set.query, selfRank: comp.set.selfRank, total: comp.set.total }
+      : undefined
+
     const ai = createRealAIClassifier()
-    const report = await runAudit({ snapshot, claimedBusinessName, declaredIndustry, websiteReachable }, ai)
+    const report = await runAudit(
+      { snapshot, claimedBusinessName, declaredIndustry, websiteReachable, competitors, visibility },
+      ai,
+    )
 
     // Chỉ ghi nhận usage SAU KHI chạy xong thành công — đúng pattern đã có ở rate-limit.ts.
     await recordAiUsage(workspaceId, 'audit-v2-preview', userId)
@@ -173,6 +193,7 @@ export async function POST(req: Request) {
       ok: true,
       preview: true,
       snapshotSource,
+      competitors: { from: comp.from, note: comp.note ?? null, query: comp.set?.query ?? null, count: comp.set?.items.length ?? 0 },
       snapshot,
       report,
       saved,

@@ -1,4 +1,7 @@
 /**
+ * Điểm vào chung để lấy snapshot GBP: Outscraper (mặc định nếu có OUTSCRAPER_API_KEY, xem lib/gbp-outscraper.ts),
+ * Browserbase (nguồn cũ, GBP_PROVIDER=browser) hoặc Places API. Phần dưới là nguồn Browserbase.
+ *
  * Quan sát GBP public — Browserbase mở Google Maps, agent ĐỌC SÂU từng tab, Claude chỉ điền chỗ DOM không đọc được.
  *
  * Luồng deep (mặc định):
@@ -34,6 +37,8 @@ import { askClaude } from '@/lib/claude'
 import { parseRelativeAgeDays } from '@/lib/gbp-relative-time'
 import * as S from '@/lib/gbp-maps-scripts'
 import { isSupportedGoogleMapsUrl } from '@/lib/place-identity'
+import { computeReviewStats } from '@/lib/gbp-review-stats'
+import { fetchOutscraperSnapshot, outscraperConfigured } from '@/lib/gbp-outscraper'
 
 export type RunGbpSnapshotInput = {
   mapsUrl?: string
@@ -47,7 +52,7 @@ export type RunGbpSnapshotInput = {
 export type RunGbpSnapshotResult = GbpSnapshotPayload & {
   error?: string
   raw?: unknown
-  source_used?: 'browser' | 'places' | 'browser+places'
+  source_used?: 'browser' | 'places' | 'browser+places' | 'outscraper' | 'outscraper+places'
 }
 
 // ---------------------------------------------------------------------------
@@ -265,7 +270,7 @@ async function fromPlaces(input: RunGbpSnapshotInput): Promise<RunGbpSnapshotRes
     address_text: place.formattedAddress || null,
     business_status: placesStatus(place.businessStatus),
     attributes: placesAttributes(place),
-    posts_signal: 'Chưa quan sát được bài đăng (Places). Cần Browserbase.',
+    posts_signal: 'Chưa quan sát được bài đăng (Places API không có dữ liệu này).',
     recent_posts: [],
     photos_signal:
       photosCount >= 10
@@ -858,27 +863,7 @@ function normalizeReviews(raw: RawReview[]): GbpReviewItem[] {
     }))
 }
 
-export function computeReviewStats(reviews: GbpReviewItem[]): GbpReviewStats | null {
-  if (!reviews.length) return null
-  const ages = reviews.map((r) => r.age_days_est).filter((d): d is number => typeof d === 'number')
-  const newest = ages.length ? Math.min(...ages) : null
-  const oldest = ages.length ? Math.max(...ages) : null
-  const replied = reviews.filter((r) => r.reply && r.reply.trim()).length
-  const ratings = reviews.map((r) => r.rating)
-  return {
-    loaded: reviews.length,
-    with_text: reviews.filter((r) => r.text.trim()).length,
-    newest_age_days: newest,
-    oldest_age_days: oldest,
-    last_30d: ages.length ? ages.filter((d) => d <= 30).length : null,
-    last_90d: ages.length ? ages.filter((d) => d <= 90).length : null,
-    window_complete: oldest != null && oldest > 90,
-    replied,
-    reply_rate: Math.round((replied / reviews.length) * 100) / 100,
-    avg_rating_loaded: Math.round((ratings.reduce((s, v) => s + v, 0) / ratings.length) * 10) / 10,
-    low_rating_count: ratings.filter((v) => v <= 3).length,
-  }
-}
+export { computeReviewStats } from '@/lib/gbp-review-stats'
 
 async function fromBrowser(input: RunGbpSnapshotInput): Promise<RunGbpSnapshotResult> {
   const url = buildSearchUrl(input)
@@ -1005,6 +990,98 @@ async function fromBrowser(input: RunGbpSnapshotInput): Promise<RunGbpSnapshotRe
 // Public entry
 // ---------------------------------------------------------------------------
 
+/**
+ * Gộp kết quả nguồn chính (browser hoặc Outscraper) với Places API.
+ * Places là nguồn chính thức: dùng để đối chiếu số liệu và bù trường còn thiếu.
+ */
+function mergeWithPlaces(
+  b: RunGbpSnapshotResult,
+  places: RunGbpSnapshotResult,
+  label: 'browser' | 'outscraper',
+): RunGbpSnapshotResult {
+  const warnings = [...(b.coverage?.warnings || [])]
+  // Cảnh báo khi 2 nguồn lệch hẳn nhau — dấu hiệu đọc nhầm doanh nghiệp / số liệu trễ
+  if (b.review_count != null && places.review_count != null) {
+    const hi = Math.max(b.review_count, places.review_count)
+    const lo = Math.min(b.review_count, places.review_count)
+    if (hi > 20 && lo / hi < 0.7) {
+      warnings.push(`Số review lệch giữa Maps (${b.review_count}) và Places API (${places.review_count}).`)
+    }
+  }
+  if (b.rating != null && places.rating != null && Math.abs(b.rating - places.rating) >= 0.3) {
+    warnings.push(`Điểm sao lệch giữa Maps (${b.rating}) và Places API (${places.rating}).`)
+  }
+
+  const primaryReviews = b.reviews && b.reviews.length ? b.reviews : null
+  const coverage: GbpCoverage | null = b.coverage ? { ...b.coverage, warnings } : null
+
+  return {
+    ...places,
+    ...b,
+    place_id: places.place_id || b.place_id || null,
+    description: b.description || places.description || null,
+    rating: b.rating ?? places.rating ?? null,
+    review_count: b.review_count ?? places.review_count ?? null,
+    primary_category: b.primary_category || places.primary_category || null,
+    additional_categories: b.additional_categories || null,
+    opening_hours: b.opening_hours || places.opening_hours || null,
+    phone: b.phone || places.phone || null,
+    website_url: b.website_url || places.website_url || null,
+    address_text: b.address_text || places.address_text || null,
+    business_status:
+      places.business_status && places.business_status !== 'operational'
+        ? places.business_status
+        : b.business_status || places.business_status || null,
+    attributes: mergeAttributes(b.attributes, places.attributes),
+    photos_signal: b.photos_signal || places.photos_signal || null,
+    photos_count_est: b.photos_count_est ?? places.photos_count_est ?? null,
+    posts_signal: b.posts_signal || places.posts_signal,
+    recent_posts: b.recent_posts?.length ? b.recent_posts : places.recent_posts || [],
+    // Review nguồn chính (nhiều hơn, có ngày + phản hồi chủ) được ưu tiên; Places chỉ là dự phòng
+    reviews: primaryReviews || places.reviews || [],
+    // Places không có phản hồi của chủ -> không tính thống kê (reply_rate sẽ sai)
+    review_stats: primaryReviews ? b.review_stats : null,
+    coverage,
+    source_used: label === 'outscraper' ? 'outscraper+places' : 'browser+places',
+    error: b.error,
+    raw: { [label]: b.raw, places: places.raw },
+  }
+}
+
+/** Chọn nguồn: GBP_PROVIDER=outscraper|browser|places. Mặc định: Outscraper nếu có key, rồi Browserbase, rồi Places. */
+function pickProvider(): 'outscraper' | 'browser' | 'places' {
+  const want = (process.env.GBP_PROVIDER || '').toLowerCase()
+  if (want === 'places') return 'places'
+  if (want === 'browser') return process.env.BROWSERBASE_API_KEY ? 'browser' : 'places'
+  if (want === 'outscraper') return outscraperConfigured() ? 'outscraper' : 'places'
+  if (outscraperConfigured()) return 'outscraper'
+  if (process.env.BROWSERBASE_API_KEY) return 'browser'
+  return 'places'
+}
+
+async function fromOutscraper(input: RunGbpSnapshotInput): Promise<RunGbpSnapshotResult> {
+  const mapped = await fetchOutscraperSnapshot({
+    mapsUrl: input.mapsUrl,
+    placeId: input.placeId,
+    businessName: input.businessName,
+    area: input.area,
+    depth: input.depth,
+  })
+  const { reply_field_present, raw_review_count, ...payload } = mapped
+  return {
+    ...payload,
+    maps_url: payload.maps_url || input.mapsUrl || buildSearchUrl(input),
+    source_used: 'outscraper',
+    raw: {
+      source: 'outscraper',
+      coverage: payload.coverage,
+      reply_field_present,
+      raw_review_count,
+      description_source: payload.description ? 'outscraper' : 'none',
+    },
+  }
+}
+
 export async function runGbpPublicSnapshot(input: RunGbpSnapshotInput): Promise<RunGbpSnapshotResult> {
   if (input.mapsUrl && !isSupportedGoogleMapsUrl(input.mapsUrl)) {
     return {
@@ -1012,73 +1089,25 @@ export async function runGbpPublicSnapshot(input: RunGbpSnapshotInput): Promise<
       source_used: 'browser',
     }
   }
-  const hasBrowserbase = Boolean(process.env.BROWSERBASE_API_KEY)
-  if (!hasBrowserbase) return fromPlaces(input)
+  const provider = pickProvider()
+  if (provider === 'places') return fromPlaces(input)
 
+  const label = provider
   try {
-    const b = await fromBrowser(input)
+    const b = provider === 'outscraper' ? await fromOutscraper(input) : await fromBrowser(input)
     let places: RunGbpSnapshotResult
     try {
-      places = await fromPlaces({ ...input, placeId: input.placeId })
+      places = await fromPlaces({ ...input, placeId: input.placeId || b.place_id })
     } catch {
       return b
     }
     if (places.error && !places.business_name) return b
-
-    const warnings = [...(b.coverage?.warnings || [])]
-    // Cảnh báo khi 2 nguồn lệch hẳn nhau — dấu hiệu đọc nhầm doanh nghiệp / số liệu trễ
-    if (b.review_count != null && places.review_count != null) {
-      const hi = Math.max(b.review_count, places.review_count)
-      const lo = Math.min(b.review_count, places.review_count)
-      if (hi > 20 && lo / hi < 0.7) {
-        warnings.push(`Số review lệch giữa Maps (${b.review_count}) và Places API (${places.review_count}).`)
-      }
-    }
-    if (b.rating != null && places.rating != null && Math.abs(b.rating - places.rating) >= 0.3) {
-      warnings.push(`Điểm sao lệch giữa Maps (${b.rating}) và Places API (${places.rating}).`)
-    }
-
-    const browserReviews = b.reviews && b.reviews.length ? b.reviews : null
-    const coverage: GbpCoverage | null = b.coverage
-      ? { ...b.coverage, warnings }
-      : null
-
-    return {
-      ...places,
-      ...b,
-      place_id: places.place_id || b.place_id || null,
-      description: b.description || places.description || null,
-      rating: b.rating ?? places.rating ?? null,
-      review_count: b.review_count ?? places.review_count ?? null,
-      primary_category: b.primary_category || places.primary_category || null,
-      additional_categories: b.additional_categories || null,
-      opening_hours: b.opening_hours || places.opening_hours || null,
-      phone: b.phone || places.phone || null,
-      website_url: b.website_url || places.website_url || null,
-      address_text: b.address_text || places.address_text || null,
-      business_status:
-        places.business_status && places.business_status !== 'operational'
-          ? places.business_status
-          : b.business_status || places.business_status || null,
-      attributes: mergeAttributes(b.attributes, places.attributes),
-      photos_signal: b.photos_signal || places.photos_signal || null,
-      photos_count_est: b.photos_count_est ?? places.photos_count_est ?? null,
-      posts_signal: b.posts_signal || places.posts_signal,
-      recent_posts: b.recent_posts?.length ? b.recent_posts : places.recent_posts || [],
-      // Review từ browser (nhiều hơn, có ngày + phản hồi chủ) được ưu tiên; Places chỉ là dự phòng
-      reviews: browserReviews || places.reviews || [],
-      // Places không có phản hồi của chủ -> không tính thống kê (reply_rate sẽ sai)
-      review_stats: browserReviews ? b.review_stats : null,
-      coverage,
-      source_used: 'browser+places',
-      error: b.error,
-      raw: { browser: b.raw, places: places.raw },
-    }
+    return mergeWithPlaces(b, places, label)
   } catch (err: any) {
     const fb = await fromPlaces(input)
     return {
       ...fb,
-      error: `Browser lỗi: ${err?.message || err}. Đã fallback Places.`,
+      error: `${label === 'outscraper' ? 'Outscraper' : 'Browser'} lỗi: ${err?.message || err}. Đã fallback Places.`,
       source_used: 'places',
     }
   }

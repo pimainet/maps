@@ -29,6 +29,10 @@ export type GbpReviewItem = {
   /** Nội dung chủ doanh nghiệp phản hồi. null = không thấy phản hồi (với nguồn Places: luôn null, không có nghĩa là chưa phản hồi). */
   reply?: string | null
   reply_relative_time?: string | null
+  /** Thời điểm đăng (ISO, UTC) — chỉ có với nguồn Outscraper. */
+  posted_at?: string | null
+  /** Khóa định danh ổn định (hash, không chứa tên người viết) để Review Watch không tạo task trùng. */
+  key?: string | null
 }
 
 export type GbpAttributeGroup = { group: string; items: string[] }
@@ -46,8 +50,8 @@ export type GbpBusinessStatus =
   | 'permanently_closed'
   | 'unknown'
 
-/** 'unclaimed' = thấy nút "Nhận quyền sở hữu". 'unknown' = không thấy, KHÔNG có nghĩa đã được xác minh. */
-export type GbpClaimSignal = 'unclaimed' | 'unknown'
+/** 'claimed' = Outscraper báo hồ sơ đã xác minh. 'unclaimed' = thấy nút "Nhận quyền sở hữu". 'unknown' = không thấy, KHÔNG có nghĩa đã được xác minh. */
+export type GbpClaimSignal = 'unclaimed' | 'claimed' | 'unknown'
 
 /** Thống kê review tính từ danh sách review browser đã tải (sắp xếp mới nhất). */
 export type GbpReviewStats = {

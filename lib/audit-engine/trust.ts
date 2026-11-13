@@ -12,12 +12,14 @@ function insufficient(id: string, label: string, severity: CheckResult['severity
   }
 }
 
+/** Trung vị (không dùng trung bình: 1 chuỗi lớn vài nghìn review sẽ kéo lệch cả nhóm). Tên hàm giữ nguyên để khỏi sửa chỗ gọi. */
 function competitorAvg(input: AuditInput, key: 'reviewCount' | 'rating'): number | undefined {
   const list = input.competitors
   if (!list || list.length === 0) return undefined
-  const values = list.map((c) => c[key]).filter((v): v is number => v !== undefined)
+  const values = list.map((c) => c[key]).filter((v): v is number => v !== undefined).sort((a, b) => a - b)
   if (values.length === 0) return undefined
-  return values.reduce((s, v) => s + v, 0) / values.length
+  const mid = Math.floor(values.length / 2)
+  return values.length % 2 ? values[mid] : (values[mid - 1] + values[mid]) / 2
 }
 
 /** T01 — Review Volume, so với đối thủ — `competitors` chưa có collector thật, nên thường sẽ insufficient cho tới khi có. */
@@ -33,9 +35,9 @@ function checkT01(input: AuditInput): CheckResult {
     group: 'trust',
     label: 'Review Volume',
     severity: 'high',
-    confidence: 'verified',
+    confidence: 'estimated',
     passed: ok,
-    message: `${self} review, trung bình nhóm đối thủ ${avg.toFixed(0)}.`,
+    message: `${self} review, trung vị nhóm đối thủ ${avg.toFixed(0)}.`,
     action: ok ? undefined : 'Số review đang thấp hơn đáng kể so với đối thủ — xây quy trình xin review sau mỗi lượt khách.',
   }
 }
@@ -53,9 +55,9 @@ function checkT02(input: AuditInput): CheckResult {
     group: 'trust',
     label: 'Rating',
     severity: 'high',
-    confidence: 'verified',
+    confidence: 'estimated',
     passed: ok,
-    message: `Rating ${self.toFixed(1)}, trung bình nhóm đối thủ ${avg.toFixed(1)}.`,
+    message: `Rating ${self.toFixed(1)}, trung vị nhóm đối thủ ${avg.toFixed(1)}.`,
     action: ok ? undefined : 'Rating đang thấp hơn mặt bằng đối thủ.',
   }
 }

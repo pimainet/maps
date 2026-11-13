@@ -35,6 +35,8 @@ function sanitizeDiagnostics(d: Record<string, unknown>) {
 
 export async function POST(req: Request) {
   const diagnostics: Record<string, unknown> = {
+    has_outscraper_key: Boolean(process.env.OUTSCRAPER_API_KEY),
+    gbp_provider: process.env.GBP_PROVIDER || 'auto',
     has_browserbase_key: Boolean(process.env.BROWSERBASE_API_KEY),
     has_browserbase_project: Boolean(process.env.BROWSERBASE_PROJECT_ID),
     has_places_key: Boolean(process.env.GOOGLE_PLACES_API_KEY),
@@ -106,7 +108,7 @@ export async function POST(req: Request) {
       client_id: clientId,
       place_id: client.place_id || null,
       maps_url: mapsUrl,
-      source: 'browser',
+      source: process.env.OUTSCRAPER_API_KEY && process.env.GBP_PROVIDER !== 'browser' ? 'outscraper' : 'browser',
     })
 
     await updateSnapshot(pending.id, workspaceId, { status: 'running' })
@@ -161,7 +163,7 @@ export async function POST(req: Request) {
         raw_json: {
           ...(result.raw && typeof result.raw === 'object' ? (result.raw as object) : {}),
           deep: {
-            agent_version: 2,
+            agent_version: result.source_used?.startsWith('outscraper') ? 3 : 2,
             opening_hours: result.opening_hours || null,
             hours_today: result.hours_today || null,
             additional_categories: result.additional_categories || null,

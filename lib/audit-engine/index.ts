@@ -37,7 +37,7 @@ export async function runAudit(input: AuditInput, ai: AIClassifier): Promise<Aud
   ])
   const contentBasic = runContentBasicChecks(input)
   const visual = runVisualChecks(input)
-  const visibility = runVisibilityChecks()
+  const visibility = runVisibilityChecks(input)
 
   const checksSoFar = [...foundation, ...relevance, ...trust, ...contentBasic, ...contentAdvanced, ...visual, ...visibility]
   const conversion = runConversionChecks(checksSoFar)
