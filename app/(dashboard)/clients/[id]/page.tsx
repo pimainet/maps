@@ -6,6 +6,7 @@ import { ArrowUpRight, BarChart3, ClipboardCheck, FileText, Target } from 'lucid
 import { Card } from '@/components/dashboard/shared'
 import { TASK_TYPE_LABEL, PRIORITY_LABEL } from '@/lib/ui-constants'
 import { useToast } from '@/components/dashboard/toast-context'
+import { ClientInfoCard } from '@/components/dashboard/client-info-card'
 
 export default function ClientDetailPage() {
   const router = useRouter()
@@ -175,45 +176,7 @@ export default function ClientDetailPage() {
         </Card>
       </div>
 
-      <Card>
-        <div className="section-head">
-          <div>
-            <h2>Thông tin doanh nghiệp</h2>
-            <p>Dùng để viết bài đúng với doanh nghiệp của bạn.</p>
-          </div>
-        </div>
-        <div className="signal-grid">
-          <div>
-            <span>Số điện thoại</span>
-            <strong>{client.phone || '—'}</strong>
-          </div>
-          <div>
-            <span>Người liên hệ</span>
-            <strong>{client.contact_name || '—'}</strong>
-          </div>
-          <div>
-            <span>Giọng văn</span>
-            <strong>{client.brand_voice || '—'}</strong>
-          </div>
-          <div>
-            <span>Website</span>
-            <strong>{client.website_url || '—'}</strong>
-          </div>
-        </div>
-        {client.gbp_link && (
-          <div style={{ marginTop: 16 }}>
-            <span style={{ color: 'var(--muted-foreground)', fontSize: 13 }}>Hồ sơ Google: </span>
-            <a href={client.gbp_link} target="_blank" rel="noreferrer" style={{ color: 'var(--primary)' }}>
-              {client.gbp_link}
-            </a>
-          </div>
-        )}
-        {client.notes && (
-          <div style={{ marginTop: 12, color: 'var(--muted-foreground)', fontSize: 14 }}>
-            <strong>Ghi chú:</strong> {client.notes}
-          </div>
-        )}
-      </Card>
+      <ClientInfoCard client={client} onSaved={setClient} />
     </>
   )
 }

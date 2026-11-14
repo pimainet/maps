@@ -161,6 +161,8 @@ export async function getLatestSnapshotForClient(
     // Dòng cũ source = 'manual' (mốc nhập tay từ phiên bản trước) chỉ có sao + số review,
     // không đủ làm snapshot hồ sơ — bỏ qua ở đây; báo cáo Kết quả (lib/reports.ts) có truy vấn riêng.
     .neq('source', 'manual')
+    // Snapshot của "quán cũ" (client đã được sửa sang link Maps khác, migration 021) không bao giờ được dùng lại.
+    .neq('status', 'superseded')
     .order('captured_at', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false })
     .limit(1)

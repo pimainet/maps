@@ -10,6 +10,7 @@ import { hasProfileData } from '@/lib/gbp-snapshot'
 import { summarizeSnapshot } from '@/lib/gbp-audit-fields'
 import { buildAuditPrompt } from '@/lib/audit-prompt'
 import { getAuditEngineMode } from '@/lib/audit-mode'
+import { auditQuotaPlaceKey } from '@/lib/audit-quota-key'
 import { runAuditV2 } from '@/lib/run-audit-v2'
 import { diffAuditReports, ENGINE_VERSION, type AuditReport } from '@/lib/audit-engine'
 import { parseAuditResult } from '@/lib/audit-parse'
@@ -121,8 +122,16 @@ export async function POST(req: Request) {
       })
       await recordAiUsage(workspaceId, 'audit', userId)
 
+      const placeKey = auditQuotaPlaceKey(client)
+      const prevKey = (previous?.raw_input as any)?.place_key as string | undefined
       let comparison: Record<string, unknown> | null = null
-      if (previous?.checks_json) {
+      if (previous?.checks_json && prevKey && prevKey !== placeKey) {
+        // Hồ sơ đã được sửa sang doanh nghiệp/link Maps khác kể từ lần audit trước: điểm hai lần không so sánh được.
+        comparison = {
+          comparable: false,
+          reason: 'Hồ sơ đã đổi sang doanh nghiệp/link Google Maps khác kể từ lần kiểm tra trước nên không so sánh điểm được.',
+        }
+      } else if (previous?.checks_json) {
         comparison = {
           ...diffAuditReports(previous.checks_json as AuditReport, v2.report),
           previous_audit_id: previous.id,
@@ -142,6 +151,7 @@ export async function POST(req: Request) {
         raw_input: {
           engine: 'v2',
           engine_version: ENGINE_VERSION,
+          place_key: placeKey,
           narrative_source: v2.narrative.source,
           classifier: v2.meta.classifier,
           data_origin: origin,

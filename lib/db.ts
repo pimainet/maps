@@ -78,6 +78,17 @@ export async function getClientById(id: string, workspaceId?: string) {
   return data
 }
 
+/**
+ * Sửa client qua hàm SQL public.update_client (migration 021): kiểm tra thành viên, giới hạn đổi quán,
+ * ghi sổ và vô hiệu snapshot cũ nằm hết trong DB. Ném lỗi có message bắt đầu bằng NotFound / Duplicate / RateLimited.
+ */
+export async function updateClientViaRpc(clientId: string, patch: Record<string, string | null>) {
+  const supabase = await createSupabaseServerClient()
+  const { data, error } = await supabase.rpc('update_client', { p_client_id: clientId, p_patch: patch })
+  if (error) throw error
+  return data as { changed_place: boolean; superseded_snapshots: number; place_changes_left: number }
+}
+
 /** Find a client only inside the caller's active workspace. */
 export async function findClientInWorkspace(id: string, workspaceId: string) {
   const supabase = await createSupabaseServerClient()
@@ -282,7 +293,7 @@ export async function getPreviousComparableAudit(clientId: string, workspaceId: 
   const supabase = await createSupabaseServerClient()
   const { data, error } = await supabase
     .from('audits')
-    .select('id, created_at, score_overview, checks_json')
+    .select('id, created_at, score_overview, checks_json, raw_input')
     .eq('client_id', clientId)
     .eq('workspace_id', workspaceId)
     .or('module_key.is.null,module_key.neq.maps_seo_v2')

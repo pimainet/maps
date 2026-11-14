@@ -121,7 +121,7 @@ export type GbpSnapshotPayload = {
   coverage?: GbpCoverage | null
 }
 
-export type GbpSnapshotStatus = 'pending' | 'running' | 'ok' | 'partial' | 'failed'
+export type GbpSnapshotStatus = 'pending' | 'running' | 'ok' | 'partial' | 'failed' | 'superseded'
 
 /** TTL cache: không gọi lại nguồn dữ liệu nếu snapshot ok còn hạn (ngày). */
 export const GBP_SNAPSHOT_CACHE_DAYS = 7
