@@ -7,6 +7,8 @@ import { Card } from '@/components/dashboard/shared'
 import { useToast } from '@/components/dashboard/toast-context'
 import { parseAuditResult } from '@/lib/audit-parse'
 import { AuditResultView } from '@/components/dashboard/audit-result-view'
+import { buildScoreOverride, type AuditComparison } from '@/components/dashboard/audit-report-extras'
+import type { AuditReport } from '@/lib/audit-engine'
 import type { SnapshotSummary } from '@/lib/gbp-audit-fields'
 
 type DataInfo = {
@@ -33,6 +35,9 @@ export default function ClientAuditPage() {
   const [error, setError] = useState('')
   const [result, setResult] = useState<string | null>(null)
   const [dataInfo, setDataInfo] = useState<DataInfo | null>(null)
+  // Có khi server chấm bằng engine v2 (AUDIT_ENGINE_MODE=v2); null = kết quả kiểu cũ (đọc điểm từ văn bản).
+  const [report, setReport] = useState<AuditReport | null>(null)
+  const [comparison, setComparison] = useState<AuditComparison | null>(null)
   const [outputLanguage, setOutputLanguage] = useState('Tiếng Việt')
   const [note, setNote] = useState('')
 
@@ -60,6 +65,8 @@ export default function ClientAuditPage() {
     setRunning(true)
     setResult(null)
     setDataInfo(null)
+    setReport(null)
+    setComparison(null)
     try {
       const res = await fetch('/api/audit', {
         method: 'POST',
@@ -73,6 +80,8 @@ export default function ClientAuditPage() {
       }
       setResult(data.audit_result || '')
       setDataInfo(data.data || null)
+      setReport(data.report || null)
+      setComparison(data.comparison || null)
       showToast('Đã kiểm tra xong hồ sơ')
     } catch (err: any) {
       setError(err.message || 'Có lỗi xảy ra')
@@ -181,6 +190,7 @@ export default function ClientAuditPage() {
               mapsUrl: client.gbp_link,
             })}
             rawFallback={result}
+            scoreOverride={report ? buildScoreOverride(report, comparison) : undefined}
           />
         </>
       )}

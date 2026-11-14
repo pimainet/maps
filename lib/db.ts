@@ -190,7 +190,9 @@ export async function saveAudit(input: {
   client_id: string
   audit_result: string
   raw_input?: any
-  score_overview?: number
+  score_overview?: number | null
+  /** Kết quả có cấu trúc của Audit Engine v2. Chỉ ghi cột này khi có, để luồng v1 không phụ thuộc cột checks_json. */
+  checks_json?: unknown
   workspace_id: string
 }) {
   const supabase = await createSupabaseServerClient()
@@ -201,6 +203,7 @@ export async function saveAudit(input: {
       audit_result: input.audit_result,
       raw_input: input.raw_input ?? {},
       score_overview: input.score_overview ?? null,
+      ...(input.checks_json !== undefined ? { checks_json: input.checks_json } : {}),
       module_key: 'maps_seo',
       status: 'finalized',
       workspace_id: input.workspace_id,
@@ -218,6 +221,9 @@ export async function getLatestAuditByClient(clientId: string, workspaceId?: str
     .from('audits')
     .select('*')
     .eq('client_id', clientId)
+    // Dòng preview/shadow của engine v2 (module_key='maps_seo_v2') chỉ có chữ giữ chỗ — không bao giờ được làm
+    // "audit mới nhất" cho lộ trình 30 ngày / trí nhớ khách hàng. Dòng cũ module_key NULL vẫn được lấy.
+    .or('module_key.is.null,module_key.neq.maps_seo_v2')
     .order('created_at', { ascending: false })
     .limit(1)
 
@@ -266,6 +272,46 @@ export async function saveAuditV2(input: {
 
   if (error) throw error
   return data
+}
+
+/**
+ * Audit "chính thức" gần nhất để so sánh (module_key maps_seo hoặc NULL; bỏ dòng preview/shadow).
+ * previous = dòng gần nhất CÓ checks_json (đã chấm bằng engine v2); hasLegacyOnly = có audit nhưng toàn bản cũ (v1).
+ */
+export async function getPreviousComparableAudit(clientId: string, workspaceId: string) {
+  const supabase = await createSupabaseServerClient()
+  const { data, error } = await supabase
+    .from('audits')
+    .select('id, created_at, score_overview, checks_json')
+    .eq('client_id', clientId)
+    .eq('workspace_id', workspaceId)
+    .or('module_key.is.null,module_key.neq.maps_seo_v2')
+    .order('created_at', { ascending: false })
+    .limit(10)
+  if (error) throw error
+  const rows = data || []
+  const previous = rows.find((r: any) => r.checks_json && typeof r.checks_json === 'object') || null
+  return { previous, hasLegacyOnly: !previous && rows.length > 0 }
+}
+
+/** Lịch sử số review theo thời gian (từ gbp_snapshots đã lưu) — đầu vào cho check T04 Review Velocity. */
+export async function getReviewCountHistory(clientId: string, workspaceId: string) {
+  const supabase = await createSupabaseServerClient()
+  const since = new Date(Date.now() - 180 * 86_400_000).toISOString()
+  const { data, error } = await supabase
+    .from('gbp_snapshots')
+    .select('captured_at, review_count')
+    .eq('client_id', clientId)
+    .eq('workspace_id', workspaceId)
+    .in('status', ['ok', 'partial'])
+    .neq('source', 'manual')
+    .not('captured_at', 'is', null)
+    .not('review_count', 'is', null)
+    .gte('captured_at', since)
+    .order('captured_at', { ascending: true })
+    .limit(60)
+  if (error) throw error
+  return (data || []).map((r: any) => ({ capturedAt: String(r.captured_at), reviewCount: Number(r.review_count) }))
 }
 
 /** Lịch sử audit v2 của 1 client, mới nhất trước — dùng để so sánh/đo cải thiện. */

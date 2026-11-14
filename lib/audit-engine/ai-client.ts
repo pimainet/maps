@@ -17,10 +17,11 @@ function parseJsonLoose(raw: string): unknown {
  * tạo client Anthropic song song — tránh 2 nơi cấu hình key/model khác nhau.
  */
 export function createRealAIClassifier(): AIClassifier {
+  // temperature 0: phân loại không cần "sáng tạo". Độ lặp lại thật sự do classifier-cache.ts đảm bảo.
   return {
     async classify<T>(input: AIClassifyInput): Promise<T> {
       const prompt = `${input.system}\n\n${input.user}\n\nChỉ trả JSON thuần, không markdown, không giải thích.`
-      const raw = await askClaude(prompt, { maxTokens: 1024, temperature: 0.2 })
+      const raw = await askClaude(prompt, { maxTokens: input.maxTokens ?? 1024, temperature: 0 })
       try {
         return parseJsonLoose(raw) as T
       } catch {

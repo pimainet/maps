@@ -7,8 +7,22 @@
 // con số dễ hiểu. Hàm này làm đúng việc đó: so sánh "trước chu kỳ" với
 // "hiện tại", cộng thêm tỉ lệ hoàn thành việc trong chu kỳ.
 import { createClient as createSupabaseServerClient } from '@/lib/supabase/server'
-import { getClientById, getLatestCycle, getTasks, getContents } from '@/lib/db'
+import { getClientById, getLatestCycle, getTasks, getContents, getCycleHistory } from '@/lib/db'
 import { summarizeProgress, type ProgressSummary } from '@/lib/progress'
+
+export type CycleSummary = {
+  /** 2–3 việc nổi bật đã làm tốt trong chu kỳ (lấy từ task done, ưu tiên high/medium). */
+  bestThings: string[]
+  /** 1–2 câu về thay đổi số liệu (rating, review). */
+  metricsHighlights: string[]
+  /** 1 vấn đề còn lại hoặc mới (từ task còn mở hoặc gợi ý chung). */
+  newIssue: string | null
+  /** Hướng tập trung chu kỳ tiếp theo (dựa trên giai đoạn). */
+  nextFocus: string
+  /** true nếu nên gợi ý mở chu kỳ mới. */
+  suggestNewCycle: boolean
+  suggestReason: string | null
+}
 
 export type ClientCycleReport = {
   client: { id: string; name: string }
@@ -29,6 +43,8 @@ export type ClientCycleReport = {
   /** Tiến bộ chi tiết (theo loại việc, tuần này, mốc tiếp theo) tính từ cùng danh sách việc. */
   progress: ProgressSummary
   content_published: number
+  /** Tóm tắt kiểu “bác sĩ tái khám” + gợi ý mở chu kỳ mới. */
+  summary: CycleSummary
 }
 
 async function getSnapshotAtOrBefore(clientId: string, workspaceId: string, cutoff: string | null) {
@@ -113,6 +129,63 @@ export async function getClientCycleReport(clientId: string, workspaceId: string
     return new Date(c.created_at).getTime() >= new Date(cycleStart).getTime()
   }).length
 
+  // ── Tóm tắt tái khám + gợi ý chu kỳ mới ──────────────────────────
+  const doneTasks = tasksInCycle.filter((t: any) => t.status === 'done')
+  const openTasks = tasksInCycle.filter((t: any) => !['done', 'skipped'].includes(t.status || 'pending'))
+
+  const bestThings: string[] = doneTasks
+    .filter((t: any) => ['high', 'medium'].includes(t.priority || ''))
+    .slice(0, 3)
+    .map((t: any) => t.title || 'Việc đã hoàn thành')
+
+  if (bestThings.length === 0 && doneTasks.length > 0) {
+    bestThings.push(...doneTasks.slice(0, 2).map((t: any) => t.title || 'Việc đã hoàn thành'))
+  }
+  if (bestThings.length === 0) bestThings.push('Chưa có việc nổi bật nào được đánh dấu hoàn thành trong chu kỳ này.')
+
+  const metricsHighlights: string[] = []
+  const ratingDelta = !sameSnapshot && baselineRating != null && currentRating != null ? round1(currentRating - baselineRating) : null
+  const reviewDelta = !sameSnapshot && baselineReviews != null && currentReviews != null ? currentReviews - baselineReviews : null
+  if (ratingDelta != null && ratingDelta !== 0) {
+    metricsHighlights.push(`Điểm đánh giá ${ratingDelta > 0 ? 'tăng' : 'giảm'} ${Math.abs(ratingDelta)} điểm.`)
+  }
+  if (reviewDelta != null && reviewDelta !== 0) {
+    metricsHighlights.push(`Số lượt đánh giá ${reviewDelta > 0 ? 'tăng' : 'giảm'} ${Math.abs(reviewDelta)}.`)
+  }
+  if (metricsHighlights.length === 0) {
+    metricsHighlights.push(sameSnapshot ? 'Chưa có đủ dữ liệu trước/sau để so sánh số liệu.' : 'Số liệu đánh giá chưa thay đổi rõ trong chu kỳ này.')
+  }
+
+  const newIssue = openTasks.length > 0
+    ? `Còn ${openTasks.length} việc chưa xong${openTasks[0]?.title ? ` (ví dụ: “${openTasks[0].title}”)` : ''}.`
+    : (tasksInCycle.length === 0 ? 'Chưa có việc nào trong chu kỳ này.' : null)
+
+  // Gợi ý giai đoạn tiếp theo dựa trên số chu kỳ đã có
+  const history = await getCycleHistory(clientId, workspaceId).catch(() => [])
+  const cycleCount = (history || []).length || (cycle ? 1 : 0)
+  let nextFocus = 'Tiếp tục hoàn thiện những việc còn lại và duy trì đăng bài đều.'
+  if (cycleCount <= 1) nextFocus = 'Chu kỳ tiếp theo nên chuyển sang làm rõ dịch vụ, nhu cầu tìm kiếm thật và các chủ đề bài viết hữu ích, khác nhau.'
+  else if (cycleCount === 2) nextFocus = 'Chu kỳ tiếp theo tập trung củng cố độ tin cậy: ảnh/case thực tế, phản hồi đánh giá trung thực, và theo dõi tín hiệu gọi/chỉ đường.'
+  else nextFocus = 'Chu kỳ tiếp theo tối ưu theo dữ liệu: tìm điểm nghẽn còn lại và thử từng cải tiến có thể đo được.'
+
+  const daysRunning = cycleStart ? Math.floor((Date.now() - new Date(cycleStart).getTime()) / 86400000) : 0
+  const donePercent = tasksInCycle.length > 0 ? (doneCount / tasksInCycle.length) * 100 : 0
+  const suggestNewCycle = !!(cycle?.status === 'active' && (daysRunning >= 28 || donePercent >= 70))
+  const suggestReason = suggestNewCycle
+    ? (daysRunning >= 28
+        ? `Chu kỳ đã chạy ${daysRunning} ngày. Nên xem xét mở chu kỳ mới để cập nhật lộ trình theo tình hình hiện tại.`
+        : `Đã hoàn thành khoảng ${Math.round(donePercent)}% việc trong chu kỳ. Có thể mở chu kỳ mới để đẩy lên giai đoạn tiếp theo.`)
+    : null
+
+  const summary: CycleSummary = {
+    bestThings,
+    metricsHighlights,
+    newIssue,
+    nextFocus,
+    suggestNewCycle,
+    suggestReason,
+  }
+
   return {
     client: { id: client.id, name: client.name },
     cycle: {
@@ -125,12 +198,12 @@ export async function getClientCycleReport(clientId: string, workspaceId: string
       rating: {
         baseline: round1(baselineRating),
         current: round1(currentRating),
-        delta: !sameSnapshot && baselineRating != null && currentRating != null ? round1(currentRating - baselineRating) : null,
+        delta: ratingDelta,
       },
       review_count: {
         baseline: baselineReviews,
         current: currentReviews,
-        delta: !sameSnapshot && baselineReviews != null && currentReviews != null ? currentReviews - baselineReviews : null,
+        delta: reviewDelta,
       },
     },
     baseline_captured_at: baseline?.captured_at || null,
@@ -143,5 +216,6 @@ export async function getClientCycleReport(clientId: string, workspaceId: string
     },
     progress: summarizeProgress(tasksInCycle),
     content_published: publishedInCycle,
+    summary,
   }
 }

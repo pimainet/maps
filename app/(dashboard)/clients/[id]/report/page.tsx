@@ -21,6 +21,14 @@ type Report = {
   tasks: { total: number; done: number; percent: number }
   progress: ProgressSummary
   content_published: number
+  summary: {
+    bestThings: string[]
+    metricsHighlights: string[]
+    newIssue: string | null
+    nextFocus: string
+    suggestNewCycle: boolean
+    suggestReason: string | null
+  }
 }
 
 function DeltaBadge({ value, suffix = '' }: { value: number | null; suffix?: string }) {
@@ -106,6 +114,62 @@ export default function ClientReportPage() {
           </div>
         </div>
       </Card>
+
+      {report.summary && (
+        <Card>
+          <div className="section-head">
+            <div>
+              <p className="overline">Báo cáo tái khám</p>
+              <h2>Tóm tắt chu kỳ này</h2>
+              <p>Những gì đã làm tốt, thay đổi số liệu, và hướng đi tiếp theo.</p>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gap: 16 }}>
+            <div>
+              <strong style={{ display: 'block', marginBottom: 6 }}>Việc nổi bật đã làm</strong>
+              <ul style={{ margin: 0, paddingLeft: 18 }}>
+                {report.summary.bestThings.map((t, i) => (
+                  <li key={i} style={{ marginBottom: 4 }}>{t}</li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <strong style={{ display: 'block', marginBottom: 6 }}>Thay đổi số liệu</strong>
+              <ul style={{ margin: 0, paddingLeft: 18 }}>
+                {report.summary.metricsHighlights.map((t, i) => (
+                  <li key={i} style={{ marginBottom: 4 }}>{t}</li>
+                ))}
+              </ul>
+            </div>
+
+            {report.summary.newIssue && (
+              <div>
+                <strong style={{ display: 'block', marginBottom: 6 }}>Vấn đề còn lại</strong>
+                <p style={{ margin: 0 }}>{report.summary.newIssue}</p>
+              </div>
+            )}
+
+            <div>
+              <strong style={{ display: 'block', marginBottom: 6 }}>Hướng chu kỳ tiếp theo</strong>
+              <p style={{ margin: 0 }}>{report.summary.nextFocus}</p>
+            </div>
+
+            {report.summary.suggestNewCycle && report.summary.suggestReason && (
+              <div style={{ padding: '12px 14px', background: 'var(--muted)', borderRadius: 8 }}>
+                <strong>Gợi ý mở chu kỳ mới</strong>
+                <p style={{ margin: '6px 0 0' }}>{report.summary.suggestReason}</p>
+                <div style={{ marginTop: 10 }}>
+                  <Link href={`/clients/${clientId}/plan`} className="primary-button">
+                    Xem kế hoạch <ArrowRight size={16} />
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
 
       <Card>
         <div className="section-head">

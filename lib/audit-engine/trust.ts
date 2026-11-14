@@ -84,7 +84,12 @@ function checkT03(input: AuditInput): CheckResult {
   }
 }
 
-/** T04 — Review Velocity: dùng lịch sử thật từ bảng gbp_snapshots nếu caller truyền vào (cần ≥2 điểm). */
+/**
+ * T04 — Review Velocity: dùng lịch sử thật từ bảng gbp_snapshots nếu caller truyền vào.
+ * Cần ≥2 điểm cách nhau ≥ 7 ngày (2 lần lấy sát nhau không nói lên xu hướng). Số review dao động nhỏ do nguồn dữ liệu
+ * (±3 hoặc ±3%) không bị coi là "giảm bất thường".
+ */
+const T04_MIN_SPAN_DAYS = 7
 function checkT04(input: AuditInput): CheckResult {
   const history = input.reviewCountHistory
   if (!history || history.length < 2) {
@@ -93,18 +98,30 @@ function checkT04(input: AuditInput): CheckResult {
   const sorted = [...history].sort((a, b) => new Date(a.capturedAt).getTime() - new Date(b.capturedAt).getTime())
   const first = sorted[0]
   const last = sorted[sorted.length - 1]
-  const growing = last.reviewCount >= first.reviewCount
+  const spanDays = (new Date(last.capturedAt).getTime() - new Date(first.capturedAt).getTime()) / 86_400_000
+  if (!(spanDays >= T04_MIN_SPAN_DAYS)) {
+    return {
+      ...insufficient('T04', 'Review Velocity', 'medium'),
+      message: 'Các lần đo số review còn quá sát nhau (cần cách ≥ 7 ngày) để kết luận xu hướng.',
+    }
+  }
+  const drop = first.reviewCount - last.reviewCount
+  const tolerance = Math.max(3, Math.round(first.reviewCount * 0.03))
+  const shrinking = drop > tolerance
+  const growing = last.reviewCount > first.reviewCount
   return {
     id: 'T04',
     group: 'trust',
     label: 'Review Velocity',
     severity: 'medium',
     confidence: 'verified',
-    passed: growing,
-    message: growing
-      ? `Số review tăng từ ${first.reviewCount} lên ${last.reviewCount}.`
-      : `Số review giảm từ ${first.reviewCount} xuống ${last.reviewCount} — bất thường, cần kiểm tra.`,
-    action: growing ? undefined : 'Kiểm tra vì sao số review giảm — có thể do review bị gỡ hoặc hồ sơ gặp vấn đề (xem F02).',
+    passed: !shrinking,
+    message: shrinking
+      ? `Số review giảm từ ${first.reviewCount} xuống ${last.reviewCount} — bất thường, cần kiểm tra.`
+      : growing
+        ? `Số review tăng từ ${first.reviewCount} lên ${last.reviewCount}.`
+        : `Số review gần như không đổi (${first.reviewCount} → ${last.reviewCount}) trong ${Math.round(spanDays)} ngày.`,
+    action: shrinking ? 'Kiểm tra vì sao số review giảm — có thể do review bị gỡ hoặc hồ sơ gặp vấn đề (xem F02).' : undefined,
   }
 }
 

@@ -31,6 +31,8 @@ export type CheckGroup =
 export interface AIClassifyInput {
   system: string
   user: string
+  /** Giới hạn token đầu ra (mặc định 1024). Không nằm trong khoá cache. */
+  maxTokens?: number
 }
 
 export interface AIClassifier {
@@ -98,6 +100,18 @@ export interface CheckResult {
   passed: boolean | null
   message: string
   action?: string
+  /**
+   * false = chỉ là INSIGHT để hiển thị, KHÔNG tính vào điểm / độ phủ / so sánh giữa 2 lần audit
+   * (vd T06: AI đọc review, kết luận bằng văn bản tự do nên không phù hợp làm tiêu chí đạt/không đạt).
+   * Mặc định (undefined) = có tính điểm.
+   */
+  scored?: boolean
+  /**
+   * true = check dựa trên dữ liệu thu thập KHÔNG ỔN ĐỊNH giữa các lần (bài đăng mẫu, số ảnh do AI ước tính,
+   * tỉ lệ phản hồi review từ nguồn thứ ba...). Chuyển đạt -> không đạt ở loại check này chưa được coi là
+   * "xấu đi" cho tới khi lần sau xác nhận lại (xem diff.ts).
+   */
+  volatile?: boolean
 }
 
 export interface TierScore {
@@ -115,10 +129,31 @@ export interface Opportunity {
   action: string
 }
 
+export interface AuditCoverage {
+  /** Số check có kết luận và được tính điểm. */
+  scored: number
+  /** Số check chưa đủ dữ liệu để kết luận. */
+  insufficient: number
+  /** Số check chỉ hiển thị (không tính điểm). */
+  informational: number
+  /** Tổng số check engine đã chạy. */
+  total: number
+}
+
 export interface AuditReport {
   checks: CheckResult[]
   tierScores: TierScore[]
   overallScore: number | null
   topOpportunities: Opportunity[]
   generatedAt: string
+  /**
+   * Phiên bản logic chấm điểm. Chỉ so sánh điểm giữa các lần audit CÙNG major version
+   * (đổi tập check / ngưỡng / trọng số thì thang đo đã khác). Báo cáo cũ không có trường này.
+   */
+  engineVersion?: string
+  coverage?: AuditCoverage
 }
+
+/** Tăng PATCH khi sửa lỗi không đổi thang điểm; tăng MAJOR khi đổi check/ngưỡng/trọng số (điểm không còn so sánh được). */
+export const ENGINE_VERSION = '2.1.0'
+export const engineMajor = (v: string | undefined | null): string | null => (v ? v.split('.')[0] : null)

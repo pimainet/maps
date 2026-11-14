@@ -309,15 +309,16 @@ Thông tin:
 - Số điện thoại: {{phone}}
 - Ghi chú thêm: {{extra_info}}
 
-Trước khi viết, tự suy nghĩ ngắn (KHÔNG in ra phần suy nghĩ): cách đối thủ thường viết về chủ đề này, 1 góc khác biệt, 1 yếu tố địa phương cụ thể.
+Trước khi viết, tự suy nghĩ ngắn (KHÔNG in ra phần suy nghĩ): cách đối thủ thường viết về chủ đề này, 1 góc khác biệt, 1 yếu tố địa phương cụ thể (tên đường/phường nếu có trong ghi chú, mùa vụ, thói quen khách hàng khu vực, hoặc đặc thù ngành tại {{area}}).
 
 Yêu cầu bài viết:
 - 1 bài GBP hoàn chỉnh, 150–280 từ.
-- Có yếu tố địa phương tự nhiên, CTA rõ.
+- Có yếu tố địa phương tự nhiên và cụ thể (không chỉ nhắc tên khu vực một lần). Nếu dữ liệu đầu vào có tên đường, phường, quận, sự kiện, hoặc mùa vụ thì phải dùng; nếu không có thì viết khái quát theo khu vực, không bịa.
+- Có CTA rõ ràng.
 - Chọn góc viết theo mục tiêu và cấp độ trong phần Mục tiêu; chuyên sâu hơn bằng câu hỏi, quy trình, tiêu chí lựa chọn hoặc tình huống thực tế phù hợp ngành — không chỉ đổi từ khóa của bài cũ.
 - Chỉ dùng chi tiết địa phương và bằng chứng có trong dữ liệu đầu vào; nếu không có thì viết khái quát, không tự dựng trải nghiệm/case.
 - Không nhồi từ khóa, lặp tên địa danh, tạo nội dung hàng loạt gần giống, hoặc hứa hẹn thứ hạng.
-- Giọng văn đúng yêu cầu.
+- Giọng văn đúng yêu cầu, như người địa phương đang nói chuyện với khách gần nhà, không như quảng cáo chung chung.
 
 CẤM:
 - Không bịa SĐT, địa chỉ chi tiết, ưu đãi, số liệu, chứng nhận, năm kinh nghiệm.

@@ -5,15 +5,19 @@ import { runContentBasicChecks, runContentAdvancedChecks } from './content'
 import { runVisualChecks } from './visual'
 import { runVisibilityChecks } from './visibility'
 import { runConversionChecks } from './conversion'
-import { scoreAllTiers, scoreOverall } from './scoring'
+import { coverageOf, scoreAllTiers, scoreOverall } from './scoring'
+import { applyStabilityFlags } from './stability'
 import { pickTopOpportunities } from './priority'
-import type { AIClassifier, AuditInput, AuditReport } from './types'
+import { ENGINE_VERSION, type AIClassifier, type AuditInput, type AuditReport } from './types'
 
 export * from './types'
 export { createRealAIClassifier } from './ai-client'
 export { checkWebsiteReachable } from './check-website'
 export { diffAuditReports } from './diff'
 export type { AuditDiff, AuditDiffEntry } from './diff'
+export { createCachedClassifier, memoryClassifierStore } from './classifier-cache'
+export type { ClassifierStore } from './classifier-cache'
+export { applyStabilityFlags, VOLATILE_CHECK_IDS, INFORMATIONAL_CHECK_IDS } from './stability'
 
 /**
  * Audit Engine — 34/34 checks, hoạt động trên ĐÚNG dữ liệu hệ thống thật sự
@@ -42,10 +46,18 @@ export async function runAudit(input: AuditInput, ai: AIClassifier): Promise<Aud
   const checksSoFar = [...foundation, ...relevance, ...trust, ...contentBasic, ...contentAdvanced, ...visual, ...visibility]
   const conversion = runConversionChecks(checksSoFar)
 
-  const checks = [...checksSoFar, ...conversion]
+  const checks = applyStabilityFlags([...checksSoFar, ...conversion])
   const tierScores = scoreAllTiers(checks)
   const overallScore = scoreOverall(tierScores)
   const topOpportunities = pickTopOpportunities(checks)
 
-  return { checks, tierScores, overallScore, topOpportunities, generatedAt: new Date().toISOString() }
+  return {
+    checks,
+    tierScores,
+    overallScore,
+    topOpportunities,
+    generatedAt: (input.now ?? new Date()).toISOString(),
+    engineVersion: ENGINE_VERSION,
+    coverage: coverageOf(checks),
+  }
 }

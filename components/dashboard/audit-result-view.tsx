@@ -1,16 +1,31 @@
+import type { ReactNode } from 'react'
 import { Lock } from 'lucide-react'
 import type { DemoAudit } from '@/lib/demo-audit'
 import { Card } from '@/components/dashboard/shared'
+
+/**
+ * Thay số điểm/nhóm điểm lấy từ việc đọc chữ (audit v1) bằng số do engine v2 tính sẵn.
+ * score = null nghĩa là nhóm đó chưa đủ dữ liệu (hiện chữ, không vẽ thanh).
+ */
+export type ScoreOverride = {
+  display: string
+  groups: Array<{ key: string; label: string; score: number | null }>
+  /** Khối hiện thêm dưới phần giải thích (độ phủ dữ liệu, so sánh với lần trước...). */
+  extra?: ReactNode
+}
 
 export function AuditResultView({
   audit,
   teaser = false,
   rawFallback,
+  scoreOverride,
 }: {
   audit: DemoAudit
   teaser?: boolean
   rawFallback?: string
+  scoreOverride?: ScoreOverride
 }) {
+  const groups = scoreOverride?.groups ?? audit.groups
   return (
     <>
       <Card className="result-panel">
@@ -24,20 +39,21 @@ export function AuditResultView({
             </p>
           </div>
           <div className="score-ring">
-            <strong>{audit.overall}</strong>
+            <strong>{scoreOverride?.display ?? audit.overall}</strong>
             <span>/10</span>
           </div>
         </div>
         <p style={{ margin: '0 0 18px', color: 'var(--muted-foreground)', fontSize: 13, lineHeight: 1.55 }}>{audit.overallNote}</p>
+        {scoreOverride?.extra}
         <div className="score-bars">
-          {audit.groups.map((g) => (
+          {groups.map((g) => (
             <div className="score-row" key={g.key}>
               <div>
                 <span>{g.label}</span>
-                <strong>{g.score}</strong>
+                <strong>{g.score == null ? 'Chưa đủ dữ liệu' : g.score}</strong>
               </div>
               <div className="progress">
-                <i style={{ width: `${Math.min(100, g.score * 10)}%` }} />
+                <i style={{ width: `${g.score == null ? 0 : Math.min(100, g.score * 10)}%` }} />
               </div>
             </div>
           ))}
