@@ -25,6 +25,7 @@
 // giống cách "NoWorkspace:" đang được xử lý ở lib/auth.ts.
 import { createClient as createSupabaseServerClient } from '@/lib/supabase/server'
 import { getCurrentUser } from '@/lib/auth'
+import { auditQuotaPlaceKey } from '@/lib/audit-quota-key'
 
 type EndpointLimit = {
   /** Số lượt gọi tối đa mỗi USER được phép trong userWindowMinutes. */
@@ -146,6 +147,62 @@ export async function withAiRateLimit<T>(workspaceId: string, endpoint: Endpoint
   const result = await run()
   await recordAiUsage(workspaceId, endpoint, userId)
   return result
+}
+
+export type AuditQuotaReservation = {
+  /** Gọi khi audit lưu thành công: lượt này được tính vào quota 30 ngày. */
+  commit: () => Promise<void>
+  /** Gọi khi audit thất bại/không có dữ liệu: hoàn lại lượt (an toàn khi gọi nhiều lần hoặc sau commit). */
+  release: () => Promise<void>
+}
+
+/**
+ * Giữ chỗ 1 lượt audit cho 1 doanh nghiệp, ATOMIC ở DB (hàm reserve_audit_quota, migration 019): bấm song song
+ * nhiều lần không vượt được giới hạn, và xóa/tạo lại client hay mở thêm workspace không reset được quota.
+ *
+ * Luồng dùng: reserve -> (lấy dữ liệu Maps, gọi Claude, lưu audit) -> commit; mọi nhánh lỗi -> release.
+ * Lượt chỉ bị tính khi audit thành công, giống hành vi cũ.
+ *
+ * Nếu migration 019 chưa chạy trên DB (hàm chưa tồn tại) thì tự rơi về cách đếm cũ trên bảng audits để
+ * không làm gián đoạn người dùng khi triển khai code trước migration.
+ */
+export async function reserveClientAuditQuota(
+  client: { id: string; place_id?: string | null; gbp_link_normalized?: string | null },
+  workspaceId: string,
+): Promise<AuditQuotaReservation> {
+  const supabase = await createSupabaseServerClient()
+  const { data, error } = await supabase.rpc('reserve_audit_quota', {
+    p_workspace_id: workspaceId,
+    p_place_key: auditQuotaPlaceKey(client),
+    p_limit: AUDIT_QUOTA_PER_CLIENT,
+    p_window_days: AUDIT_QUOTA_WINDOW_DAYS,
+  })
+
+  if (error) {
+    const missing = error.code === '42883' || error.code === 'PGRST202' || /Could not find the function/i.test(error.message || '')
+    if (!missing) throw error
+    console.warn('reserve_audit_quota chưa có trên DB (chưa chạy migration 019) — dùng kiểm tra quota cũ.')
+    await enforceClientAuditQuota(client.id, workspaceId)
+    const noop = async () => {}
+    return { commit: noop, release: noop }
+  }
+
+  const id = data as string
+  let settled = false
+  return {
+    commit: async () => {
+      if (settled) return
+      settled = true
+      const { error: e } = await supabase.rpc('commit_audit_quota', { p_id: id })
+      if (e) console.error('commit_audit_quota:', e.message) // audit đã lưu; pending tự hết hạn sau 10 phút nếu lỗi
+    },
+    release: async () => {
+      if (settled) return
+      settled = true
+      const { error: e } = await supabase.rpc('release_audit_quota', { p_id: id })
+      if (e) console.error('release_audit_quota:', e.message) // pending tự hết hạn sau 10 phút
+    },
+  }
 }
 
 /**
