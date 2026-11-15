@@ -59,6 +59,12 @@ async function main() {
   assert.equal((await enrichWithDataForSeo(base(), { placeId: 'ChIJ_x1234567' })).description, null)
   globalThis.fetch = (async () => new Response('{}', { status: 401 })) as any
   assert.equal((await enrichWithDataForSeo(base(), { placeId: 'ChIJ_x1234567' })).description, null)
+  // Đã tra mà nguồn không có thêm gì -> ghi dấu, lần sau không gọi (không trả phí lại)
+  let calls2 = 0
+  globalThis.fetch = (async () => { calls2++; return new Response(JSON.stringify(ok({ place_id: 'ChIJ_x1234567', additional_categories: [] })), { status: 200 }) }) as any
+  const n1 = await enrichWithDataForSeo(base(), { placeId: 'ChIJ_x1234567' })
+  assert.equal(calls2, 1); assert.equal(n1.description, null)
+  await enrichWithDataForSeo(n1, { placeId: 'ChIJ_x1234567' }); assert.equal(calls2, 1, 'không tra lại')
   globalThis.fetch = realFetch
   console.log('OK: DataForSEO bù mô tả + danh mục phụ, an toàn khi lỗi')
 }

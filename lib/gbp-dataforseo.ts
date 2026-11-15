@@ -74,7 +74,10 @@ export async function fetchDataForSeoInfo(input: RunGbpSnapshotInput): Promise<{
 }
 
 /** Trường nào của snapshot còn thiếu và DataForSEO có thể bù? */
+export const DFS_CHECKED_MARK = 'DataForSEO: đã tra, không có thêm dữ liệu để bù.'
+
 export function needsDfsEnrichment(s: Partial<RunGbpSnapshotResult>): boolean {
+  if (s.coverage?.warnings?.includes(DFS_CHECKED_MARK)) return false // đã tra rồi mà nguồn cũng không có: không trả phí lại mỗi lần audit
   const catsOk = s.coverage?.sections?.categories === 'ok' && Boolean(s.additional_categories)
   return !clean(s.description) || !catsOk
 }
@@ -112,12 +115,17 @@ export function applyDfsInfo(snap: RunGbpSnapshotResult, info: DfsInfo, by: stri
   }
   if (cov && (extra.length || have.size || Array.isArray(info.additional_categories))) cov.sections.categories = 'ok'
   if (cov && used.length) cov.warnings.push(`Đã bù ${used.join(', ')} từ DataForSEO.`)
+  else if (cov && !cov.warnings.includes(DFS_CHECKED_MARK)) cov.warnings.push(DFS_CHECKED_MARK)
   if (cov) out.coverage = cov
   return out
 }
 
 export async function enrichWithDataForSeo(snap: RunGbpSnapshotResult, input: RunGbpSnapshotInput): Promise<RunGbpSnapshotResult> {
-  if (!dataforseoConfigured() || !needsDfsEnrichment(snap)) return snap
+  if (!needsDfsEnrichment(snap)) return snap
+  if (!dataforseoConfigured()) {
+    console.warn('dataforseo enrich: bỏ qua — thiếu DATAFORSEO_LOGIN/DATAFORSEO_PASSWORD trên môi trường chạy (đã Redeploy chưa?)')
+    return snap
+  }
   const placeId = input.placeId || snap.place_id
   const r = await fetchDataForSeoInfo({ ...input, placeId })
   if (!r.info) {

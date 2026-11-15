@@ -15,6 +15,7 @@ import {
   updateSnapshot,
 } from '@/lib/gbp-snapshots'
 import { hasProfileData, runGbpPublicSnapshot, type RunGbpSnapshotResult } from '@/lib/gbp-snapshot'
+import { enrichWithDataForSeo } from '@/lib/gbp-dataforseo'
 import { outscraperConfigured } from '@/lib/gbp-outscraper'
 import { buildMapsSearchUrl, extractPlaceIdFromUrl } from '@/lib/place-identity'
 import type { GbpSnapshotStatus } from '@/lib/gbp-snapshot-types'
@@ -136,6 +137,34 @@ async function captureLive(client: SnapshotClient, workspaceId: string) {
   }
 }
 
+/**
+ * Bản lưu còn mới (dùng lại, không gọi Outscraper) nhưng thiếu mô tả/danh mục phụ -> chỉ gọi thêm DataForSEO để bù rồi lưu lại.
+ * Không tốn thêm 1 lần Outscraper; đã tra mà nguồn cũng không có thì ghi dấu để không tra lại mỗi lần bấm audit.
+ */
+async function enrichStoredSnapshot(row: any, client: SnapshotClient, workspaceId: string): Promise<any> {
+  try {
+    const placeId = row.place_id || client.place_id || extractPlaceIdFromUrl(client.gbp_link)
+    const enriched = await enrichWithDataForSeo(row as RunGbpSnapshotResult, {
+      mapsUrl: client.gbp_link || undefined,
+      placeId,
+      businessName: client.name || undefined,
+      area: client.area || undefined,
+    })
+    if (enriched === row) return row
+    const patch = {
+      description: enriched.description || null,
+      primary_category: enriched.primary_category || null,
+      additional_categories: enriched.additional_categories || null,
+      coverage: enriched.coverage || null,
+    }
+    await updateSnapshot(row.id, workspaceId, patch).catch((e) => console.warn('enrichStoredSnapshot save failed:', e?.message))
+    return { ...row, ...patch }
+  } catch (e: any) {
+    console.warn('enrichStoredSnapshot failed (non-fatal):', e?.message)
+    return row
+  }
+}
+
 export async function getClientSnapshot(
   client: SnapshotClient,
   workspaceId: string,
@@ -143,7 +172,7 @@ export async function getClientSnapshot(
 ): Promise<ClientSnapshot> {
   if (!opts.force) {
     const fresh = await getFreshSnapshotForClient(client.id, workspaceId, opts.maxAgeMs)
-    if (fresh) return { snapshot: fresh, origin: 'cache', error: null }
+    if (fresh) return { snapshot: await enrichStoredSnapshot(fresh, client, workspaceId), origin: 'cache', error: null }
   }
 
   let error: string | null = null
