@@ -147,7 +147,7 @@ export default function ClientAuditPage() {
             {running ? 'Đang lấy dữ liệu và kiểm tra…' : 'Kiểm tra hồ sơ'}
           </button>
           <button className="secondary-button" onClick={() => router.push(`/clients/${client.id}/plan`)}>
-            Xem kế hoạch 30 ngày
+            Xem kế hoạch hiện tại
           </button>
           {running && (
             <span style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>
@@ -178,8 +178,8 @@ export default function ClientAuditPage() {
         <>
           <div className="section-head" style={{ marginTop: 8 }}>
             <div />
-            <button className="primary-button" onClick={() => router.push(`/clients/${client.id}/plan`)}>
-              Tạo kế hoạch 30 ngày
+            <button className="primary-button" onClick={() => router.push(`/clients/${client.id}/plan?start=1`)}>
+              Tạo kế hoạch làm việc
             </button>
           </div>
           <AuditResultView

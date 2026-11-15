@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { ArrowRight, ExternalLink, Loader2, Unplug } from 'lucide-react'
@@ -8,6 +8,7 @@ import { Card } from '@/components/dashboard/shared'
 import { useToast } from '@/components/dashboard/toast-context'
 import { TASK_TYPE_LABEL } from '@/lib/ui-constants'
 import { AUTO_POST_ENABLED } from '@/lib/features'
+import { WorkingBot, type BotStage } from '@/components/dashboard/working-bot'
 
 export default function ClientPlanPage() {
   const { showToast } = useToast()
@@ -55,8 +56,11 @@ export default function ClientPlanPage() {
 
   const [client, setClient] = useState<any>(null)
   const [loadingClient, setLoadingClient] = useState(true)
-  const [running, setRunning] = useState(false)
-  const [generatingTasks, setGeneratingTasks] = useState(false)
+  // Một nút chạy cả 2 bước: 'plan' (soạn kế hoạch) -> 'tasks' (chia việc + soạn bài nháp).
+  const [stage, setStage] = useState<BotStage | null>(null)
+  const [runStartedAt, setRunStartedAt] = useState(0)
+  const running = stage !== null
+  const autoStartDone = useRef(false)
   const [error, setError] = useState('')
   const [tasksError, setTasksError] = useState('')
   const [result, setResult] = useState<string | null>(null)
@@ -92,6 +96,14 @@ export default function ClientPlanPage() {
           if (planData.plan_result) {
             setResult(planData.plan_result)
             setSavedPlan(planData)
+            // Kế hoạch đã lưu nhưng chưa có việc nào (vd lần trước hỏng giữa chừng) -> cho tiếp tục đúng bước còn thiếu.
+            try {
+              const tr = await fetch(`/api/tasks?plan_id=${planData.id}`)
+              const td = await tr.json()
+              if (tr.ok && Array.isArray(td) && td.length > 0) setTasksCreated(td)
+            } catch {
+              /* không chặn trang */
+            }
           }
           if (planData.active_cycle) setCycleInfo({ active_cycle: planData.active_cycle })
         }
@@ -111,86 +123,125 @@ export default function ClientPlanPage() {
     load()
   }, [clientId])
 
-  async function handleCreatePlan() {
-    if (!client) return
-    setError('')
-    setRunning(true)
-    try {
-      const today = new Date()
-      const end = new Date(today)
-      end.setDate(end.getDate() + 30)
-      const res = await fetch('/api/plan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          client_id: client.id,
-          audit_id: auditRecord?.id,
-          business_name: client.name,
-          industry: client.industry || '',
-          area: client.area || '',
-          audit_result: auditResult || '',
-          start_date: today.toISOString().slice(0, 10),
-          end_date: end.toISOString().slice(0, 10),
-          force_new_cycle: forceNewCycle,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        if (res.status === 409 && data.code === 'ACTIVE_CYCLE_EXISTS') {
-          setCycleInfo(data)
-          throw new Error('Bạn đang có một kế hoạch đang chạy. Chọn “Bắt đầu kế hoạch mới” nếu muốn làm lại từ đầu.')
-        }
-        throw new Error(data.error || 'Chưa tạo được kế hoạch. Thử lại sau ít phút.')
+  /** Bước 1: soạn kế hoạch. Trả về { plan_id, plan_text, start_date } hoặc null nếu lỗi (đã hiện lỗi). */
+  async function runPlanStep() {
+    const today = new Date()
+    const end = new Date(today)
+    end.setDate(end.getDate() + 30)
+    const res = await fetch('/api/plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_id: client.id,
+        audit_id: auditRecord?.id,
+        business_name: client.name,
+        industry: client.industry || '',
+        area: client.area || '',
+        audit_result: auditResult || '',
+        start_date: today.toISOString().slice(0, 10),
+        end_date: end.toISOString().slice(0, 10),
+        force_new_cycle: forceNewCycle,
+      }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      if (res.status === 409 && data.code === 'ACTIVE_CYCLE_EXISTS') {
+        setCycleInfo(data)
+        throw new Error('Bạn đang có một kế hoạch đang chạy. Chọn “Bắt đầu kế hoạch mới” nếu muốn làm lại từ đầu.')
       }
-      setResult(data.plan_result || 'Chưa có nội dung kế hoạch.')
-      setSavedPlan(data.plan || null)
-      setCycleInfo(data.cycle ? { active_cycle: data.cycle } : null)
-      setForceNewCycle(false)
-      showToast(data.force_new_cycle ? 'Đã bắt đầu kế hoạch mới' : 'Đã tạo kế hoạch 30 ngày')
-    } catch (err: any) {
-      setError(err.message || 'Có lỗi xảy ra')
-    } finally {
-      setRunning(false)
+      throw new Error(data.error || 'Chưa tạo được kế hoạch. Thử lại sau ít phút.')
+    }
+    setResult(data.plan_result || 'Chưa có nội dung kế hoạch.')
+    setSavedPlan(data.plan || null)
+    setCycleInfo(data.cycle ? { active_cycle: data.cycle } : null)
+    setForceNewCycle(false)
+    setTasksCreated(null)
+    return {
+      plan_id: data.plan?.id as string | undefined,
+      plan_text: (data.plan_result as string) || '',
+      start_date: (data.plan?.start_date as string) || today.toISOString().slice(0, 10),
     }
   }
 
-  async function handleGenerateTasks() {
-    if (!client || !result) return
-    setGeneratingTasks(true)
-    setTasksError('')
-    setTasksCreated(null)
-    try {
-      const res = await fetch('/api/tasks/generate-from-plan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          client_id: client.id,
-          plan_id: savedPlan?.id,
-          business_name: client.name,
-          industry: client.industry || '',
-          area: client.area || '',
-          plan_result: result,
-          start_date: savedPlan?.start_date || new Date().toISOString().slice(0, 10),
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Chưa tạo được danh sách việc. Thử lại sau ít phút.')
-      setTasksCreated(data.items || [])
-      const written = data.auto_written || 0
-      if (written > 0) {
-        showToast(data.message || `Đã tạo ${data.items?.length || 0} việc và soạn sẵn ${written} bài nháp`)
-      } else if (data.auto_write_error) {
-        setTasksError(`Đã tạo việc nhưng chưa soạn được bài nháp: ${data.auto_write_error}`)
-        showToast(data.message || 'Đã tạo việc, bài nháp chưa soạn được')
-      } else {
-        showToast(data.message || `Đã tạo ${data.items?.length || 0} việc`)
-      }
-    } catch (err: any) {
-      setTasksError(err.message || 'Có lỗi xảy ra')
-    } finally {
-      setGeneratingTasks(false)
+  /** Bước 2: chia kế hoạch thành việc (+ soạn bài nháp đầu tiên). */
+  async function runTasksStep(plan: { plan_id?: string; plan_text: string; start_date: string }) {
+    const res = await fetch('/api/tasks/generate-from-plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_id: client.id,
+        plan_id: plan.plan_id,
+        business_name: client.name,
+        industry: client.industry || '',
+        area: client.area || '',
+        plan_result: plan.plan_text,
+        start_date: plan.start_date,
+      }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.error || 'Chưa tạo được danh sách việc. Thử lại sau ít phút.')
+    setTasksCreated(data.items || [])
+    const written = data.auto_written || 0
+    if (written > 0) {
+      showToast(data.message || `Đã tạo ${data.items?.length || 0} việc và soạn sẵn ${written} bài nháp`)
+    } else if (data.auto_write_error) {
+      setTasksError(`Đã tạo việc nhưng chưa soạn được bài nháp: ${data.auto_write_error}`)
+      showToast(data.message || 'Đã tạo việc, bài nháp chưa soạn được')
+    } else {
+      showToast(data.message || `Đã tạo ${data.items?.length || 0} việc`)
     }
   }
+
+  /** Nút duy nhất: kế hoạch -> việc. `resume` = kế hoạch đã lưu, chỉ chạy lại bước việc (không tốn lượt kế hoạch). */
+  async function handleCreateAll(resume = false) {
+    if (!client || running) return
+    setError('')
+    setTasksError('')
+    setRunStartedAt(Date.now())
+    try {
+      let plan: { plan_id?: string; plan_text: string; start_date: string }
+      if (resume && savedPlan?.id && result) {
+        plan = { plan_id: savedPlan.id, plan_text: result, start_date: savedPlan.start_date || new Date().toISOString().slice(0, 10) }
+      } else {
+        setStage('plan')
+        plan = await runPlanStep()
+      }
+      setStage('tasks')
+      try {
+        await runTasksStep(plan)
+      } catch (err: any) {
+        // Kế hoạch đã lưu an toàn; chỉ bước việc hỏng -> báo rõ để bấm "Thử lại" đúng bước.
+        setTasksError(`Kế hoạch đã lưu, nhưng chưa tạo được danh sách việc: ${err.message || 'có lỗi xảy ra'}`)
+      }
+    } catch (err: any) {
+      setError(err.message || 'Có lỗi xảy ra')
+    } finally {
+      setStage(null)
+    }
+  }
+
+  // Từ trang kiểm tra hồ sơ bấm "Tạo kế hoạch làm việc" -> vào đây với ?start=1 và chạy luôn (một lần).
+  useEffect(() => {
+    if (searchParams.get('start') !== '1' || autoStartDone.current || loadingClient || loadingAudit || !client) return
+    autoStartDone.current = true
+    router.replace(`/clients/${clientId}/plan`) // F5 không chạy lại
+    // Đã có kế hoạch đang chạy: không tự ý làm lại, để người dùng chọn.
+    if (cycleInfo?.active_cycle && savedPlan) return
+    if (!auditResult.trim()) return
+    handleCreateAll(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, loadingClient, loadingAudit, client])
+
+  // Cảnh báo khi đóng trang giữa lúc bot đang làm.
+  useEffect(() => {
+    if (!running) return
+    const h = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', h)
+    return () => window.removeEventListener('beforeunload', h)
+  }, [running])
 
   if (loadingClient) {
     return (
@@ -216,7 +267,7 @@ export default function ClientPlanPage() {
       <Card>
         <div className="section-head">
           <div>
-            <h2>Tạo kế hoạch 30 ngày</h2>
+            <h2>Tạo kế hoạch làm việc</h2>
             <p>
               Cho <strong>{client.name}</strong>
               {client.industry || client.area ? `, ${[client.industry, client.area].filter(Boolean).join(', ')}` : ''}
@@ -296,16 +347,17 @@ export default function ClientPlanPage() {
         {error && <div className="alert alert-error" style={{ marginTop: 16 }}>{error}</div>}
 
         <div className="plan-actions" style={{ marginTop: 24 }}>
-          <button className="primary-button" onClick={handleCreatePlan} disabled={running}>
+          <button className="primary-button" onClick={() => handleCreateAll(false)} disabled={running || !auditResult.trim()}>
             {running && <Loader2 size={18} className="animate-spin" />}
-            {running ? 'Đang tạo kế hoạch… (khoảng 15–25 giây)' : 'Tạo kế hoạch 30 ngày'}
+            {running ? 'Bot đang làm việc…' : 'Tạo kế hoạch làm việc'}
           </button>
+          {!running && <span className="rail-sub" style={{ alignSelf: 'center' }}>Gồm kế hoạch 30 ngày và danh sách việc, mất khoảng 1 phút.</span>}
         </div>
       </Card>
 
-      {running && (
+      {running && stage && (
         <Card>
-          <div className="empty-note">Đang soạn kế hoạch 30 ngày cho bạn…</div>
+          <WorkingBot stage={stage} startedAt={runStartedAt} />
         </Card>
       )}
 
@@ -321,12 +373,11 @@ export default function ClientPlanPage() {
         </Card>
       )}
 
-      {result && (
+      {result && !running && (
         <Card>
           <div className="section-head">
             <div>
-              <p className="overline">Bước tiếp theo</p>
-              <h2>Biến kế hoạch thành danh sách việc</h2>
+              <h2>{tasksCreated ? 'Danh sách việc đã sẵn sàng' : 'Kế hoạch đã lưu, chưa có danh sách việc'}</h2>
               <p>Mỗi việc có hướng dẫn từng bước. Việc đã có sẽ không bị tạo trùng.</p>
             </div>
           </div>
@@ -335,7 +386,7 @@ export default function ClientPlanPage() {
 
           {tasksCreated && tasksCreated.length > 0 && (
             <div className="client-list" style={{ marginBottom: 20 }}>
-              {tasksCreated.map((t: any) => (
+              {tasksCreated.slice(0, 12).map((t: any) => (
                 <div className="client-row" key={t.id}>
                   <div className="row-main">
                     <strong>{t.title}</strong>
@@ -343,6 +394,7 @@ export default function ClientPlanPage() {
                   </div>
                 </div>
               ))}
+              {tasksCreated.length > 12 && <div className="rail-sub">…và {tasksCreated.length - 12} việc khác</div>}
             </div>
           )}
           {tasksCreated && tasksCreated.length === 0 && (
@@ -357,9 +409,8 @@ export default function ClientPlanPage() {
                 Bắt đầu làm <ArrowRight size={18} />
               </Link>
             ) : (
-              <button className="primary-button" onClick={handleGenerateTasks} disabled={generatingTasks}>
-                {generatingTasks && <Loader2 size={18} className="animate-spin" />}
-                {generatingTasks ? 'Đang tạo danh sách việc… (20–30 giây)' : 'Tạo danh sách việc'}
+              <button className="primary-button" onClick={() => handleCreateAll(true)}>
+                Tạo danh sách việc từ kế hoạch này
               </button>
             )}
           </div>
