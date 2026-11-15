@@ -10,6 +10,7 @@ import { requireActiveWorkspaceId } from '@/lib/auth'
 import {
   canonicalizePlaceId,
   extractPlaceIdFromUrl,
+  isSupportedGoogleMapsUrl,
   normalizeGbpLink,
 } from '@/lib/place-identity'
 
@@ -48,10 +49,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Thiếu tên doanh nghiệp' }, { status: 400 })
     }
 
-    const gbp_link =
+    let gbp_link =
       typeof body.gbp_link === 'string' && body.gbp_link.trim()
         ? body.gbp_link.trim()
         : null
+    if (gbp_link && !/^https?:\/\//i.test(gbp_link)) gbp_link = `https://${gbp_link}`
+    if (gbp_link && !isSupportedGoogleMapsUrl(gbp_link)) {
+      return NextResponse.json(
+        { error: 'Link này không phải link Google Maps. Hãy dùng ô tìm doanh nghiệp, hoặc dán link “Chia sẻ” từ Google Maps.' },
+        { status: 400 },
+      )
+    }
 
     let place_id = canonicalizePlaceId(body.place_id) || extractPlaceIdFromUrl(gbp_link)
     const gbp_link_normalized = normalizeGbpLink(gbp_link)

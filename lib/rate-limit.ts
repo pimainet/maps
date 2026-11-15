@@ -49,6 +49,8 @@ const LIMITS: Record<string, EndpointLimit> = {
   // enforceClientAuditQuota (xem app/api/audit/v2-preview/route.ts).
   // Giới hạn thấp vì mỗi lần gọi tốn tới 4 lượt gọi Claude (R01, R04,
   // C03, C04) cộng dồn, không phải 1 lượt như route audit cũ.
+  // Tìm doanh nghiệp để chọn khi tạo/sửa hồ sơ: mỗi lượt tốn 1 lần gọi Places/Outscraper nên cần trần; ghi nhận NGAY khi gọi (kể cả không có kết quả).
+  'place-search': { perUserMax: 20, perUserWindowMinutes: 10, perWorkspaceMax: 60, perWorkspaceWindowMinutes: 60 },
   'audit-v2-preview': { perUserMax: 8, perUserWindowMinutes: 10, perWorkspaceMax: 20, perWorkspaceWindowMinutes: 60 },
 }
 

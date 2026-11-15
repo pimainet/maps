@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation'
 import { Pencil } from 'lucide-react'
 import { Card } from '@/components/dashboard/shared'
 import { useToast } from '@/components/dashboard/toast-context'
+import { PlacePicker } from '@/components/dashboard/place-picker'
 
-const FIELDS = ['name', 'industry', 'area', 'phone', 'contact_name', 'brand_voice', 'website_url', 'gbp_link', 'notes'] as const
+const FIELDS = ['name', 'industry', 'area', 'phone', 'contact_name', 'brand_voice', 'website_url', 'gbp_link', 'place_id', 'notes'] as const
 type Form = Record<(typeof FIELDS)[number], string>
 
 function toForm(c: any): Form {
@@ -26,10 +27,11 @@ export function ClientInfoCard({ client, onSaved }: { client: any; onSaved: (c: 
   const [fieldError, setFieldError] = useState('')
   const [dupId, setDupId] = useState<string | null>(null)
   const [needConfirm, setNeedConfirm] = useState(false)
+  const [picked, setPicked] = useState(false) // true: link/place_id đến từ danh sách chọn (đáng tin), false: người dùng tự gõ link
 
   const original = toForm(client)
   const changed = FIELDS.filter((k) => form[k].trim() !== original[k].trim())
-  const linkChanged = changed.includes('gbp_link')
+  const linkChanged = changed.includes('gbp_link') || changed.includes('place_id')
 
   function startEdit() {
     setForm(toForm(client))
@@ -37,6 +39,7 @@ export function ClientInfoCard({ client, onSaved }: { client: any; onSaved: (c: 
     setFieldError('')
     setDupId(null)
     setNeedConfirm(false)
+    setPicked(false)
     setEditing(true)
   }
 
@@ -53,6 +56,10 @@ export function ClientInfoCard({ client, onSaved }: { client: any; onSaved: (c: 
     try {
       const body: Record<string, unknown> = {}
       for (const k of changed) body[k] = form[k].trim()
+      // Link đổi mà không chọn quán từ danh sách: không gửi place_id cũ đi kèm (server tự suy ra từ link mới).
+      // Chọn từ danh sách: luôn gửi kèm place_id của quán đã chọn (kể cả khi trùng quán hiện tại, để không bị coi là đổi quán).
+      if (picked && form.place_id.trim()) body.place_id = form.place_id.trim()
+      else delete body.place_id
       if (confirmPlaceChange) body.confirm_place_change = true
       const res = await fetch(`/api/clients/${client.id}`, {
         method: 'PATCH',
@@ -168,10 +175,25 @@ export function ClientInfoCard({ client, onSaved }: { client: any; onSaved: (c: 
           <span>Website</span>
           <input value={form.website_url} style={bad('website_url')} onChange={(e) => update('website_url', e.target.value)} placeholder="https://" />
         </label>
-        <label className="field wide">
-          <span>Link Google Maps</span>
-          <input value={form.gbp_link} style={bad('gbp_link')} onChange={(e) => update('gbp_link', e.target.value)} placeholder="https://maps.app.goo.gl/…" />
-        </label>
+        <PlacePicker
+          initialQuery={[client.name, client.area].filter(Boolean).join(' ')}
+          selected={{ name: client.name, address: client.area }}
+          onSelect={(c) => {
+            setForm((f) => ({ ...f, gbp_link: c.maps_url, place_id: c.place_id }))
+            setPicked(true)
+            setNeedConfirm(false)
+          }}
+        />
+        <details className="field wide">
+          <summary style={{ cursor: 'pointer' }}>Nâng cao: dán link Google Maps</summary>
+          <label className="field wide">
+            <span>Link Google Maps</span>
+            <input value={form.gbp_link} style={bad('gbp_link')} onChange={(e) => {
+              setPicked(false)
+              setForm((f) => ({ ...f, gbp_link: e.target.value, place_id: client.place_id ?? '' }))
+            }} placeholder="https://maps.app.goo.gl/…" />
+          </label>
+        </details>
         <label className="field wide">
           <span>Giọng văn thương hiệu</span>
           <textarea value={form.brand_voice} style={bad('brand_voice')} onChange={(e) => update('brand_voice', e.target.value)} />

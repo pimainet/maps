@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Check, Users } from 'lucide-react'
 import { Card } from '@/components/dashboard/shared'
 import { useToast } from '@/components/dashboard/toast-context'
+import { PlacePicker } from '@/components/dashboard/place-picker'
 
 export default function NewClientPage() {
   const router = useRouter()
@@ -76,6 +77,16 @@ export default function NewClientPage() {
       </div>
 
       <div className="form-grid">
+        <PlacePicker
+          onSelect={(c) =>
+            setForm((prev) => ({
+              ...prev,
+              name: prev.name.trim() ? prev.name : c.name,
+              gbp_link: c.maps_url,
+              place_id: c.place_id,
+            }))
+          }
+        />
         <label className="field">
           <span>
             Tên doanh nghiệp <em>*</em>
@@ -102,10 +113,17 @@ export default function NewClientPage() {
           <span>Giọng văn thương hiệu</span>
           <input value={form.brand_voice} onChange={(e) => update('brand_voice', e.target.value)} placeholder="Thân thiện, chuyên gia..." />
         </label>
-        <label className="field wide">
-          <span>Link hồ sơ Google (Google Maps)</span>
-          <input value={form.gbp_link} onChange={(e) => update('gbp_link', e.target.value)} placeholder="https://maps.google.com/..." />
-        </label>
+        <details className="field wide">
+          <summary style={{ cursor: 'pointer' }}>Nâng cao: dán link Google Maps hoặc Place ID thay vì tìm</summary>
+          <label className="field wide">
+            <span>Link hồ sơ Google (Google Maps)</span>
+            <input value={form.gbp_link} onChange={(e) => setForm((p) => ({ ...p, gbp_link: e.target.value, place_id: '' }))} placeholder="https://maps.app.goo.gl/..." />
+          </label>
+          <label className="field wide">
+            <span>Place ID (nếu có)</span>
+            <input value={form.place_id} onChange={(e) => update('place_id', e.target.value)} placeholder="ChIJ..." />
+          </label>
+        </details>
         <label className="field wide">
           <span>Website (không bắt buộc)</span>
           <input value={form.website_url} onChange={(e) => update('website_url', e.target.value)} placeholder="https://" />
