@@ -39,6 +39,24 @@ export type ClientSnapshot = {
 const GENERIC_FAILURE = 'Không đọc được hồ sơ Google Maps lần này.'
 
 /**
+ * Lỗi bất ngờ (không phải "Google không có dữ liệu") -> phân loại thô để người vận hành biết hướng xử lý,
+ * không để lộ chi tiết nội bộ cho khách. Chi tiết đầy đủ luôn có trong log server.
+ */
+export function classifyCaptureFailure(err: unknown): string {
+  const m = String((err as any)?.message || err || '')
+  if (/OUTSCRAPER_API_KEY|GOOGLE_PLACES_API_KEY|Chưa cấu hình|Thiếu .*KEY/i.test(m)) {
+    return 'Hệ thống chưa cấu hình nguồn dữ liệu Google Maps (thiếu khóa API). Quản trị viên cần kiểm tra biến môi trường.'
+  }
+  if (/relation .* does not exist|column .* does not exist|schema cache|violates|row-level security|permission denied|gbp_snapshots/i.test(m)) {
+    return 'Lỗi lưu dữ liệu của hệ thống (có thể chưa chạy đủ migration trên Supabase). Quản trị viên xem log máy chủ.'
+  }
+  if (/timeout|timed out|aborted|quá thời gian|fetch failed|ECONN|ENOTFOUND/i.test(m)) {
+    return 'Kết nối tới nguồn dữ liệu Google Maps bị quá thời gian. Hãy thử lại sau ít phút.'
+  }
+  return GENERIC_FAILURE
+}
+
+/**
  * Lấy mới thất bại thì chỉ dùng bản đã lưu nếu còn tương đối mới. Bản quá cũ (vd tên/ảnh/bài đăng từ nhiều tháng trước)
  * sẽ khiến audit kết luận sai về hồ sơ hiện tại — thà báo lỗi để người dùng xử lý nguyên nhân.
  */
@@ -134,8 +152,8 @@ export async function getClientSnapshot(
     if (live.status !== 'failed') return { snapshot: live.saved, origin: 'live', error: live.error }
     error = live.error || GENERIC_FAILURE
   } catch (err: any) {
-    console.error('getClientSnapshot live failed:', err?.message || err)
-    error = GENERIC_FAILURE
+    console.error('getClientSnapshot live failed:', client.id, err?.message || err)
+    error = classifyCaptureFailure(err)
   }
 
   const stored = await getLatestSnapshotForClient(client.id, workspaceId, { onlyOk: true }).catch(() => null)
