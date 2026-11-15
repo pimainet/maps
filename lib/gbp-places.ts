@@ -200,7 +200,9 @@ async function fetchPlacesUnsafe(input: RunGbpSnapshotInput): Promise<RunGbpSnap
     place_id: place.id || placeId,
     maps_url: place.googleMapsUri || input.mapsUrl || buildMapsSearchUrl(input),
     business_name: place.displayName?.text || input.businessName || null,
-    description: place.editorialSummary?.text || null,
+    // editorialSummary là đoạn tóm tắt do Google tạo, KHÔNG phải mô tả chủ hồ sơ viết -> không dùng làm `description`
+    // (nếu không, audit sẽ chấm "mô tả" trên văn bản chủ quán chưa từng viết).
+    description: null,
     primary_category: place.primaryTypeDisplayName?.text || place.primaryType || null,
     // `types` của Places KHÔNG phải danh mục phụ của hồ sơ -> không gán vào additional_categories (xem types).
     additional_categories: null,
