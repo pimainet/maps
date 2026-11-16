@@ -90,10 +90,20 @@ export function AuditResultView({
           </div>
         </div>
         <ol style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13, lineHeight: 1.55 }}>
-          {audit.actions.map((a) => (
+          {audit.actions.slice(0, 3).map((a) => (
             <li key={a}>{a}</li>
           ))}
         </ol>
+        {audit.actions.length > 3 && (
+          <details style={{ marginTop: 10, fontSize: 13 }}>
+            <summary style={{ cursor: 'pointer', color: 'var(--muted-foreground)' }}>Xem thêm {audit.actions.length - 3} việc</summary>
+            <ol start={4} style={{ margin: '8px 0 0', paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 10, lineHeight: 1.55 }}>
+              {audit.actions.slice(3).map((a) => (
+                <li key={a}>{a}</li>
+              ))}
+            </ol>
+          </details>
+        )}
       </Card>
 
       {teaser && (
@@ -119,7 +129,10 @@ export function AuditResultView({
               <p>Giữ nguyên output audit để lập lộ trình 30 ngày</p>
             </div>
           </div>
-          <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, fontSize: 14 }}>{rawFallback}</div>
+          <details>
+            <summary style={{ cursor: 'pointer', fontSize: 13, color: 'var(--muted-foreground)' }}>Bấm để xem bản đầy đủ</summary>
+            <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, fontSize: 14, marginTop: 10 }}>{rawFallback}</div>
+          </details>
         </Card>
       )}
     </>

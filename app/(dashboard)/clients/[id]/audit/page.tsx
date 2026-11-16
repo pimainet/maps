@@ -7,6 +7,7 @@ import { Card } from '@/components/dashboard/shared'
 import { useToast } from '@/components/dashboard/toast-context'
 import { parseAuditResult } from '@/lib/audit-parse'
 import { AuditResultView } from '@/components/dashboard/audit-result-view'
+import { AdviceCard } from '@/components/dashboard/advice-card'
 import { buildScoreOverride, type AuditComparison } from '@/components/dashboard/audit-report-extras'
 import type { AuditReport } from '@/lib/audit-engine'
 import type { SnapshotSummary } from '@/lib/gbp-audit-fields'
@@ -182,6 +183,7 @@ export default function ClientAuditPage() {
               Tạo kế hoạch làm việc
             </button>
           </div>
+          {report?.advice && <AdviceCard clientId={client.id} advice={report.advice} />}
           <AuditResultView
             audit={parseAuditResult(result, {
               name: client.name,

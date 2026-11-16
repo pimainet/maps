@@ -12,7 +12,7 @@
 import type { RunGbpSnapshotInput, RunGbpSnapshotResult } from '@/lib/gbp-snapshot-types'
 import { fetchOutscraperSnapshot, outscraperConfigured } from '@/lib/gbp-outscraper'
 import { fetchPlacesSnapshot, mergeWithPlaces } from '@/lib/gbp-places'
-import { enrichWithDataForSeo } from '@/lib/gbp-dataforseo'
+import { enrichSnapshot } from '@/lib/gbp-enrich'
 import { buildMapsSearchUrl, isSupportedGoogleMapsUrl } from '@/lib/place-identity'
 
 export type { RunGbpSnapshotInput, RunGbpSnapshotResult }
@@ -54,7 +54,7 @@ export async function runGbpPublicSnapshot(rawInput: RunGbpSnapshotInput): Promi
   // Không có Outscraper -> chỉ còn Places.
   if (!outscraperConfigured()) {
     const p = await fetchPlacesSnapshot(input)
-    return enrichWithDataForSeo(p, input).catch(() => p)
+    return enrichSnapshot(p, input).catch(() => p)
   }
 
   let primary: RunGbpSnapshotResult
@@ -62,7 +62,7 @@ export async function runGbpPublicSnapshot(rawInput: RunGbpSnapshotInput): Promi
     primary = await fromOutscraper(input)
   } catch (err: any) {
     const fallback = await fetchPlacesSnapshot(input)
-    const enriched = await enrichWithDataForSeo(fallback, input).catch(() => fallback)
+    const enriched = await enrichSnapshot(fallback, input).catch(() => fallback)
     return { ...enriched, error: `Outscraper lỗi: ${err?.message || err}. Đã dùng Places làm dự phòng.` }
   }
 
@@ -70,5 +70,5 @@ export async function runGbpPublicSnapshot(rawInput: RunGbpSnapshotInput): Promi
   const places = await fetchPlacesSnapshot({ ...input, placeId: input.placeId || primary.place_id })
   const merged = places.error && !places.business_name ? primary : mergeWithPlaces(primary, places)
   // Mô tả/danh mục phụ còn trống -> thử nguồn thứ hai (DataForSEO) nếu đã cấu hình; lỗi thì giữ nguyên.
-  return enrichWithDataForSeo(merged, input).catch(() => merged)
+  return enrichSnapshot(merged, input).catch(() => merged)
 }

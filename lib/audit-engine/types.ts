@@ -1,4 +1,5 @@
 import type { GbpSnapshotPayload } from '@/lib/gbp-snapshot-types'
+import type { AuditAdvice } from './advice'
 
 /**
  * Audit Engine — Types
@@ -75,6 +76,8 @@ export interface AuditInput {
     reviewCount?: number
     rating?: number
     photoCountEst?: number
+    category?: string | null
+    subcategories?: string[]
   }>
 
   /**
@@ -152,8 +155,13 @@ export interface AuditReport {
    */
   engineVersion?: string
   coverage?: AuditCoverage
+  /**
+   * Lời khuyên danh mục + hồ sơ doanh nghiệp (xem advice.ts). KHÔNG tham gia chấm điểm hay so sánh giữa hai lần audit;
+   * báo cáo cũ và chế độ shadow không có trường này.
+   */
+  advice?: AuditAdvice
 }
 
 /** Tăng PATCH khi sửa lỗi không đổi thang điểm; tăng MAJOR khi đổi check/ngưỡng/trọng số (điểm không còn so sánh được). */
-export const ENGINE_VERSION = '2.1.0'
+export const ENGINE_VERSION = '2.2.0'
 export const engineMajor = (v: string | undefined | null): string | null => (v ? v.split('.')[0] : null)

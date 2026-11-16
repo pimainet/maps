@@ -1,4 +1,7 @@
 import { getReviewCountHistory } from '@/lib/db'
+import { getBusinessProfile } from '@/lib/business-profile-store'
+import { auditQuotaPlaceKey } from '@/lib/audit-quota-key'
+import { buildAdvice } from '@/lib/audit-engine/advice'
 import { resolveCompetitorSet } from '@/lib/competitors-store'
 import { createSupabaseClassifierStore } from '@/lib/audit-classifier-store'
 import {
@@ -66,6 +69,22 @@ export async function runAuditV2(args: {
     },
     ai,
   )
+
+  // Lời khuyên danh mục + hồ sơ doanh nghiệp: không tham gia chấm điểm; lỗi thì bỏ qua, audit vẫn đầy đủ.
+  // Shadow (withNarrative=false) không cần nên không tốn thêm lượt AI.
+  if (args.withNarrative !== false) {
+    try {
+      const stored = await getBusinessProfile(client.id, workspaceId, auditQuotaPlaceKey(client as any))
+      report.advice = await buildAdvice({
+        input: { snapshot, declaredIndustry: client.industry || undefined, competitors },
+        ai,
+        area: client.area,
+        confirmedProfile: stored?.confirmed ? stored : null,
+      })
+    } catch (e: any) {
+      console.error('audit advice failed (non-fatal):', e?.message)
+    }
+  }
 
   const narrative =
     args.withNarrative === false

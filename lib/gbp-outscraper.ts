@@ -85,12 +85,12 @@ export function parseOutscraperDate(datetime: unknown, unixSeconds?: unknown): n
   return Number.isFinite(t) ? t : null
 }
 
-function ageDays(ms: number | null, now: number): number | null {
+export function ageDays(ms: number | null, now: number): number | null {
   if (ms == null) return null
   return Math.max(0, Math.floor((now - ms) / 86_400_000))
 }
 
-function relativeVi(days: number | null): string | null {
+export function relativeVi(days: number | null): string | null {
   if (days == null) return null
   if (days < 1) return 'hôm nay'
   if (days < 7) return `${days} ngày trước`
@@ -325,6 +325,7 @@ export function mapOutscraperToPayload(
   sections.overview = name ? 'ok' : 'empty'
   sections.hours = hours ? 'ok' : 'empty'
   sections.about = attributes.length || place?.description ? 'ok' : 'empty'
+  sections.categories = subtypes ? 'ok' : 'not_found' // không có subtypes = chưa đọc được (không phải "không có danh mục phụ")
   sections.services = 'skipped' // Outscraper không có danh sách dịch vụ chi tiết, chỉ có menu_link
   sections.reviews = reviews.length ? 'ok' : reviewsPlace || place?.reviews_data ? 'empty' : 'skipped'
   sections.updates = posts.length ? 'ok' : Array.isArray(place?.posts) ? 'empty' : 'not_found'

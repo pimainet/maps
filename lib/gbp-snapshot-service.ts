@@ -15,7 +15,7 @@ import {
   updateSnapshot,
 } from '@/lib/gbp-snapshots'
 import { hasProfileData, runGbpPublicSnapshot, type RunGbpSnapshotResult } from '@/lib/gbp-snapshot'
-import { enrichWithDataForSeo } from '@/lib/gbp-dataforseo'
+import { enrichSnapshot } from '@/lib/gbp-enrich'
 import { outscraperConfigured } from '@/lib/gbp-outscraper'
 import { buildMapsSearchUrl, extractPlaceIdFromUrl } from '@/lib/place-identity'
 import type { GbpSnapshotStatus } from '@/lib/gbp-snapshot-types'
@@ -144,7 +144,7 @@ async function captureLive(client: SnapshotClient, workspaceId: string) {
 async function enrichStoredSnapshot(row: any, client: SnapshotClient, workspaceId: string): Promise<any> {
   try {
     const placeId = row.place_id || client.place_id || extractPlaceIdFromUrl(client.gbp_link)
-    const enriched = await enrichWithDataForSeo(row as RunGbpSnapshotResult, {
+    const enriched = await enrichSnapshot(row as RunGbpSnapshotResult, {
       mapsUrl: client.gbp_link || undefined,
       placeId,
       businessName: client.name || undefined,
@@ -156,6 +156,8 @@ async function enrichStoredSnapshot(row: any, client: SnapshotClient, workspaceI
       primary_category: enriched.primary_category || null,
       additional_categories: enriched.additional_categories || null,
       coverage: enriched.coverage || null,
+      posts_signal: enriched.posts_signal || null,
+      recent_posts: enriched.recent_posts || [],
     }
     await updateSnapshot(row.id, workspaceId, patch).catch((e) => console.warn('enrichStoredSnapshot save failed:', e?.message))
     return { ...row, ...patch }
