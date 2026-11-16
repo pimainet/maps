@@ -71,20 +71,22 @@ export async function runAuditV2(args: {
   )
 
   // Lời khuyên danh mục + hồ sơ doanh nghiệp: không tham gia chấm điểm; lỗi thì bỏ qua, audit vẫn đầy đủ.
-  // Shadow (withNarrative=false) không cần nên không tốn thêm lượt AI.
-  if (args.withNarrative !== false) {
-    try {
-      const stored = await getBusinessProfile(client.id, workspaceId, auditQuotaPlaceKey(client as any))
-      report.advice = await buildAdvice({
-        input: { snapshot, declaredIndustry: client.industry || undefined, competitors },
-        ai,
-        area: client.area,
-        confirmedProfile: stored?.confirmed ? stored : null,
-      })
-    } catch (e: any) {
-      console.error('audit advice failed (non-fatal):', e?.message)
-    }
-  }
+  // Chạy song song với phần viết nhận xét để không kéo dài thời gian audit. Shadow (withNarrative=false) không cần nên không tốn lượt AI.
+  const advicePromise =
+    args.withNarrative === false
+      ? Promise.resolve(undefined)
+      : (async () => {
+          const stored = await getBusinessProfile(client.id, workspaceId, auditQuotaPlaceKey(client as any))
+          return buildAdvice({
+            input: { snapshot, declaredIndustry: client.industry || undefined, competitors },
+            ai,
+            area: client.area,
+            confirmedProfile: stored?.confirmed ? stored : null,
+          })
+        })().catch((e: any) => {
+          console.error('audit advice failed (non-fatal):', e?.message)
+          return undefined
+        })
 
   const narrative =
     args.withNarrative === false
@@ -95,6 +97,9 @@ export async function runAuditV2(args: {
           progressContext: args.progressContext,
           outputLanguage: args.outputLanguage,
         })
+
+  const advice = await advicePromise
+  if (advice) report.advice = advice
 
   return {
     report,

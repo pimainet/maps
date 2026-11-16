@@ -21,6 +21,8 @@ export type CompetitorItem = {
   reviewCount?: number
   photoCountEst?: number
   category?: string | null
+  /** Danh mục phụ (Outscraper `subtypes`, đã bỏ danh mục chính). Luôn có key này ở dữ liệu mới. */
+  subcategories?: string[]
   /** Vị trí trong kết quả tìm kiếm (1 = đầu tiên). */
   rank: number
 }
@@ -60,6 +62,22 @@ function sameName(a: string, b: string): boolean {
   const tb = new Set(y.split(' '))
   const hit = ta.filter((t) => tb.has(t)).length
   return hit / Math.max(ta.length, tb.size) >= 0.8
+}
+
+/** `subtypes` của Outscraper ("A, B, C" hoặc mảng) trừ danh mục chính -> mảng danh mục phụ. */
+export function parseSubcategories(raw: unknown, primary?: unknown): string[] {
+  const list = Array.isArray(raw) ? raw.map(String) : typeof raw === 'string' ? raw.split(',') : []
+  const p = primary ? norm(String(primary)) : ''
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const x of list) {
+    const t = x.trim()
+    const k = norm(t)
+    if (!t || !k || k === p || seen.has(k)) continue
+    seen.add(k)
+    out.push(t)
+  }
+  return out
 }
 
 export function median(values: number[]): number | undefined {
@@ -113,6 +131,7 @@ export function buildCompetitorSet(
       reviewCount: num(r?.reviews),
       photoCountEst: num(r?.photos_count),
       category: r?.type ? String(r.type) : null,
+      subcategories: parseSubcategories(r?.subtypes, r?.type),
       rank,
     })
   })
@@ -140,6 +159,8 @@ export function usableCachedSet(cached: unknown, query: string | null, now = Dat
   const c = cached as Partial<CompetitorSet> | null
   if (!c || typeof c !== 'object' || !query) return null
   if (c.source !== 'outscraper' || c.query !== query || !Array.isArray(c.items) || !c.fetchedAt) return null
+  // Cache cũ (trước khi lưu danh mục phụ của đối thủ) không dùng được cho R02 -> lấy lại.
+  if (c.items.length && !c.items.some((i) => Array.isArray((i as any).subcategories))) return null
   const age = now - new Date(c.fetchedAt).getTime()
   return age >= 0 && age <= COMPETITOR_CACHE_DAYS * 86_400_000 ? (c as CompetitorSet) : null
 }

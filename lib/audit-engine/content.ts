@@ -41,6 +41,13 @@ function checkC01(input: AuditInput): CheckResult {
     return insufficient('C01', 'Post Activity', 'medium')
   }
   const hasPosts = posts.length > 0
+  // Nguồn không trả dữ liệu bài đăng (trường vắng mặt) = chưa đọc được, KHÔNG phải "chưa đăng bài".
+  if (!hasPosts && input.snapshot.coverage?.sections?.updates !== 'empty') {
+    return {
+      ...insufficient('C01', 'Post Activity', 'medium'),
+      message: 'Chưa đọc được bài đăng Google Posts từ dữ liệu công khai — không kết luận là chưa đăng. Kết nối tài khoản Google Business để kiểm tra chính xác.',
+    }
+  }
   return {
     id: 'C01',
     group: 'content',
