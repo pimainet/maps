@@ -51,8 +51,6 @@ const LIMITS: Record<string, EndpointLimit> = {
   // C03, C04) cộng dồn, không phải 1 lượt như route audit cũ.
   // Tìm doanh nghiệp để chọn khi tạo/sửa hồ sơ: mỗi lượt tốn 1 lần gọi Places/Outscraper nên cần trần; ghi nhận NGAY khi gọi (kể cả không có kết quả).
   'place-search': { perUserMax: 20, perUserWindowMinutes: 10, perWorkspaceMax: 60, perWorkspaceWindowMinutes: 60 },
-  // Xác nhận hồ sơ doanh nghiệp + viết mô tả mẫu: 1 lượt gọi AI mỗi lần.
-  'business-profile': { perUserMax: 8, perUserWindowMinutes: 10, perWorkspaceMax: 30, perWorkspaceWindowMinutes: 60 },
   'audit-v2-preview': { perUserMax: 8, perUserWindowMinutes: 10, perWorkspaceMax: 20, perWorkspaceWindowMinutes: 60 },
 }
 

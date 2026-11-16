@@ -1,6 +1,4 @@
 import { getReviewCountHistory } from '@/lib/db'
-import { getBusinessProfile } from '@/lib/business-profile-store'
-import { auditQuotaPlaceKey } from '@/lib/audit-quota-key'
 import { buildAdvice } from '@/lib/audit-engine/advice'
 import { resolveCompetitorSet } from '@/lib/competitors-store'
 import { createSupabaseClassifierStore } from '@/lib/audit-classifier-store'
@@ -70,20 +68,16 @@ export async function runAuditV2(args: {
     ai,
   )
 
-  // Lời khuyên danh mục + hồ sơ doanh nghiệp: không tham gia chấm điểm; lỗi thì bỏ qua, audit vẫn đầy đủ.
-  // Chạy song song với phần viết nhận xét để không kéo dài thời gian audit. Shadow (withNarrative=false) không cần nên không tốn lượt AI.
+  // Lời khuyên danh mục + mô tả mẫu: AI hỗ trợ nhưng bám dữ liệu và bị code kiểm lại (xem advice.ts); không tham gia chấm điểm.
+  // Chạy song song với phần viết nhận xét để không kéo dài thời gian audit; lỗi thì bỏ qua. Shadow (withNarrative=false) không cần.
   const advicePromise =
     args.withNarrative === false
       ? Promise.resolve(undefined)
-      : (async () => {
-          const stored = await getBusinessProfile(client.id, workspaceId, auditQuotaPlaceKey(client as any))
-          return buildAdvice({
-            input: { snapshot, declaredIndustry: client.industry || undefined, competitors },
-            ai,
-            area: client.area,
-            confirmedProfile: stored?.confirmed ? stored : null,
-          })
-        })().catch((e: any) => {
+      : buildAdvice({
+          input: { snapshot, declaredIndustry: client.industry || undefined, claimedBusinessName: client.name || undefined, competitors },
+          area: client.area,
+          ai,
+        }).catch((e: any) => {
           console.error('audit advice failed (non-fatal):', e?.message)
           return undefined
         })

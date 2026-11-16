@@ -183,7 +183,6 @@ export default function ClientAuditPage() {
               Tạo kế hoạch làm việc
             </button>
           </div>
-          {report?.advice && <AdviceCard clientId={client.id} advice={report.advice} />}
           <AuditResultView
             audit={parseAuditResult(result, {
               name: client.name,
@@ -192,6 +191,7 @@ export default function ClientAuditPage() {
               mapsUrl: client.gbp_link,
             })}
             rawFallback={result}
+            recommendations={report?.advice ? <AdviceCard advice={report.advice} /> : undefined}
             scoreOverride={report ? buildScoreOverride(report, comparison) : undefined}
           />
         </>

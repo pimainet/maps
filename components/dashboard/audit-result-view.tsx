@@ -19,15 +19,19 @@ export function AuditResultView({
   teaser = false,
   rawFallback,
   scoreOverride,
+  recommendations,
 }: {
   audit: DemoAudit
   teaser?: boolean
   rawFallback?: string
   scoreOverride?: ScoreOverride
+  /** Khối đặt đầu phần "Đề nghị" (vd thẻ tư vấn danh mục + mô tả). Chỉ dùng ở bản đầy đủ. */
+  recommendations?: ReactNode
 }) {
   const groups = scoreOverride?.groups ?? audit.groups
-  return (
-    <>
+  const full = !teaser
+
+  const scoreCard = (
       <Card className="result-panel">
         <div className="result-top">
           <div>
@@ -44,7 +48,6 @@ export function AuditResultView({
           </div>
         </div>
         <p style={{ margin: '0 0 18px', color: 'var(--muted-foreground)', fontSize: 13, lineHeight: 1.55 }}>{audit.overallNote}</p>
-        {scoreOverride?.extra}
         <div className="score-bars">
           {groups.map((g) => (
             <div className="score-row" key={g.key}>
@@ -81,7 +84,9 @@ export function AuditResultView({
           </div>
         )}
       </Card>
+  )
 
+  const actionsCard = (
       <Card>
         <div className="section-head">
           <div>
@@ -105,6 +110,33 @@ export function AuditResultView({
           </details>
         )}
       </Card>
+  )
+
+  return (
+    <>
+      {full ? (
+        <>
+          <PartTitle id="de-nghi" title="Đề nghị cho quán" note="Việc nên làm để Google đưa quán tới đúng khách" />
+          {recommendations}
+          {actionsCard}
+
+          <PartTitle id="danh-gia-maps" title="Đánh giá Google Maps" note="Điểm hiện tại của hồ sơ và các nhóm chính" />
+          {scoreCard}
+          <details className="detail-fold">
+            <summary>Xem chi tiết đánh giá</summary>
+            <div className="detail-fold-body">
+              {scoreOverride?.extra}
+              {rawFallback && <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.65, fontSize: 14 }}>{rawFallback}</div>}
+            </div>
+          </details>
+          <style>{FOLD_CSS}</style>
+        </>
+      ) : (
+        <>
+          {scoreCard}
+          {actionsCard}
+        </>
+      )}
 
       {teaser && (
         <div className="metrics-grid">
@@ -121,20 +153,28 @@ export function AuditResultView({
         </div>
       )}
 
-      {!teaser && rawFallback && (
-        <Card>
-          <div className="section-head">
-            <div>
-              <h2>Bản ghi đầy đủ</h2>
-              <p>Giữ nguyên output audit để lập lộ trình 30 ngày</p>
-            </div>
-          </div>
-          <details>
-            <summary style={{ cursor: 'pointer', fontSize: 13, color: 'var(--muted-foreground)' }}>Bấm để xem bản đầy đủ</summary>
-            <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, fontSize: 14, marginTop: 10 }}>{rawFallback}</div>
-          </details>
-        </Card>
-      )}
     </>
   )
 }
+
+function PartTitle({ id, title, note }: { id: string; title: string; note: string }) {
+  return (
+    <div id={id} className="part-title">
+      <h2>{title}</h2>
+      <p>{note}</p>
+    </div>
+  )
+}
+
+const FOLD_CSS = `
+.part-title { margin:28px 0 -4px; padding-left:12px; border-left:3px solid var(--primary, #7c8cff); scroll-margin-top:16px; }
+.part-title h2 { margin:0; font-size:19px; font-weight:650; letter-spacing:-.01em; }
+.part-title p { margin:2px 0 0; font-size:13px; color:var(--muted-foreground); }
+.detail-fold { border:1px solid var(--border-strong); border-radius:14px; background:var(--card); overflow:hidden; }
+.detail-fold > summary { cursor:pointer; list-style:none; padding:14px 18px; font-size:14px; font-weight:600; display:flex; align-items:center; justify-content:space-between; }
+.detail-fold > summary::-webkit-details-marker { display:none; }
+.detail-fold > summary::after { content:'Mở ▾'; font-size:12.5px; font-weight:500; color:var(--muted-foreground); }
+.detail-fold[open] > summary::after { content:'Thu gọn ▴'; }
+.detail-fold > summary:focus-visible { outline:2px solid var(--primary, #7c8cff); outline-offset:-2px; }
+.detail-fold-body { padding:4px 18px 18px; display:grid; gap:14px; border-top:1px solid var(--border); }
+`
