@@ -74,7 +74,12 @@ export function buildScoreOverride(report: AuditReport, comparison: AuditCompari
       {comparison && <ComparisonBlock c={comparison} />}
     </>
   )
+  const delta =
+    comparison && comparison.comparable && (comparison as AuditDiff).comparableScoreDelta != null
+      ? to10((comparison as AuditDiff).comparableScoreDelta as number)
+      : null
   return {
+    delta,
     display: report.overallScore == null ? '–' : String(to10(report.overallScore)),
     groups: GROUP_ORDER.map((g) => {
       const t = report.tierScores.find((x) => x.group === g)

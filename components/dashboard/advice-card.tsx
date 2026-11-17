@@ -64,9 +64,9 @@ export function AdviceCard({ advice }: { advice: AuditAdvice; clientId?: string 
   }
 
   return (
-    <Card>
+    <div className="ad-root ad-grid">
       <style>{CSS}</style>
-      <div className="ad-root">
+      <Card className="ad-card ad-wide">
         <header className="ad-head">
           <div>
             <h2 className="ad-title">Lĩnh vực chính</h2>
@@ -114,7 +114,10 @@ export function AdviceCard({ advice }: { advice: AuditAdvice; clientId?: string 
           </div>
         )}
 
-        {(supported.length > 0 || others.length > 0) && (
+      </Card>
+
+      {(supported.length > 0 || others.length > 0) && (
+        <Card className="ad-card">
           <section className="ad-block">
             <div className="ad-block-head">
               <h3>Danh mục phụ nên thêm</h3>
@@ -140,8 +143,10 @@ export function AdviceCard({ advice }: { advice: AuditAdvice; clientId?: string 
               </p>
             )}
           </section>
-        )}
+        </Card>
+      )}
 
+      <Card className={`ad-card${supported.length > 0 || others.length > 0 ? ' ad-desc' : ' ad-wide'}`}>
         <section className="ad-block">
           <div className="ad-block-head">
             <h3>Mô tả</h3>
@@ -189,8 +194,8 @@ export function AdviceCard({ advice }: { advice: AuditAdvice; clientId?: string 
             </div>
           )}
         </section>
-      </div>
-    </Card>
+      </Card>
+    </div>
   )
 }
 
@@ -224,7 +229,11 @@ const CSS = `
 .ad-root .ad-sug .ad-fill { background:var(--ad-warn); }
 @keyframes ad-grow { from { transform:scaleX(0); } to { transform:scaleX(1); } }
 
-.ad-root .ad-block { margin-top:22px; padding-top:18px; border-top:1px solid var(--ad-line); }
+.ad-root.ad-grid { display:grid; gap:14px; grid-template-columns:minmax(0,1fr); }
+.ad-root .ad-wide { grid-column:1 / -1; }
+.ad-root .ad-card { align-self:start; }
+@media (min-width: 960px) { .ad-root.ad-grid { grid-template-columns:minmax(0,1fr) minmax(0,1.5fr); } }
+.ad-root .ad-block { margin:0; padding:0; border:0; }
 .ad-root .ad-block-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
 .ad-root .ad-block-head h3 { margin:0; font-size:15px; font-weight:650; }
 .ad-root .ad-chips { display:flex; flex-wrap:wrap; gap:8px; }
@@ -242,7 +251,7 @@ const CSS = `
 .ad-root .ad-draft-foot { display:flex; align-items:center; gap:12px; margin-top:10px; flex-wrap:wrap; }
 .ad-root .ad-meter { flex:1 1 120px; height:5px; border-radius:3px; background:color-mix(in srgb, var(--ad-line) 45%, transparent); overflow:hidden; }
 .ad-root .ad-meter div { height:100%; background:var(--ad-ok); }
-.ad-root .ad-copy { display:inline-flex; align-items:center; gap:6px; font:inherit; font-size:13px; padding:6px 12px; border-radius:9px; border:1px solid var(--ad-line); background:transparent; color:inherit; cursor:pointer; }
+.ad-root .ad-copy { white-space:nowrap; flex:none; display:inline-flex; align-items:center; gap:6px; font:inherit; font-size:13px; padding:6px 12px; border-radius:9px; border:1px solid var(--ad-line); background:transparent; color:inherit; cursor:pointer; }
 .ad-root .ad-copy:hover { border-color:var(--ad-acc); }
 .ad-root .ad-copy-main { background:var(--ad-acc); border-color:var(--ad-acc); color:#fff; font-weight:600; }
 @media (max-width: 520px) { .ad-root .ad-verdict { font-size:18px; } .ad-root .ad-head { flex-direction:column; } }
