@@ -12,6 +12,7 @@ import { ChevronsUpDown, ClipboardCheck, CreditCard, FileText, House, LogOut, Me
 import { ToastProvider } from './toast-context'
 import { Brand } from './brand'
 import { ROLE_LABEL } from '@/lib/ui-constants'
+import { dedupeFetch } from '@/lib/dedupe-fetch'
 
 function NavItem({ icon: Icon, label, active, href, count, onNavigate }: any) {
   return (
@@ -81,7 +82,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   }, [mobileOpen])
 
   useEffect(() => {
-    fetch('/api/me')
+    dedupeFetch('/api/me')
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!data?.profile) return
@@ -112,7 +113,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     if (!isClientRoute) return
     const id = pathname.split('/clients/')[1]?.split('/')[0]
     if (!id || id === 'new') return
-    fetch('/api/clients')
+    dedupeFetch('/api/clients')
       .then((r) => r.json())
       .then((data) => {
         const found = (Array.isArray(data) ? data : []).find((c: any) => c.id === id)
@@ -122,7 +123,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   }, [pathname])
 
   useEffect(() => {
-    fetch('/api/content')
+    dedupeFetch('/api/content')
       .then((r) => r.json())
       .then((data) => {
         const list = Array.isArray(data) ? data : []

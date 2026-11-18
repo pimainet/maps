@@ -1,29 +1,23 @@
 import { NextResponse } from 'next/server'
 import { publicError } from '@/lib/api-error'
 import { createClient } from '@/lib/supabase/server'
-import { getUserWorkspaces, getActiveWorkspaceId } from '@/lib/auth'
+import { getUserWorkspaces, getActiveWorkspaceId, getCurrentUser } from '@/lib/auth'
 import { getWorkspaceClientLimit } from '@/lib/db'
 
 export async function GET() {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
-
-    if (userError || !user) {
+    const user = await getCurrentUser()
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('id, full_name, avatar_url, is_superadmin')
-      .eq('id', user.id)
-      .single()
-
-    const memberships = await getUserWorkspaces()
-    const activeWorkspaceId = await getActiveWorkspaceId()
+    const supabase = await createClient()
+    // Hồ sơ và danh sách workspace chạy song song (trước đây nối đuôi nhau)
+    const [{ data: profile }, memberships] = await Promise.all([
+      supabase.from('profiles').select('id, full_name, avatar_url, is_superadmin').eq('id', user.id).single(),
+      getUserWorkspaces(),
+    ])
+    const activeWorkspaceId = await getActiveWorkspaceId(memberships)
     const active = memberships.find((m) => m.workspace_id === activeWorkspaceId) || null
 
     let clientLimit = null

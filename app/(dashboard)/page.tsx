@@ -9,6 +9,7 @@ import { ArrowRight, Check, ChevronRight, Plus } from 'lucide-react'
 import { Badge, ProgressRing } from '@/components/dashboard/shared'
 import { TASK_TYPE_LABEL } from '@/lib/ui-constants'
 import { summarizeProgress } from '@/lib/progress'
+import { dedupeFetch } from '@/lib/dedupe-fetch'
 
 const PRIORITY_RANK: Record<string, number> = { high: 0, medium: 1, low: 2 }
 
@@ -59,10 +60,10 @@ export default function HomePage() {
       const safe = (p: Promise<Response>) =>
         p.then((r) => (r.ok ? r.json() : null)).catch(() => null)
       const [me, c, ct, t] = await Promise.all([
-        safe(fetch('/api/me')),
-        safe(fetch('/api/clients')),
-        safe(fetch('/api/content')),
-        safe(fetch('/api/tasks')),
+        safe(dedupeFetch('/api/me')),
+        safe(dedupeFetch('/api/clients')),
+        safe(dedupeFetch('/api/content')),
+        safe(dedupeFetch('/api/tasks')),
       ])
       setUserName(me?.profile?.full_name || '')
       setClients(Array.isArray(c) ? c : [])

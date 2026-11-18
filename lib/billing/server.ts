@@ -11,7 +11,19 @@ export type PlanState = {
 }
 
 /** Gói hiệu lực = workspaces.plan, nhưng nếu kỳ đã hết hạn quá hạn ân hạn mà cron chưa kịp hạ thì vẫn tính là free. */
+const PLAN_TTL_MS = 15_000
+const planCache = new Map<string, { at: number; state: PlanState }>()
+
 export async function getPlanState(workspaceId: string): Promise<PlanState> {
+  const hit = planCache.get(workspaceId)
+  if (hit && Date.now() - hit.at < PLAN_TTL_MS) return hit.state
+  const state = await loadPlanState(workspaceId)
+  planCache.set(workspaceId, { at: Date.now(), state })
+  if (planCache.size > 500) planCache.clear()
+  return state
+}
+
+async function loadPlanState(workspaceId: string): Promise<PlanState> {
   const [{ data: ws }, { data: subs }] = await Promise.all([
     supabaseAdmin.from('workspaces').select('plan').eq('id', workspaceId).maybeSingle(),
     supabaseAdmin

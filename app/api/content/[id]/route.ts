@@ -3,6 +3,7 @@ import { publicError } from '@/lib/api-error'
 import {
   getContentById,
   updateContentStatus,
+  updateTaskStatus,
   getLatestContentHistory,
   saveContentHistory,
 } from '@/lib/db'
@@ -126,6 +127,16 @@ export async function PATCH(
 
     if (body.status !== undefined) {
       updatedStatus = await updateContentStatus(id, body.status, workspaceId)
+    }
+
+    // Bài đã đăng thì việc tương ứng phải xong, nếu không dashboard và "Việc cần làm" vẫn báo chưa hoàn thành.
+    if (body.status === 'published') {
+      try {
+        const taskId = (updatedStatus || existingContent)?.task_id
+        if (taskId) await updateTaskStatus(taskId, 'done', workspaceId)
+      } catch (err: any) {
+        console.error('Không cập nhật được việc sau khi đánh dấu đã đăng:', err?.message)
+      }
     }
 
     if (!updatedStatus && !hasFinalContent) {

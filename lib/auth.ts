@@ -33,24 +33,20 @@ export type WorkspaceMembership = {
 
 const ACTIVE_WORKSPACE_COOKIE = 'active_workspace_id'
 
-export async function getCurrentUser() {
+/** User hiện tại. Dùng getClaims(): với khoá ký bất đối xứng của Supabase thì xác thực JWT tại chỗ (không gọi mạng);
+ * với khoá cũ (HS256) nó tự rơi về getUser() như trước — an toàn như nhau, chỉ nhanh hơn. */
+export async function getCurrentUser(): Promise<{ id: string; email?: string } | null> {
   const supabase = await createClient()
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser()
-
-  if (error || !user) return null
-  return user
+  const { data, error } = await supabase.auth.getClaims()
+  const sub = data?.claims?.sub
+  if (error || !sub) return null
+  return { id: sub, email: (data!.claims as any).email }
 }
 
 export async function getCurrentProfile(): Promise<Profile | null> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
+  const user = await getCurrentUser()
   if (!user) return null
+  const supabase = await createClient()
 
   const { data, error } = await supabase
     .from('profiles')
@@ -89,8 +85,8 @@ export async function getUserWorkspaces(): Promise<WorkspaceMembership[]> {
 
 /** workspace_id đang được chọn làm việc cho request này, hoặc null
  * nếu user chưa thuộc workspace nào. Không throw. */
-export async function getActiveWorkspaceId(): Promise<string | null> {
-  const memberships = await getUserWorkspaces()
+export async function getActiveWorkspaceId(preloaded?: WorkspaceMembership[]): Promise<string | null> {
+  const memberships = preloaded ?? (await getUserWorkspaces())
   if (memberships.length === 0) return null
 
   const cookieStore = await cookies()
@@ -120,10 +116,9 @@ export async function requireActiveWorkspaceId(): Promise<string> {
 /** Role của user trong workspace đang chọn ('owner' | 'admin' | 'member'),
  * hoặc null nếu chưa có workspace active. */
 export async function getActiveWorkspaceRole(): Promise<string | null> {
-  const workspaceId = await getActiveWorkspaceId()
-  if (!workspaceId) return null
-
   const memberships = await getUserWorkspaces()
+  const workspaceId = await getActiveWorkspaceId(memberships)
+  if (!workspaceId) return null
   return memberships.find((m) => m.workspace_id === workspaceId)?.role ?? null
 }
 

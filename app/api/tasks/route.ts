@@ -10,8 +10,7 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url)
     const clientId = searchParams.get('client_id') || undefined
     const planId = searchParams.get('plan_id') || undefined
-    const data = await getTasks({ clientId, planId, workspaceId })
-    const ent = await getEntitlements(workspaceId)
+    const [data, ent] = await Promise.all([getTasks({ clientId, planId, workspaceId }), getEntitlements(workspaceId)])
     const open = await unlockedTaskIds(workspaceId, planId ?? null, ent.taskLimit)
     if (!open) return NextResponse.json(data)
     const visible = (data || []).filter((t: any) => open.has(t.id))

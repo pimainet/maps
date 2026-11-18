@@ -21,10 +21,9 @@ export async function proxy(request: NextRequest) {
     },
   )
 
-  // getUser() validates the session and refreshes its cookies when necessary.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // getClaims() làm mới phiên khi cần và xác thực JWT tại chỗ (khoá bất đối xứng) — không tốn 1 vòng gọi mạng mỗi request.
+  const { data: claimsData } = await supabase.auth.getClaims()
+  const user = claimsData?.claims?.sub ? { id: claimsData.claims.sub } : null
 
   const { pathname } = request.nextUrl
   const isPublic =
