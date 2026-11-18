@@ -10,6 +10,7 @@ import { AuditResultView } from '@/components/dashboard/audit-result-view'
 import { AdviceCard } from '@/components/dashboard/advice-card'
 import { buildScoreOverride, type AuditComparison } from '@/components/dashboard/audit-report-extras'
 import type { AuditReport } from '@/lib/audit-engine'
+import { LockedCard, UpgradeBanner } from '@/components/dashboard/upgrade-prompt'
 import type { SnapshotSummary } from '@/lib/gbp-audit-fields'
 
 type DataInfo = {
@@ -39,6 +40,8 @@ export default function ClientAuditPage() {
   // Có khi server chấm bằng engine v2 (AUDIT_ENGINE_MODE=v2); null = kết quả kiểu cũ (đọc điểm từ văn bản).
   const [report, setReport] = useState<AuditReport | null>(null)
   const [comparison, setComparison] = useState<AuditComparison | null>(null)
+  // Phần bị khoá theo gói (server tự cắt; đây chỉ để hiện thẻ "Mở khoá").
+  const [locks, setLocks] = useState<{ plan: string; locked_actions: number; locked_secondary: number; locked_drafts: number } | null>(null)
   const [outputLanguage, setOutputLanguage] = useState('Tiếng Việt')
   const [note, setNote] = useState('')
 
@@ -83,6 +86,7 @@ export default function ClientAuditPage() {
       setDataInfo(data.data || null)
       setReport(data.report || null)
       setComparison(data.comparison || null)
+      setLocks(data.locks || null)
       showToast('Đã kiểm tra xong hồ sơ')
     } catch (err: any) {
       setError(err.message || 'Có lỗi xảy ra')
@@ -194,6 +198,14 @@ export default function ClientAuditPage() {
             recommendations={report?.advice ? <AdviceCard advice={report.advice} /> : undefined}
             scoreOverride={report ? buildScoreOverride(report, comparison) : undefined}
           />
+          {locks && locks.plan === 'free' && locks.locked_actions + locks.locked_secondary + locks.locked_drafts > 0 && (
+            <>
+              <UpgradeBanner show lockedCount={locks.locked_actions + locks.locked_secondary + locks.locked_drafts} onIntent="after-first-audit" />
+              {locks.locked_actions > 0 && <LockedCard title={`Còn ${locks.locked_actions} việc cần làm ngay`} note="Mở khoá để xem đủ danh sách việc 7–14 ngày." />}
+              {locks.locked_drafts > 0 && <LockedCard title="Mô tả mẫu cho quán" note="Bản nháp viết từ chính dữ liệu hồ sơ, sẵn sàng dán lên Google." />}
+              {locks.locked_secondary > 0 && <LockedCard title={`${locks.locked_secondary} danh mục phụ nên thêm`} note="Kèm bằng chứng từ các quán đang đứng đầu." />}
+            </>
+          )}
         </>
       )}
     </>

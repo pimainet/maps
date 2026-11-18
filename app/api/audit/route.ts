@@ -14,6 +14,8 @@ import { auditQuotaPlaceKey } from '@/lib/audit-quota-key'
 import { runAuditV2 } from '@/lib/run-audit-v2'
 import { diffAuditReports, ENGINE_VERSION, type AuditReport } from '@/lib/audit-engine'
 import { parseAuditResult } from '@/lib/audit-parse'
+import { getPlanState } from '@/lib/billing/server'
+import { shapeAuditPayload, shapeAuditRow } from '@/lib/billing/shape'
 
 export const maxDuration = 300
 export const runtime = 'nodejs'
@@ -30,8 +32,14 @@ export async function GET(req: Request) {
   try {
     const workspaceId = await requireActiveWorkspaceId()
     const clientId = new URL(req.url).searchParams.get('client_id')
-    const data = clientId ? await getLatestAuditByClient(clientId, workspaceId) : await getAllAudits(workspaceId)
-    return NextResponse.json(data)
+    const [data, ps] = await Promise.all([
+      clientId ? getLatestAuditByClient(clientId, workspaceId) : getAllAudits(workspaceId),
+      getPlanState(workspaceId),
+    ])
+    // Khoá theo gói ở server: gói miễn phí không nhận phần bị khoá trong JSON.
+    if (Array.isArray(data)) return NextResponse.json(data.map((r: any) => shapeAuditRow(r, ps.entitlements, ps.plan).row))
+    const shaped = shapeAuditRow(data as any, ps.entitlements, ps.plan)
+    return NextResponse.json(shaped.row && shaped.locks ? { ...shaped.row, locks: shaped.locks } : shaped.row)
   } catch (error: any) {
     return NextResponse.json({ error: publicError(error) }, { status: errorStatus(error) })
   }
@@ -172,11 +180,16 @@ export async function POST(req: Request) {
       }
       await quota.commit()
 
+      const ps = await getPlanState(workspaceId)
+      const shapedV2 = shapeAuditPayload({ audit_result: v2.text, report: v2.report }, ps.entitlements, ps.plan)
+      const savedShaped = shapeAuditRow(saved as any, ps.entitlements, ps.plan).row
+
       return NextResponse.json({
-        audit: saved,
-        audit_result: v2.text,
+        audit: savedShaped,
+        audit_result: shapedV2.audit_result,
         engine: 'v2',
-        report: v2.report,
+        report: shapedV2.report,
+        locks: shapedV2.locks,
         narrative_source: v2.narrative.source,
         comparison,
         used_progress: true,
@@ -236,9 +249,12 @@ export async function POST(req: Request) {
       })
     }
 
+    const psV1 = await getPlanState(workspaceId)
+    const shapedV1 = shapeAuditPayload({ audit_result, report: null }, psV1.entitlements, psV1.plan)
     return NextResponse.json({
-      audit: saved,
-      audit_result,
+      audit: shapeAuditRow(saved as any, psV1.entitlements, psV1.plan).row,
+      audit_result: shapedV1.audit_result,
+      locks: shapedV1.locks,
       used_progress: true,
       data: dataInfo,
     })

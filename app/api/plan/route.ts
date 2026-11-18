@@ -17,6 +17,8 @@ import {
 } from '@/lib/db'
 import { PLAN_30_DAYS_PROMPT } from '@/lib/prompts'
 import { requireActiveWorkspaceId } from '@/lib/auth'
+import { getEntitlements } from '@/lib/billing/server'
+import { limitPlanText } from '@/lib/billing/shape'
 import { cycleStrategy, getClientProgress } from '@/lib/client-memory'
 import { checkAiRateLimit, recordAiUsage } from '@/lib/rate-limit'
 import { isValidIsoDate, readJsonObject } from '@/lib/request-body'
@@ -49,7 +51,9 @@ export async function GET(req: Request) {
       getLatestPlanByClient(clientId, workspaceId),
       getActiveCycle(clientId, workspaceId),
     ])
-    return NextResponse.json({ ...(data || {}), active_cycle: cycle })
+    const ent = await getEntitlements(workspaceId)
+    const lim = limitPlanText((data as any)?.plan_result || '', ent)
+    return NextResponse.json({ ...(data || {}), ...(data ? { plan_result: lim.text, plan_locked: lim.locked } : {}), active_cycle: cycle })
   } catch (error: any) {
     const status = error.message?.includes('Unauthorized')
       ? 401
@@ -217,9 +221,12 @@ export async function POST(req: Request) {
       }
     }
 
+    const entP = await getEntitlements(workspaceId)
+    const limP = limitPlanText(plan_result, entP)
     return NextResponse.json({
-      plan: saved,
-      plan_result,
+      plan: { ...saved, plan_result: limP.text },
+      plan_locked: limP.locked,
+      plan_result: limP.text,
       cycle,
       force_new_cycle: forceNewCycle,
       used_progress: true,

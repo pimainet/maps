@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { ChevronsUpDown, ClipboardCheck, FileText, House, LogOut, Menu, Plus, Settings, Store, X } from 'lucide-react'
+import { ChevronsUpDown, ClipboardCheck, CreditCard, FileText, House, LogOut, Menu, Plus, Settings, Store, X } from 'lucide-react'
 import { ToastProvider } from './toast-context'
 import { Brand } from './brand'
 import { ROLE_LABEL } from '@/lib/ui-constants'
@@ -175,6 +175,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
             onNavigate={closeMenu}
           />
           <div className="nav-gap" />
+          <NavItem icon={CreditCard} label="Gói dịch vụ" active={pathname.startsWith('/billing')} href="/billing" onNavigate={closeMenu} />
           <NavItem icon={Settings} label="Cài đặt" active={pathname.startsWith('/settings')} href="/settings" onNavigate={closeMenu} />
         </nav>
 

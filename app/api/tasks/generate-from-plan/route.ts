@@ -4,6 +4,8 @@ import { askClaude } from '@/lib/claude'
 import { createTasks, getClientById, findClientInWorkspace, findPlanInWorkspace, getTasks, getActiveCycle, openCycle, updateCycle } from '@/lib/db'
 import { TASKS_FROM_PLAN_PROMPT } from '@/lib/prompts'
 import { requireActiveWorkspaceId } from '@/lib/auth'
+import { supabaseAdmin } from '@/lib/supabase/admin'
+import { getEntitlements, unlockedTaskIds } from '@/lib/billing/server'
 import { checkAiRateLimit, recordAiUsage } from '@/lib/rate-limit'
 import { autoWriteContentBatch } from '@/lib/write-content'
 import { isValidIsoDate, readJsonObject } from '@/lib/request-body'
@@ -112,11 +114,15 @@ export async function POST(req: Request) {
     if (!clientExists) {
       return NextResponse.json({ error: 'Không tìm thấy khách hàng trong workspace hiện tại.' }, { status: 404 })
     }
+    let planText = plan_result as string
     if (plan_id) {
       const plan = await findPlanInWorkspace(plan_id, client_id, workspaceId)
       if (!plan) {
         return NextResponse.json({ error: 'Không tìm thấy kế hoạch của khách hàng trong workspace hiện tại.' }, { status: 404 })
       }
+      // Luôn dùng bản kế hoạch ĐẦY ĐỦ đã lưu (client chỉ nhận bản đã cắt theo gói, không được dùng bản đó để chia việc).
+      const { data: full } = await supabaseAdmin.from('plans').select('plan_result').eq('id', plan_id).eq('workspace_id', workspaceId).maybeSingle()
+      if (full?.plan_result) planText = full.plan_result
     }
 
     const forceNewCycle = body.force_new_cycle === true
@@ -156,7 +162,7 @@ export async function POST(req: Request) {
       .replaceAll('{{industry}}', industry || '')
       .replaceAll('{{area}}', area || '')
       .replaceAll('{{start_date}}', effectiveStartDate)
-      .replaceAll('{{plan_result}}', plan_result)
+      .replaceAll('{{plan_result}}', planText)
       .replaceAll('{{progress_context}}', progress_context)
 
     let raw = await askClaude(prompt, { maxTokens: 4096, temperature: 0.2 })
@@ -315,8 +321,13 @@ export async function POST(req: Request) {
       }
     }
 
+    // Gói miễn phí: chỉ trả các việc được mở; phần còn lại vẫn lưu, mở ra khi nâng cấp.
+    const entT = await getEntitlements(workspaceId)
+    const openT = await unlockedTaskIds(workspaceId, plan_id ?? null, entT.taskLimit)
+    const visibleItems = openT ? (created as any[]).filter((t) => openT.has(t.id)) : created
     return NextResponse.json({
-      items: created,
+      items: visibleItems,
+      locked_count: (created as any[]).length - (visibleItems as any[]).length,
       skipped_duplicates: skipped.length,
       skipped_titles: skipped.map((s) => s.title),
       auto_written: writtenCount,

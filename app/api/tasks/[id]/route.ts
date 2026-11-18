@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { publicError } from '@/lib/api-error'
 import { getTaskById, updateTaskStatus } from '@/lib/db'
 import { requireActiveWorkspaceId } from '@/lib/auth'
+import { isTaskUnlocked, LOCKED_RESPONSE } from '@/lib/billing/server'
 
 const ALLOWED_STATUS = ['pending', 'done', 'skipped']
 
@@ -13,6 +14,7 @@ export async function GET(
     const workspaceId = await requireActiveWorkspaceId()
     const { id } = await params
     const data = await getTaskById(id, workspaceId)
+    if (data && !(await isTaskUnlocked(workspaceId, data as any))) return NextResponse.json(LOCKED_RESPONSE, { status: 402 })
     return NextResponse.json(data)
   } catch (error: any) {
     const status = error.message?.includes('Unauthorized') ? 401 : error.message?.includes('NoWorkspace') ? 409 : 404
@@ -35,6 +37,8 @@ export async function PATCH(
       )
     }
 
+    const existing = await getTaskById(id, workspaceId)
+    if (existing && !(await isTaskUnlocked(workspaceId, existing as any))) return NextResponse.json(LOCKED_RESPONSE, { status: 402 })
     const updated = await updateTaskStatus(id, body.status, workspaceId)
     return NextResponse.json(updated)
   } catch (error: any) {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { publicError } from '@/lib/api-error'
 import { requireActiveWorkspaceId } from '@/lib/auth'
+import { isTaskUnlocked, LOCKED_RESPONSE } from '@/lib/billing/server'
 import {
   getTaskById,
   getContentByTaskId,
@@ -37,6 +38,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!task) {
       return NextResponse.json({ error: 'Không tìm thấy công việc này.' }, { status: 404 })
     }
+    if (!(await isTaskUnlocked(workspaceId, task as any))) return NextResponse.json(LOCKED_RESPONSE, { status: 402 })
 
     const guidance = getTaskGuidance(task.task_type)
 

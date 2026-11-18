@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { LockedCard } from '@/components/dashboard/upgrade-prompt'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { ArrowRight, ExternalLink, Loader2, Unplug } from 'lucide-react'
 import { Card } from '@/components/dashboard/shared'
@@ -64,6 +65,8 @@ export default function ClientPlanPage() {
   const [error, setError] = useState('')
   const [tasksError, setTasksError] = useState('')
   const [result, setResult] = useState<string | null>(null)
+  const [planLocked, setPlanLocked] = useState(false)
+  const [lockedTasks, setLockedTasks] = useState(0)
   const [auditResult, setAuditResult] = useState('')
   const [auditRecord, setAuditRecord] = useState<any>(null)
   const [loadingAudit, setLoadingAudit] = useState(true)
@@ -95,11 +98,13 @@ export default function ClientPlanPage() {
         if (planRes.ok && planData) {
           if (planData.plan_result) {
             setResult(planData.plan_result)
+            setPlanLocked(!!planData.plan_locked)
             setSavedPlan(planData)
             // Kế hoạch đã lưu nhưng chưa có việc nào (vd lần trước hỏng giữa chừng) -> cho tiếp tục đúng bước còn thiếu.
             try {
               const tr = await fetch(`/api/tasks?plan_id=${planData.id}`)
               const td = await tr.json()
+              setLockedTasks(Number(tr.headers.get('x-locked-count')) || 0)
               if (tr.ok && Array.isArray(td) && td.length > 0) setTasksCreated(td)
             } catch {
               /* không chặn trang */
@@ -152,6 +157,7 @@ export default function ClientPlanPage() {
       throw new Error(data.error || 'Chưa tạo được kế hoạch. Thử lại sau ít phút.')
     }
     setResult(data.plan_result || 'Chưa có nội dung kế hoạch.')
+    setPlanLocked(!!data.plan_locked)
     setSavedPlan(data.plan || null)
     setCycleInfo(data.cycle ? { active_cycle: data.cycle } : null)
     setForceNewCycle(false)
@@ -181,6 +187,7 @@ export default function ClientPlanPage() {
     const data = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(data.error || 'Chưa tạo được danh sách việc. Thử lại sau ít phút.')
     setTasksCreated(data.items || [])
+    setLockedTasks(Number(data.locked_count) || 0)
     const written = data.auto_written || 0
     if (written > 0) {
       showToast(data.message || `Đã tạo ${data.items?.length || 0} việc và soạn sẵn ${written} bài nháp`)
@@ -370,6 +377,7 @@ export default function ClientPlanPage() {
             </div>
           </div>
           <div className="prose">{result}</div>
+          {planLocked && <LockedCard title="Từ Tuần 2 trở đi" note="Lộ trình đủ 4 tuần và việc từng ngày nằm trong gói Cơ bản." />}
         </Card>
       )}
 
@@ -397,6 +405,7 @@ export default function ClientPlanPage() {
               {tasksCreated.length > 12 && <div className="rail-sub">…và {tasksCreated.length - 12} việc khác</div>}
             </div>
           )}
+          {lockedTasks > 0 && <div style={{ marginBottom: 20 }}><LockedCard title={`Còn ${lockedTasks} việc đã soạn sẵn`} note="Mở khoá để xem và làm theo từng việc." /></div>}
           {tasksCreated && tasksCreated.length === 0 && (
             <div className="alert alert-ok" style={{ marginBottom: 20 }}>
               Không có việc mới. Các việc trong kế hoạch này đã được tạo trước đó.
