@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Lock } from 'lucide-react'
-import type { DemoAudit } from '@/lib/demo-audit'
+import type { AuditResult } from '@/lib/audit-types'
 import { Card } from '@/components/dashboard/shared'
 
 /**
@@ -23,7 +23,7 @@ export function AuditResultView({
   scoreOverride,
   recommendations,
 }: {
-  audit: DemoAudit
+  audit: AuditResult
   teaser?: boolean
   rawFallback?: string
   scoreOverride?: ScoreOverride

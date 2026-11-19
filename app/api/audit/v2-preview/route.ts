@@ -30,7 +30,7 @@ export const runtime = 'nodejs'
  * kèm so sánh cơ bản giữa 2 lần gần nhất — để trả lời câu hỏi "có cải
  * thiện không" (PHẦN VII, Vấn đề 5 trong tài liệu framework gốc).
  *
- * Yêu cầu đăng nhập + thuộc workspace — không public như /api/public/demo-audit.
+ * Yêu cầu đăng nhập + thuộc workspace — không public.
  *
  * Body:
  *  - { client_id: string, forceRefresh?: boolean }
@@ -38,8 +38,8 @@ export const runtime = 'nodejs'
  *      trong TTL cache (gbp_snapshots) nếu có — forceRefresh=true để lấy
  *      lại từ Outscraper (tốn credit). Snapshot lấy mới được lưu vào gbp_snapshots.
  *  - { business_name?: string, maps_url?: string, area?: string, industry?: string }
- *      Chạy thử nhanh, không cần client có sẵn trong workspace (giống cách
- *      /api/public/demo-audit nhận input) — không lưu gì vào gbp_snapshots.
+ *      Chạy thử nhanh, không cần client có sẵn trong workspace
+ *      — không lưu gì vào gbp_snapshots.
  */
 export async function GET(req: Request) {
   try {

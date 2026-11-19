@@ -1,4 +1,4 @@
-import type { DemoAudit } from '@/lib/demo-audit'
+import type { AuditResult } from '@/lib/audit-types'
 
 function numFrom(line: string | undefined): number | null {
   if (!line) return null
@@ -27,7 +27,7 @@ function bulletsAfter(text: string, heading: RegExp, stop: RegExp): string[] {
     .slice(0, 6)
 }
 
-export function parseAuditResult(raw: string, meta?: { name?: string; industry?: string; area?: string; mapsUrl?: string }): DemoAudit {
+export function parseAuditResult(raw: string, meta?: { name?: string; industry?: string; area?: string; mapsUrl?: string }): AuditResult {
   const overallLine = raw.split('\n').find((l) => /Điểm\s*:/.test(l) || /Score\s*:/i.test(l))
   let overall = numFrom(overallLine) ?? 5
   if (overall > 10) overall = Math.round((overall / 10) * 10) / 10
@@ -50,7 +50,7 @@ export function parseAuditResult(raw: string, meta?: { name?: string; industry?:
   const actions = bulletsAfter(raw, /#{1,4}\s*5\./, /#{1,4}\s*6\./)
   const noteLine = raw.split('\n').find((l) => /Giải thích/i.test(l))
 
-  let difficulty: DemoAudit['difficulty'] = 'Trung bình'
+  let difficulty: AuditResult['difficulty'] = 'Trung bình'
   if (/Độ khó[\s\S]{0,80}Cao/i.test(raw)) difficulty = 'Cao'
   else if (/Độ khó[\s\S]{0,80}Thấp/i.test(raw)) difficulty = 'Thấp'
 

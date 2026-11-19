@@ -12,7 +12,7 @@ export type AuditPromptInput = {
   note?: string
 }
 
-/** Dựng prompt audit từ dữ liệu đã lấy — dùng chung cho audit khách hàng và demo công khai. */
+/** Dựng prompt audit từ dữ liệu đã lấy — dùng cho audit khách hàng. */
 export function buildAuditPrompt(input: AuditPromptInput): string {
   const { snapshot: s, declared: d } = input
   const f = snapshotToAuditFields(s)

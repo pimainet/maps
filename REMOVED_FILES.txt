@@ -1,0 +1,4 @@
+Xóa các file/thư mục sau khỏi dự án của bạn:
+- app/demo/                      (trang /demo)
+- app/api/public/demo-audit/     (API audit demo công khai)
+- lib/demo-audit.ts              (kiểu dữ liệu đã chuyển sang lib/audit-types.ts)

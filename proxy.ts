@@ -30,7 +30,6 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith('/login') ||
     pathname.startsWith('/signup') ||
     pathname.startsWith('/auth') ||
-    pathname.startsWith('/demo') ||
     pathname.startsWith('/api/public/') ||
     // Cron authenticates with CRON_SECRET; unsubscribe links use an HMAC signature.
     pathname.startsWith('/api/cron/') ||

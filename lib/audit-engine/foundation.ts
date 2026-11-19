@@ -12,7 +12,7 @@ function insufficient(id: string, label: string, severity: CheckResult['severity
   }
 }
 
-/** F01 — Profile tồn tại: cùng tiêu chí `hasProfile` route demo-audit đang dùng. */
+/** F01 — Profile tồn tại: tiêu chí `hasProfile`. */
 function checkF01(input: AuditInput): CheckResult {
   const s = input.snapshot
   const resolved = Boolean(s.business_name || s.rating != null || s.review_count != null || s.address_text || s.place_id)
