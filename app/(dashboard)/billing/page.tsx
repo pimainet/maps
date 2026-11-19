@@ -12,8 +12,33 @@ const vnd = (n: number) => n.toLocaleString('vi-VN') + 'đ'
 const date = (s: string | null) => (s ? new Date(s).toLocaleDateString('vi-VN') : '')
 
 const FEATURES: Record<'basic' | 'full', string[]> = {
-  basic: ['Kế hoạch 30 ngày đầy đủ và danh sách việc', 'Mô tả mẫu + danh mục phụ có bằng chứng', 'Theo dõi tiến độ từng việc', '1 quán'],
-  full: ['Mọi thứ của gói Cơ bản', 'Cảnh báo khi có đánh giá thấp sao', 'Theo dõi thứ hạng trên Google Maps', '1 quán'],
+  basic: [
+    'Phân tích tình trạng Google Maps của doanh nghiệp',
+    'Xác định điểm đang làm tốt và điểm cần cải thiện',
+    'Kế hoạch tối ưu cá nhân hóa trong 30 ngày',
+    'Hướng dẫn chi tiết từng công việc cần thực hiện',
+    'Toàn bộ danh sách nhiệm vụ và theo dõi tiến độ',
+    'AI hỗ trợ tư vấn và tạo nội dung',
+    'Gợi ý danh mục phụ và mô tả có căn cứ',
+    '1 doanh nghiệp',
+  ],
+  full: [
+    'Bao gồm toàn bộ gói Khởi động, cộng thêm:',
+    'Theo dõi thứ hạng Google Maps',
+    'Cảnh báo khi xuất hiện đánh giá thấp sao',
+    'Chủ động phát hiện biến động và vấn đề cần xử lý',
+    'Hỗ trợ quản lý sự hiện diện trực tuyến một cách liên tục',
+  ],
+}
+
+const AUDIENCE: Record<'basic' | 'full', string> = {
+  basic: 'Dành cho chủ doanh nghiệp muốn cải thiện Google Maps nhưng chưa biết bắt đầu từ đâu.',
+  full: 'Dành cho chủ doanh nghiệp muốn chủ động theo dõi tình hình và quản lý uy tín trên Google Maps.',
+}
+
+const FIT: Record<'basic' | 'full', string> = {
+  basic: 'Phù hợp nếu: Bạn muốn tự cải thiện Google Maps, có hướng dẫn rõ ràng và không phải thuê chuyên gia SEO ngay từ đầu.',
+  full: 'Phù hợp nếu: Google Maps là một kênh quan trọng giúp khách hàng tìm đến doanh nghiệp và bạn muốn theo dõi tình hình thường xuyên thay vì kiểm tra thủ công.',
 }
 
 export default function BillingPage() {
@@ -79,14 +104,16 @@ export default function BillingPage() {
       </Card>
 
       <Card>
-        <div className="section-head"><div><h2>Chọn gói</h2><p>Mỗi gói dùng cho 1 quán. Đổi sang gói khác sẽ áp dụng từ kỳ sau, không tính lại tiền giữa kỳ.</p></div></div>
+        <div className="section-head"><div><h2>Chọn gói</h2><p>Mỗi gói dùng cho 1 doanh nghiệp. Đổi sang gói khác sẽ áp dụng từ kỳ sau, không tính lại tiền giữa kỳ.</p></div></div>
         <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))' }}>
           {info.catalog.map((c) => (
             <button key={c.plan} type="button" onClick={() => setPlan(c.plan)} aria-pressed={plan === c.plan}
               style={{ textAlign: 'left', padding: 16, borderRadius: 14, border: plan === c.plan ? '2px solid var(--primary, #2563eb)' : '1px solid var(--border, #e4e4e7)', background: 'transparent', cursor: 'pointer', color: 'inherit' }}>
               <strong style={{ fontSize: 16 }}>{c.label}</strong>
               <div style={{ fontSize: 22, fontWeight: 700, margin: '6px 0' }}>{vnd(c.monthly)}<small style={{ fontSize: 13, fontWeight: 400 }}> / tháng</small></div>
+              <p style={{ fontSize: 13, margin: '0 0 8px' }}>{AUDIENCE[c.plan]}</p>
               <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.6 }}>{FEATURES[c.plan].map((f) => <li key={f}>{f}</li>)}</ul>
+              <p style={{ fontSize: 12, margin: '8px 0 0', color: 'var(--muted-foreground)' }}>{FIT[c.plan]}</p>
             </button>
           ))}
         </div>
@@ -100,7 +127,7 @@ export default function BillingPage() {
           ))}
         </div>
         <p style={{ fontSize: 13, color: 'var(--muted-foreground)', margin: '0 0 12px' }}>
-          Trả trước bằng chuyển khoản, không tự động trừ tiền. Tặng kèm: bảng QR đánh giá bằng gỗ (khách quét là vào thẳng trang đánh giá của quán) và bộ mẫu tin nhắn xin đánh giá.
+          Trả trước bằng chuyển khoản, không tự động trừ tiền. Tặng kèm khi đăng ký gói trả phí: bảng QR hướng khách hàng đến trang đánh giá Google của doanh nghiệp và bộ mẫu tin nhắn xin đánh giá khách hàng.
         </p>
         <button className="primary-button" onClick={createOrder} disabled={busy}>{busy ? 'Đang tạo…' : `Lấy mã chuyển khoản ${vnd(price)}`}</button>
         {error && <div className="alert alert-error" style={{ marginTop: 12 }}>{error}</div>}

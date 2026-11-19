@@ -47,7 +47,7 @@ export function UpgradeBanner({ show, lockedCount, onIntent }: { show: boolean; 
     <div className="upgrade-banner" role="status" data-intent={onIntent}>
       <div>
         <strong>Còn {lockedCount} mục đang khoá trong gói miễn phí.</strong>
-        <span> Gói Cơ bản mở toàn bộ kế hoạch và mô tả mẫu cho quán của bạn.</span>
+        <span> Gói Khởi động mở toàn bộ kế hoạch và mô tả mẫu cho quán của bạn.</span>
       </div>
       <Link href="/billing" className="primary-button">Xem gói</Link>
       <button

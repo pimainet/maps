@@ -5,9 +5,9 @@ export type PeriodMonths = 1 | 3 | 12
 
 export const PERIODS: PeriodMonths[] = [1, 3, 12]
 
-export const PLAN_LABEL: Record<PlanKey, string> = { free: 'Miễn phí', basic: 'Cơ bản', full: 'Đầy đủ' }
+export const PLAN_LABEL: Record<PlanKey, string> = { free: 'Miễn phí', basic: 'Khởi động', full: 'Nâng cao' }
 
-/** Giá 1 tháng (VND). Cơ bản 349k là giá thử nghiệm; đổi ở đây là đủ. */
+/** Giá 1 tháng (VND). Giá phiên bản đầu (349k/799k) giữ nguyên cho tới khi có dữ liệu thực tế về chuyển đổi, chi phí AI/vận hành và mức sẵn sàng chi trả; đổi ở đây là đủ. */
 export const MONTHLY_PRICE_VND: Record<PaidPlan, number> = { basic: 349_000, full: 799_000 }
 
 /** Trả trước nhiều tháng được giảm: 3 tháng -5%, 12 tháng -15% (làm tròn nghìn). */
@@ -25,7 +25,7 @@ export type Entitlements = {
   auditActionLimit: number | null
   /** Danh mục phụ gợi ý + mô tả mẫu. */
   advanceAdvice: boolean
-  /** Cảnh báo đánh giá xấu, theo dõi thứ hạng (gói Đầy đủ). */
+  /** Cảnh báo đánh giá xấu, theo dõi thứ hạng (gói Nâng cao). */
   monitoring: boolean
   maxClients: number
 }

@@ -377,7 +377,7 @@ export default function ClientPlanPage() {
             </div>
           </div>
           <div className="prose">{result}</div>
-          {planLocked && <LockedCard title="Từ Tuần 2 trở đi" note="Lộ trình đủ 4 tuần và việc từng ngày nằm trong gói Cơ bản." />}
+          {planLocked && <LockedCard title="Từ Tuần 2 trở đi" note="Lộ trình đủ 4 tuần và việc từng ngày nằm trong gói Khởi động." />}
         </Card>
       )}
 
