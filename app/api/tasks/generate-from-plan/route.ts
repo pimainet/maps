@@ -8,6 +8,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 import { getEntitlements, unlockedTaskIds } from '@/lib/billing/server'
 import { checkAiRateLimit, recordAiUsage } from '@/lib/rate-limit'
 import { autoWriteContentBatch } from '@/lib/write-content'
+import { TASK_TYPES, normalizeTaskType } from '@/lib/task-types'
 import { isValidIsoDate, readJsonObject } from '@/lib/request-body'
 import {
   getClientProgress,
@@ -55,7 +56,6 @@ function parseTasksJson(raw: string): TaskItem[] {
   return parsed as TaskItem[]
 }
 
-const VALID_TYPES = ['content', 'profile_update', 'photo', 'review', 'other']
 const VALID_PRIORITIES = ['low', 'medium', 'high']
 
 const AUTO_WRITE_COUNT = 1
@@ -63,7 +63,7 @@ const AUTO_WRITE_COUNT = 1
 const REPAIR_PROMPT = `Bạn nhận được phản hồi sau đây từ một model khác. Hãy CHỈ trả về một JSON array hợp lệ chứa các task, không markdown, không giải thích.
 
 Mỗi phần tử phải có đúng các key: title, description, task_type, priority, due_date.
-task_type chỉ được: content | profile_update | photo | review | other
+task_type chỉ được: ${TASK_TYPES.join(' | ')}
 priority chỉ được: low | medium | high
 due_date dạng YYYY-MM-DD
 
@@ -203,9 +203,7 @@ export async function POST(req: Request) {
       .map((t) => ({
         title: t.title!.trim(),
         description: typeof t.description === 'string' ? t.description.trim() : undefined,
-        task_type: VALID_TYPES.includes(t.task_type || '')
-          ? t.task_type!
-          : 'other',
+        task_type: normalizeTaskType(t.task_type),
         priority: VALID_PRIORITIES.includes(t.priority || '')
           ? t.priority!
           : 'medium',
@@ -287,7 +285,9 @@ export async function POST(req: Request) {
         client_id,
         workspaceId,
         AUTO_WRITE_COUNT,
-        clientInfo
+        plan_id ?? null,
+        // chỉ viết cho các việc vừa tạo ở lần này, không đụng việc tồn đọng cũ
+        { clientInfo, onlyTaskIds: (created || []).map((t: any) => t.id) }
       )
     } catch (err: any) {
       autoWriteError = err?.message || String(err)

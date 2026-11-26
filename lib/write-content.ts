@@ -13,6 +13,7 @@ import {
   deleteContentById,
 } from '@/lib/db'
 import { titlesSimilar } from '@/lib/client-memory'
+import { pickUnwrittenContentTasks } from '@/lib/content-selection'
 import { WRITER_COMPACT_PROMPT, REFINE_LIGHT_PROMPT, CRITIC_COMPACT_PROMPT, DESCRIPTION_WRITER_PROMPT } from '@/lib/prompts'
 import { checkAiRateLimit, recordAiUsage } from '@/lib/rate-limit'
 
@@ -375,10 +376,12 @@ export async function writeAdHocContent(input: {
 
 export async function getUnwrittenContentTasks(
   clientId: string,
-  workspaceId: string
+  workspaceId: string,
+  planId: string | null,
+  onlyTaskIds?: ReadonlySet<string>
 ) {
   const [tasks, contents] = await Promise.all([
-    getTasks({ clientId, workspaceId }),
+    getTasks({ clientId, workspaceId, ...(planId ? { planId } : {}) }),
     getContents(clientId, workspaceId),
   ])
 
@@ -405,24 +408,23 @@ export async function getUnwrittenContentTasks(
     }
   }
 
-  return (tasks || [])
-    .filter(
-      (t: any) =>
-        (t.task_type === 'content' || t.task_type === 'description_update') && !writtenTaskIds.has(t.id)
-    )
-    .sort(
-      (a: any, b: any) =>
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    )
+  return pickUnwrittenContentTasks(tasks || [], writtenTaskIds, planId, onlyTaskIds)
 }
 
 export async function autoWriteContentBatch(
   clientId: string,
   workspaceId: string,
   count: number,
-  clientInfo?: ClientInfo
+  planId: string | null,
+  opts: { clientInfo?: ClientInfo; onlyTaskIds?: string[] } = {}
 ) {
-  const unwritten = await getUnwrittenContentTasks(clientId, workspaceId)
+  const { clientInfo, onlyTaskIds } = opts
+  const unwritten = await getUnwrittenContentTasks(
+    clientId,
+    workspaceId,
+    planId,
+    onlyTaskIds ? new Set(onlyTaskIds) : undefined
+  )
   const toWrite = unwritten.slice(0, count)
 
   const results = []

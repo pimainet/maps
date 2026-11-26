@@ -40,6 +40,27 @@ export function normalizePlan(v: unknown): PlanKey {
   return v === 'basic' || v === 'full' ? v : 'free'
 }
 
+/** Quá hạn bao nhiêu ngày (sau khi kỳ hết) thì hạ về gói miễn phí nếu cron chưa kịp hạ. */
+export const PLAN_GRACE_DAYS = 3
+
+/**
+ * Gói hiệu lực của workspace: `workspaces.plan`, nhưng nếu kỳ đang hoạt động đã hết hạn quá ân hạn
+ * mà cron chưa kịp hạ thì vẫn tính là miễn phí. Gói thủ công do superadmin đặt (vd 'agency') không có kỳ
+ * và được coi là gói đầy đủ. Thuần logic, dùng chung cho getPlanState và cron.
+ */
+export function resolveEffectivePlan(
+  wsPlan: unknown,
+  active: { current_period_end: string } | null | undefined,
+  now: number = Date.now()
+): PlanKey {
+  let plan = normalizePlan(wsPlan)
+  if (plan !== 'free' && active) {
+    if (new Date(active.current_period_end).getTime() + PLAN_GRACE_DAYS * 86_400_000 < now) plan = 'free'
+  }
+  if (plan === 'free' && wsPlan && !['free', 'basic', 'full'].includes(String(wsPlan))) plan = 'full'
+  return plan
+}
+
 export function isPaidPlan(v: unknown): v is PaidPlan {
   return v === 'basic' || v === 'full'
 }

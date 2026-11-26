@@ -217,6 +217,16 @@ export function cycleStrategy(cycleNumber: number): string {
   return '- Giai đoạn 4+ — Tối ưu theo dữ liệu: tìm điểm nghẽn còn lại trong hành trình khách hàng, thử từng cải tiến có thể đo, mở rộng các chủ đề/địa bàn chỉ khi doanh nghiệp thực sự phục vụ ở đó; giữ những gì hiệu quả và dừng những gì không có bằng chứng.'
 }
 
+/**
+ * Việc viết mô tả trước đây bị lưu nhầm là 'other'; coi hai loại này là một khi so trùng,
+ * để việc mô tả mới không lọt qua dedupe so với việc cũ cùng tiêu đề.
+ */
+function sameTaskTypeForDedup(a: string, b: string): boolean {
+  if (a === b) return true
+  const pair = new Set([a, b])
+  return pair.size === 2 && pair.has('other') && pair.has('description_update')
+}
+
 /** Lọc danh sách task AI đề xuất, bỏ cái trùng việc đã có (mọi status). */
 export function filterDuplicateTasks<
   T extends { title?: string; task_type?: string }
@@ -235,7 +245,7 @@ export function filterDuplicateTasks<
     const dup = existing.some(
       (e) =>
         titlesSimilar(e.title, title) &&
-        (!p.task_type || !e.task_type || p.task_type === e.task_type)
+        (!p.task_type || !e.task_type || sameTaskTypeForDedup(p.task_type, e.task_type))
     )
     if (dup) skipped.push(p)
     else kept.push(p)

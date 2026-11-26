@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { publicError } from '@/lib/api-error'
 import {
   getContentById,
+  getTaskById,
   updateContentStatus,
   updateTaskStatus,
   getLatestContentHistory,
@@ -152,10 +153,21 @@ export async function PATCH(
     if (body.status === 'approved') {
       try {
         const content = updatedStatus || (await getContentById(id, workspaceId))
-        const results = await autoWriteContentBatch(content.client_id, workspaceId, 1)
-        nextAutoWrite = results
-        const failed = results.find((r: any) => r.reason === 'error')
-        if (failed) nextAutoWriteError = failed.error
+        // Chỉ viết tiếp trong CÙNG kế hoạch với bài vừa duyệt; không rõ kế hoạch thì không tự viết.
+        const approvedTask = content.task_id
+          ? await getTaskById(content.task_id, workspaceId).catch(() => null)
+          : null
+        if (approvedTask) {
+          const results = await autoWriteContentBatch(
+            content.client_id,
+            workspaceId,
+            1,
+            approvedTask.plan_id ?? null
+          )
+          nextAutoWrite = results
+          const failed = results.find((r: any) => r.reason === 'error')
+          if (failed) nextAutoWriteError = failed.error
+        }
       } catch (err: any) {
         nextAutoWriteError = err?.message || String(err)
         console.error('Auto write after approve error:', nextAutoWriteError)

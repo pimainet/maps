@@ -1,6 +1,6 @@
 // Gói, giá, cắt nội dung theo gói, mã đơn: thuần logic, không DB.
 import assert from 'node:assert/strict'
-import { ENTITLEMENTS, parseOrderCode, priceFor, transferContent, isPaidPlan, isPeriod } from '../lib/billing/plans'
+import { ENTITLEMENTS, resolveEffectivePlan, parseOrderCode, priceFor, transferContent, isPaidPlan, isPeriod } from '../lib/billing/plans'
 import { limitActionsInText, limitPlanText, shapeAuditPayload, shapeReport } from '../lib/billing/shape'
 import { newOrderCode, readBankInfo, vietQrUrl } from '../lib/billing/orders'
 
@@ -51,4 +51,23 @@ const plan = '### 1. Mục tiêu\nA\n**Tuần 1 – x:**\n- a\n**Tuần 2 – y:
 const lp = limitPlanText(plan, ENTITLEMENTS.free)
 assert.ok(lp.locked && lp.text.includes('Tuần 1') && !lp.text.includes('Tuần 2') && !lp.text.includes('- b'))
 assert.equal(limitPlanText(plan, ENTITLEMENTS.full).text, plan)
+
+// gói hiệu lực (dùng cho getPlanState và cron review-watch)
+{
+  const now = Date.parse('2026-11-20T00:00:00Z')
+  const end = (iso: string) => ({ current_period_end: iso })
+  assert.equal(resolveEffectivePlan('free', null, now), 'free')
+  assert.equal(resolveEffectivePlan('full', end('2026-12-01T00:00:00Z'), now), 'full')       // còn hạn
+  assert.equal(resolveEffectivePlan('full', end('2026-11-18T00:00:00Z'), now), 'full')       // hết hạn 2 ngày: còn trong ân hạn 3 ngày
+  assert.equal(resolveEffectivePlan('full', end('2026-11-10T00:00:00Z'), now), 'free')       // quá ân hạn mà cron chưa hạ
+  assert.equal(resolveEffectivePlan('basic', null, now), 'basic')                            // không có kỳ active: giữ nguyên
+  assert.equal(resolveEffectivePlan('agency', null, now), 'full')                            // gói thủ công = đầy đủ
+  assert.equal(resolveEffectivePlan(undefined, null, now), 'free')
+  assert.equal(resolveEffectivePlan(null, end('2020-01-01T00:00:00Z'), now), 'free')
+  // chỉ gói Nâng cao có monitoring
+  assert.equal(ENTITLEMENTS[resolveEffectivePlan('free', null, now)].monitoring, false)
+  assert.equal(ENTITLEMENTS[resolveEffectivePlan('basic', null, now)].monitoring, false)
+  assert.equal(ENTITLEMENTS[resolveEffectivePlan('full', end('2026-12-01T00:00:00Z'), now)].monitoring, true)
+}
+
 console.log('billing: OK')

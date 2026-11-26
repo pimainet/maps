@@ -1,6 +1,6 @@
 // Phía server: đọc gói hiệu lực của workspace + cắt dữ liệu theo gói. Dùng service role (người dùng không tự sửa được gói).
 import { supabaseAdmin } from '@/lib/supabase/admin'
-import { ENTITLEMENTS, normalizePlan, type Entitlements, type PlanKey } from './plans'
+import { ENTITLEMENTS, normalizePlan, resolveEffectivePlan, type Entitlements, type PlanKey } from './plans'
 
 export type PlanState = {
   plan: PlanKey
@@ -10,7 +10,6 @@ export type PlanState = {
   scheduled: { plan: PlanKey; start: string } | null
 }
 
-/** Gói hiệu lực = workspaces.plan, nhưng nếu kỳ đã hết hạn quá hạn ân hạn mà cron chưa kịp hạ thì vẫn tính là free. */
 const PLAN_TTL_MS = 15_000
 const planCache = new Map<string, { at: number; state: PlanState }>()
 
@@ -33,21 +32,41 @@ async function loadPlanState(workspaceId: string): Promise<PlanState> {
       .in('status', ['active', 'scheduled'])
       .order('current_period_start', { ascending: true }),
   ])
-  let plan = normalizePlan(ws?.plan)
   const active = (subs || []).find((s: any) => s.status === 'active')
   const scheduled = (subs || []).find((s: any) => s.status === 'scheduled')
-  if (plan !== 'free' && active) {
-    const graceMs = 3 * 86_400_000
-    if (new Date(active.current_period_end).getTime() + graceMs < Date.now()) plan = 'free'
-  }
-  // Gói thủ công do superadmin đặt (vd 'agency') không có kỳ: giữ nguyên là gói đầy đủ nhất được biết
-  if (plan === 'free' && ws?.plan && !['free', 'basic', 'full'].includes(ws.plan)) plan = 'full'
+  const plan = resolveEffectivePlan(ws?.plan, active)
   return {
     plan,
     entitlements: ENTITLEMENTS[plan],
     periodEnd: active?.current_period_end ?? null,
     scheduled: scheduled ? { plan: normalizePlan(scheduled.plan), start: scheduled.current_period_start } : null,
   }
+}
+
+/**
+ * Trong các workspace cho trước, những workspace có gói được theo dõi đánh giá (Review Watch).
+ * Dùng gói HIỆU LỰC (cùng quy tắc ân hạn với getPlanState). Lỗi truy vấn thì ném lỗi (không cho chạy),
+ * để không vô tình tặng tính năng trả phí khi không đọc được gói.
+ */
+export async function workspaceIdsWithMonitoring(workspaceIds: string[]): Promise<Set<string>> {
+  const ids = [...new Set(workspaceIds.filter(Boolean))]
+  const out = new Set<string>()
+  for (let i = 0; i < ids.length; i += 100) {
+    const chunk = ids.slice(i, i + 100)
+    const [wsRes, subRes] = await Promise.all([
+      supabaseAdmin.from('workspaces').select('id,plan').in('id', chunk),
+      supabaseAdmin.from('subscriptions').select('workspace_id,current_period_end').eq('status', 'active').in('workspace_id', chunk),
+    ])
+    if (wsRes.error) throw wsRes.error
+    if (subRes.error) throw subRes.error
+    const activeByWs = new Map<string, { current_period_end: string }>()
+    for (const sub of subRes.data || []) activeByWs.set((sub as any).workspace_id, sub as any)
+    for (const ws of wsRes.data || []) {
+      const plan = resolveEffectivePlan((ws as any).plan, activeByWs.get((ws as any).id))
+      if (ENTITLEMENTS[plan].monitoring) out.add((ws as any).id)
+    }
+  }
+  return out
 }
 
 export async function getEntitlements(workspaceId: string): Promise<Entitlements> {

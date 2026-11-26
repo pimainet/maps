@@ -7,6 +7,7 @@
 import crypto from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { outscraperConfigured } from '@/lib/gbp-outscraper'
+import { workspaceIdsWithMonitoring } from '@/lib/billing/server'
 import { runReviewWatchForClient, type WatchClient, type WatchResult } from '@/lib/review-watch'
 
 export const runtime = 'nodejs'
@@ -47,6 +48,7 @@ export async function GET(req: Request) {
     clients_checked: 0,
     skipped_recent: 0,
     skipped_no_identity: 0,
+    skipped_plan: 0,
     new_reviews: 0,
     negative_tasks: 0,
     positive_tasks: 0,
@@ -66,8 +68,14 @@ export async function GET(req: Request) {
     if (onlyClient) q = q.eq('id', onlyClient)
     const clientsRes = await q
     if (clientsRes.error) throw clientsRes.error
-    const all = (clientsRes.data || []) as WatchClient[]
-    if (all.length === 0) return NextResponse.json({ ...summary, message: 'Không có doanh nghiệp nào có link/place_id.' })
+    const candidates = (clientsRes.data || []) as WatchClient[]
+    if (candidates.length === 0) return NextResponse.json({ ...summary, message: 'Không có doanh nghiệp nào có link/place_id.' })
+
+    // Chỉ workspace có gói Nâng cao (monitoring) mới được theo dõi đánh giá; còn lại bỏ qua để không tốn credit.
+    const allowedWs = await workspaceIdsWithMonitoring(candidates.map((c) => c.workspace_id as string))
+    const all = candidates.filter((c) => c.workspace_id && allowedWs.has(c.workspace_id))
+    summary.skipped_plan = candidates.length - all.length
+    if (all.length === 0) return NextResponse.json({ ...summary, message: 'Không có doanh nghiệp nào thuộc gói Nâng cao.' })
 
     // Ưu tiên doanh nghiệp chưa kiểm tra hoặc kiểm tra lâu nhất
     const statesRes = await admin
