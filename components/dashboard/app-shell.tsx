@@ -44,6 +44,8 @@ function pageInfo(pathname: string, clientName: string): PageInfo {
       return { title: 'Kế hoạch 30 ngày', subtitle: 'Từng bước để khách tìm thấy bạn nhiều hơn trên Google Maps.' }
     if (pathname.includes('/report'))
       return { title: 'Kết quả', subtitle: 'So sánh trước và sau để thấy kế hoạch có hiệu quả không.' }
+    if (pathname.includes('/photos'))
+      return { title: 'Kho ảnh đăng bài', subtitle: 'Gửi ảnh của quán để hệ thống chọn và đăng, không trùng.' }
     return { title: clientName || 'Doanh nghiệp', subtitle: 'Tình hình và những việc cần làm của doanh nghiệp này.' }
   }
   if (pathname.startsWith('/clients'))

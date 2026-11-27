@@ -87,3 +87,22 @@ CRON_SECRET=...               # chuỗi ngẫu nhiên dài, dùng cho route cron
 ```
 
 Chạy thử với dữ liệu thật: `npm run check:outscraper -- "Tên quán Quận 1"`. Chạy test logic: `npm run test:logic`.
+
+## Tự đăng bài Google Business (kho ảnh + Make)
+
+Mặc định **tắt** (`AUTO_POST_ENABLED` trong `lib/features.ts`). Khi bật:
+
+- Trang kho ảnh: `/clients/[id]/photos`
+- Link gửi ảnh không cần đăng nhập: `/u/<token>`
+- Make gọi `POST /api/autopost/prepare` rồi báo kết quả `POST /api/autopost/result` (cũng nhận `/api/autopost/report`).
+
+Thêm vào `.env.local` và Vercel (không commit file `.env`):
+
+```
+AUTOPOST_SECRET=...           # chuỗi ngẫu nhiên dài, header Authorization: Bearer <secret>
+ANTHROPIC_API_KEY=...         # đã dùng cho audit; vision/caption cũng dùng key này
+GOOGLE_PLACES_API_KEY=...     # tuỳ chọn, để lấy toạ độ doanh nghiệp khi geotag
+NEXT_PUBLIC_APP_URL=...       # tuỳ chọn, URL public của app
+```
+
+Chạy test helper: `npx tsx scripts/test-autopost-helpers.ts`.

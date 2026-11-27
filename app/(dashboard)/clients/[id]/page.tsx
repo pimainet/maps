@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowUpRight, BarChart3, ClipboardCheck, FileText, Target } from 'lucide-react'
+import { ArrowUpRight, BarChart3, ClipboardCheck, FileText, ImagePlus, Target } from 'lucide-react'
 import { Card } from '@/components/dashboard/shared'
 import { TASK_TYPE_LABEL, PRIORITY_LABEL } from '@/lib/ui-constants'
 import { useToast } from '@/components/dashboard/toast-context'
 import { ClientInfoCard } from '@/components/dashboard/client-info-card'
+import { AUTO_POST_ENABLED } from '@/lib/features'
 
 export default function ClientDetailPage() {
   const router = useRouter()
@@ -109,6 +110,11 @@ export default function ClientDetailPage() {
           <button className="primary-button" onClick={() => router.push(`/clients/${client.id}/plan`)}>
             <Target size={18} /> Kế hoạch 30 ngày
           </button>
+          {AUTO_POST_ENABLED && (
+            <button className="secondary-button" onClick={() => router.push(`/clients/${client.id}/photos`)}>
+              <ImagePlus size={18} /> Kho ảnh đăng bài
+            </button>
+          )}
         </div>
       </Card>
 

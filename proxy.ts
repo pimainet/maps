@@ -33,7 +33,10 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith('/api/public/') ||
     // Cron authenticates with CRON_SECRET; unsubscribe links use an HMAC signature.
     pathname.startsWith('/api/cron/') ||
-    pathname.startsWith('/api/notifications/unsubscribe')
+    pathname.startsWith('/api/notifications/unsubscribe') ||
+    pathname.startsWith('/u/') ||
+    pathname.startsWith('/api/photos/') ||
+    pathname.startsWith('/api/autopost/')
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone()
