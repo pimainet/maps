@@ -111,7 +111,21 @@ export function buildGbpObservationBlock(s: any): string {
       'Bài đăng thấy trên hồ sơ:\n' +
         posts
           .slice(0, 4)
-          .map((p: any, i: number) => `${i + 1}. ${p.approx_date ? `[${clip(p.approx_date, 20)}] ` : ''}${clip(p.text, 120)}`)
+          .map((p: any, i: number) => {
+            const when = p.posted_at ? String(p.posted_at).slice(0, 10) : p.approx_date
+            return `${i + 1}. ${when ? `[${clip(when, 20)}] ` : ''}${clip(p.text, 120)}`
+          })
+          .join('\n'),
+    )
+  }
+
+  const qa = Array.isArray(s.questions_answers) ? s.questions_answers : []
+  if (qa.length) {
+    lines.push(
+      'Hỏi–đáp nổi bật trên hồ sơ:\n' +
+        qa
+          .slice(0, 3)
+          .map((x: any) => `- Hỏi: "${clip(x.question, 120)}" — ${x.answer ? `Đáp: "${clip(x.answer, 120)}"` : 'chưa thấy câu trả lời'}`)
           .join('\n'),
     )
   }

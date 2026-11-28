@@ -69,9 +69,24 @@ function checkC02(input: AuditInput): CheckResult {
   if (posts.length === 0) {
     return insufficient('C02', 'Post Recency', 'medium')
   }
-  const ages = posts.map((p) => parseApproxDateToDays(p.approx_date)).filter((d): d is number => d !== null)
+  // Ưu tiên ngày đăng tuyệt đối (posted_at, ISO — vd SerpApi Google Maps Posts) rồi mới tới chuỗi tương đối.
+  const nowMs = (input.now ?? new Date()).getTime()
+  let exact = false
+  const ages = posts
+    .map((p) => {
+      const ms = p.posted_at ? Date.parse(p.posted_at) : NaN
+      if (Number.isFinite(ms)) {
+        exact = true
+        return Math.max(0, Math.floor((nowMs - ms) / 86_400_000))
+      }
+      return parseApproxDateToDays(p.approx_date)
+    })
+    .filter((d): d is number => d !== null)
   if (ages.length === 0) {
-    return insufficient('C02', 'Post Recency', 'medium')
+    return {
+      ...insufficient('C02', 'Post Recency', 'medium'),
+      message: 'Đọc được bài đăng nhưng không đọc được ngày đăng — chưa kết luận độ mới.',
+    }
   }
   const minAge = Math.min(...ages)
   const fresh = minAge <= 30
@@ -80,7 +95,7 @@ function checkC02(input: AuditInput): CheckResult {
     group: 'content',
     label: 'Post Recency',
     severity: 'medium',
-    confidence: 'estimated',
+    confidence: exact ? 'verified' : 'estimated',
     passed: fresh,
     message: fresh
       ? `Bài gần nhất khoảng ${minAge} ngày trước.`

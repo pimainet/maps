@@ -41,6 +41,12 @@ Mỗi lần bấm **Kiểm tra hồ sơ** (`POST /api/audit`), hệ thống tự
 | `OUTSCRAPER_API_KEY` | API key. Thiếu thì chỉ dùng Places API (ít dữ liệu hơn: ~5 review, không có phản hồi của chủ). |
 | `OUTSCRAPER_LANGUAGE`, `OUTSCRAPER_REGION` | Mặc định `vi`, `VN`. |
 | `GOOGLE_PLACES_API_KEY` | Tuỳ chọn: đối chiếu số liệu, bù trường thiếu và làm dự phòng khi Outscraper lỗi. |
+| `SEARCHAPI_API_KEY` | Tuỳ chọn (searchapi.io, ~$0,004/lần): bù mô tả, danh mục phụ, bài đăng, giờ, thuộc tính, hỏi–đáp. Gọi trước vì rẻ. |
+| `SERPAPI_API_KEY` | Tuỳ chọn (serpapi.com, ~$0,015–0,025/lần): như trên, cộng review mới nhất KÈM phản hồi của chủ (tỉ lệ phản hồi T05) và bài đăng có ngày đăng chính xác (C02). |
+| `GBP_ENRICH_PLACE_ORDER` | Tuỳ chọn, mặc định `searchapi,serpapi`. |
+
+Bù dữ liệu theo từng trường (`lib/gbp-enrich.ts`): chỉ gọi nguồn phụ khi trường còn thiếu, mỗi engine tối đa 1 lần cho 1 snapshot,
+nguồn của từng trường ghi ở `coverage.field_sources`. Thử với 1 quán thật: `npx tsx scripts/try-serpapi.ts <place_id>`.
 
 Biến `GBP_PROVIDER` và nguồn Browserbase/Playwright đã bị gỡ; biến này nếu còn trên Vercel sẽ bị bỏ qua.
 

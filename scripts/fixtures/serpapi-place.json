@@ -1,0 +1,44 @@
+{
+  "search_metadata": { "status": "Success" },
+  "place_results": {
+    "title": "Điện lạnh Minh",
+    "place_id": "ChIJ_x1234567",
+    "data_id": "0x3136b1:0x9a1b2c",
+    "data_cid": "11111111111",
+    "rating": 4.8,
+    "reviews": 126,
+    "type": ["Cửa hàng điện máy", "Thợ điện lạnh", "Dịch vụ sửa chữa thiết bị"],
+    "type_ids": ["appliance_store", "hvac_contractor"],
+    "description": " Sửa chữa, vệ sinh điều hòa tại nhà ở Sầm Sơn. ",
+    "service_options": { "onsite_services": true, "online_appointments": true, "delivery": false },
+    "extensions": [
+      { "highlights": ["Phục vụ nhanh"] },
+      { "accessibility": ["Lối vào cho người dùng xe lăn"] },
+      { "payments": ["Thẻ ghi nợ", "Thanh toán di động qua NFC"] }
+    ],
+    "unsupported_extensions": [{ "payments": ["Thẻ tín dụng"] }],
+    "address": "12 Lê Lợi, Sầm Sơn, Thanh Hóa",
+    "phone": "0912 345 678",
+    "website": "https://dienlanhminh.vn/",
+    "open_state": "Đang mở cửa ⋅ Đóng cửa lúc 17:30",
+    "hours": [{ "monday": "07:30–17:30" }, { "tuesday": "07:30–17:30" }, { "sunday": "Đóng cửa" }],
+    "rating_summary": [
+      { "stars": 1, "amount": 3 }, { "stars": 2, "amount": 1 }, { "stars": 3, "amount": 4 },
+      { "stars": 4, "amount": 18 }, { "stars": 5, "amount": 100 }
+    ],
+    "menu": { "link": "https://dienlanhminh.vn/bang-gia", "source": "dienlanhminh.vn" },
+    "book_online": "https://dienlanhminh.vn/dat-lich",
+    "posts": [
+      { "title": "Khuyến mãi vệ sinh điều hòa", "description": "Giảm 20% đến hết tháng 11.", "cta": "Gọi ngay", "date": "2 tuần trước" },
+      { "title": "", "description": "" },
+      { "description": "Lắp đặt điều hòa Daikin chính hãng", "date": "14 thg 9, 2026" }
+    ],
+    "questions_and_answers": [
+      {
+        "question": { "text": "Có làm chủ nhật không?", "date": "5 tháng trước", "language": "vi" },
+        "answer": { "text": "Chủ nhật nghỉ ạ, gọi trước để hẹn.", "date": "5 tháng trước" },
+        "total_answers": 1
+      }
+    ]
+  }
+}

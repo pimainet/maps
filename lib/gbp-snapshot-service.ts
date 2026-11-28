@@ -151,16 +151,32 @@ async function enrichStoredSnapshot(row: any, client: SnapshotClient, workspaceI
       area: client.area || undefined,
     })
     if (enriched === row) return row
+    const e = enriched as any
     const patch = {
-      description: enriched.description || null,
-      primary_category: enriched.primary_category || null,
-      additional_categories: enriched.additional_categories || null,
-      coverage: enriched.coverage || null,
-      posts_signal: enriched.posts_signal || null,
-      recent_posts: enriched.recent_posts || [],
+      description: e.description || null,
+      primary_category: e.primary_category || null,
+      additional_categories: e.additional_categories || null,
+      coverage: e.coverage || null,
+      posts_signal: e.posts_signal || null,
+      recent_posts: e.recent_posts || [],
+      phone: e.phone || null,
+      website_url: e.website_url || null,
+      reviews: e.reviews || [],
+      opening_hours: e.opening_hours || null,
+      attributes: e.attributes || [],
+      action_links: e.action_links || [],
+      business_status: e.business_status || null,
+      claim_signal: e.claim_signal || null,
+      rating_distribution: e.rating_distribution || null,
+      review_stats: e.review_stats || null,
     }
-    await updateSnapshot(row.id, workspaceId, patch).catch((e) => console.warn('enrichStoredSnapshot save failed:', e?.message))
-    return { ...row, ...patch }
+    // Bản sao trong raw_json.deep (dùng khi chưa có cột migration 015; questions_answers chỉ nằm ở đây).
+    const deep = Object.fromEntries(GBP_DEEP_KEYS.map((k) => [k, e[k] ?? null]))
+    const rawJson = { ...(row.raw_json && typeof row.raw_json === 'object' ? row.raw_json : {}), deep }
+    await updateSnapshot(row.id, workspaceId, { ...patch, raw_json: rawJson }).catch((err) =>
+      console.warn('enrichStoredSnapshot save failed:', err?.message),
+    )
+    return { ...row, ...patch, questions_answers: e.questions_answers ?? row.questions_answers, raw_json: rawJson }
   } catch (e: any) {
     console.warn('enrichStoredSnapshot failed (non-fatal):', e?.message)
     return row

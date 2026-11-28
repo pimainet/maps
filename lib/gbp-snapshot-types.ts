@@ -9,8 +9,22 @@
 export type GbpPostItem = {
   text: string
   approx_date?: string | null
+  /** Thời điểm đăng (ISO, UTC) khi nguồn trả ngày tuyệt đối (vd SerpApi google_maps_posts.posted_at). Chính xác hơn approx_date. */
+  posted_at?: string | null
   raw?: string | null
 }
+
+/** 1 cặp hỏi–đáp nổi bật trên hồ sơ (SerpApi/SearchApi chỉ trả cặp được Google làm nổi bật, không phải toàn bộ). */
+export type GbpQaItem = {
+  question: string
+  answer?: string | null
+  /** Ước tính tuổi câu hỏi (ngày) từ "5 năm trước"/"5 years ago". */
+  question_age_days?: number | null
+  total_answers?: number | null
+}
+
+/** Nguồn đã cung cấp 1 trường của snapshot (provenance). */
+export type GbpFieldSource = 'outscraper' | 'places' | 'serpapi' | 'searchapi' | 'dataforseo'
 
 /**
  * 1 review. Hai nguồn:
@@ -78,6 +92,13 @@ export type GbpCoverage = {
   photos_counted?: number | null
   photos_capped?: boolean
   identity?: 'matched' | 'ambiguous' | 'unverified'
+  /** Trường nào lấy từ nguồn nào (vd { description: 'serpapi', reviews: 'outscraper' }). Chỉ ghi trường đã có dữ liệu. */
+  field_sources?: Record<string, GbpFieldSource | string>
+  /**
+   * Nhật ký bù dữ liệu bằng nguồn phụ (lib/gbp-enrich.ts): đã gọi engine nào (vd "searchapi:place") để không gọi lại
+   * cho cùng 1 snapshot, và trường nào vẫn còn thiếu sau khi bù.
+   */
+  enrich?: { at: string; tried: string[]; still_missing: string[]; data_id?: string | null } | null
   warnings: string[]
   elapsed_ms: number
   depth: 'quick' | 'deep'
@@ -118,6 +139,8 @@ export type GbpSnapshotPayload = {
   rating_distribution?: Record<string, number> | null
   review_stats?: GbpReviewStats | null
   photo_categories?: string[]
+  /** Hỏi–đáp nổi bật (SerpApi/SearchApi). Lưu trong raw_json.deep, không cần cột riêng. */
+  questions_answers?: GbpQaItem[]
   coverage?: GbpCoverage | null
 }
 

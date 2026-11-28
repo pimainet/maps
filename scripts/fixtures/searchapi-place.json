@@ -1,0 +1,31 @@
+{
+  "search_metadata": { "status": "Success" },
+  "place_result": {
+    "ludocid": "11111111111",
+    "place_id": "ChIJ_x1234567",
+    "data_id": "0x3136b1:0x9a1b2c",
+    "title": "Điện lạnh Minh",
+    "description": "Mô tả từ SearchApi",
+    "address": "12 Lê Lợi, Sầm Sơn, Thanh Hóa",
+    "phone": "0912 345 678",
+    "rating": 4.8,
+    "reviews": 126,
+    "reviews_histogram": { "1": 3, "2": 1, "3": 4, "4": 18, "5": 100 },
+    "website": "https://dienlanhminh.vn/",
+    "type": "Cửa hàng điện máy",
+    "types": ["Cửa hàng điện máy", "Thợ điện lạnh"],
+    "open_state": "Đang mở cửa ⋅ Đóng cửa lúc 17:30",
+    "open_hours": { "monday": "07:30–17:30", "sunday": "Đóng cửa" },
+    "extensions": [
+      { "title": "Hỗ trợ tiếp cận", "items": [{ "title": "Lối vào cho xe lăn", "value": "Có lối vào cho người dùng xe lăn" }] }
+    ],
+    "posts": [
+      { "title": "Khuyến mãi vệ sinh điều hòa", "snippet": "Giảm 20% đến hết tháng 11.", "cta": "Gọi ngay", "date": "4 ngày trước" }
+    ],
+    "questions_and_answers": {
+      "question": { "text": "Có làm chủ nhật không?", "date": "5 tháng trước" },
+      "answer": { "text": "Chủ nhật nghỉ ạ." },
+      "total_answers": 1
+    }
+  }
+}

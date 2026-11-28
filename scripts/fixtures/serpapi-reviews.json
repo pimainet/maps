@@ -1,0 +1,14 @@
+{
+  "search_parameters": { "engine": "google_maps_reviews", "place_id": "ChIJ_x1234567", "sort_by": "newestFirst" },
+  "place_info": { "title": "Điện lạnh Minh", "rating": 4.8, "reviews": 126 },
+  "reviews": [
+    { "rating": 5, "date": "3 ngày trước", "iso_date": "2026-11-13T02:00:00Z", "review_id": "r1", "user": { "name": "A" }, "snippet": "Thợ đến nhanh, làm sạch sẽ.", "response": { "date": "2 ngày trước", "iso_date": "2026-11-14T03:00:00Z", "snippet": "Cảm ơn anh đã tin tưởng!" } },
+    { "rating": 4, "date": "1 tuần trước", "iso_date": "2026-11-09T02:00:00Z", "review_id": "r2", "user": { "name": "B" }, "snippet": "Giá hợp lý." },
+    { "rating": 2, "date": "2 tuần trước", "iso_date": "2026-11-02T02:00:00Z", "review_id": "r3", "user": { "name": "C" }, "snippet": "Hẹn 8h mà 10h mới tới.", "response": { "iso_date": "2026-11-03T02:00:00Z", "snippet": "Xin lỗi anh, bên em sẽ rút kinh nghiệm." } },
+    { "rating": 5, "date": "1 tháng trước", "iso_date": "2026-10-15T02:00:00Z", "review_id": "r4", "user": { "name": "D" }, "snippet": "" },
+    { "rating": 5, "date": "2 tháng trước", "iso_date": "2026-09-15T02:00:00Z", "review_id": "r5", "user": { "name": "E" }, "snippet": "Tốt", "response": { "snippet": "Cảm ơn chị!" } },
+    { "rating": 1, "date": "4 tháng trước", "iso_date": "2026-07-15T02:00:00Z", "review_id": "r6", "user": { "name": "F" }, "snippet": "Không nghe máy." },
+    { "date": "x", "snippet": "review lỗi không có sao" }
+  ],
+  "serpapi_pagination": { "next_page_token": "abc" }
+}

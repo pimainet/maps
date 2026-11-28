@@ -200,7 +200,7 @@ function parsePosts(raw: unknown, now: number): GbpPostItem[] {
       const text = asString(first(p, ['text', 'description', 'snippet', 'title', 'content']))
       if (!text) return null
       const ms = parseOutscraperDate(first(p, ['datetime_utc', 'date', 'published_at']), first(p, ['timestamp']))
-      return { text: text.slice(0, 500), approx_date: relativeVi(ageDays(ms, now)) }
+      return { text: text.slice(0, 500), approx_date: relativeVi(ageDays(ms, now)), posted_at: ms != null ? new Date(ms).toISOString() : null }
     })
     .filter((p): p is GbpPostItem => !!p)
     .slice(0, GBP_SNAPSHOT_MAX_POSTS)
@@ -314,6 +314,12 @@ export function mapOutscraperToPayload(
   const rawReviews = reviewsPlace?.reviews_data ?? place?.reviews_data
   const { items: reviews, replyFieldPresent } = mapReviews(rawReviews, now)
   const reviewStats = computeReviewStats(reviews)
+  // Không có trường owner_answer ở review nào => không phân biệt được "chưa phản hồi" với "nguồn không trả": không tính tỉ lệ.
+  // (Để null thì lib/gbp-enrich.ts sẽ lấy review kèm phản hồi từ SerpApi/SearchApi, và T05 không kết luận sai 0%.)
+  if (reviewStats && !replyFieldPresent) {
+    reviewStats.replied = 0
+    reviewStats.reply_rate = null
+  }
 
   const hours = hoursToString(place?.working_hours)
   const attributes = aboutToGroups(place?.about)

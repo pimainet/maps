@@ -36,6 +36,9 @@ ANTHROPIC_API_KEY=
 # Nguồn dữ liệu
 OUTSCRAPER_API_KEY=
 GOOGLE_PLACES_API_KEY=          # tùy chọn, dùng để bù dữ liệu
+SEARCHAPI_API_KEY=              # tùy chọn: bù mô tả, bài đăng, giờ, thuộc tính, hỏi–đáp (rẻ, gọi trước)
+SERPAPI_API_KEY=                # tùy chọn: như trên + review kèm phản hồi của chủ + bài đăng có ngày chính xác
+GBP_ENRICH_PLACE_ORDER=         # tùy chọn, mặc định "searchapi,serpapi"
 
 # Tùy chọn
 CRON_SECRET=

@@ -1,0 +1,13 @@
+{
+  "search_parameters": { "engine": "google_maps_reviews", "place_id": "ChIJ_x1234567", "sort_by": "newest", "num": 20 },
+  "place_result": { "place_id": "ChIJ_x1234567", "title": "Điện lạnh Minh", "rating": 4.8, "reviews": 126 },
+  "reviews": [
+    { "review_id": "s1", "user": { "name": "A" }, "text": "Thợ đến nhanh.", "rating": 5, "date": "3 ngày trước", "iso_date": "2026-11-13T02:00:00Z" },
+    { "review_id": "s2", "user": { "name": "B" }, "text": "Ổn.", "rating": 4, "date": "1 tuần trước", "iso_date": "2026-11-09T02:00:00Z" },
+    { "review_id": "s3", "user": { "name": "C" }, "text": "Chậm.", "rating": 2, "date": "2 tuần trước", "iso_date": "2026-11-02T02:00:00Z" },
+    { "review_id": "s4", "user": { "name": "D" }, "text": "", "rating": 5, "date": "1 tháng trước", "iso_date": "2026-10-15T02:00:00Z" },
+    { "review_id": "s5", "user": { "name": "E" }, "text": "Tốt", "rating": 5, "date": "2 tháng trước", "iso_date": "2026-09-15T02:00:00Z" },
+    { "review_id": "s6", "user": { "name": "F" }, "text": "Được", "rating": 4, "date": "3 tháng trước", "iso_date": "2026-08-15T02:00:00Z" }
+  ],
+  "pagination": { "next_page_token": "xyz" }
+}

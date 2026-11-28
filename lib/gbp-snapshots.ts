@@ -112,6 +112,8 @@ export const GBP_DEEP_KEYS = [
   'rating_distribution',
   'review_stats',
   'coverage',
+  // Chỉ lưu trong raw_json.deep (không có cột riêng, không cần migration).
+  'questions_answers',
 ] as const
 
 export function hydrateSnapshot<T extends Record<string, any> | null | undefined>(row: T): T {

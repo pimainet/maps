@@ -93,16 +93,20 @@ export function applyDfsInfo(snap: RunGbpSnapshotResult, info: DfsInfo, by: stri
   if (by === 'place_id' && expected && info.place_id && info.place_id !== expected) return snap
 
   const out: RunGbpSnapshotResult = { ...snap }
-  const cov = out.coverage ? { ...out.coverage, sections: { ...out.coverage.sections }, warnings: [...out.coverage.warnings] } : undefined
+  const cov = out.coverage
+    ? { ...out.coverage, sections: { ...out.coverage.sections }, warnings: [...out.coverage.warnings], field_sources: { ...(out.coverage.field_sources || {}) } }
+    : undefined
   const used: string[] = []
 
   if (!clean(out.description) && info.description) {
     out.description = info.description
     if (cov) cov.sections.about = 'ok'
+    if (cov) cov.field_sources.description = 'dataforseo'
     used.push('mô tả')
   }
   if (!clean(out.primary_category) && info.category) {
     out.primary_category = info.category
+    if (cov) cov.field_sources.primary_category = 'dataforseo'
     used.push('danh mục chính')
   }
   // DataForSEO trả additional_categories (mảng, có thể rỗng) => đã đọc được; so với danh mục chính để loại trùng.
@@ -111,6 +115,7 @@ export function applyDfsInfo(snap: RunGbpSnapshotResult, info: DfsInfo, by: stri
   const extra = info.additional_categories.filter((c) => c.toLowerCase() !== primaryKey && !have.has(c.toLowerCase()))
   if (extra.length) {
     out.additional_categories = [out.additional_categories, ...extra].filter(Boolean).join(', ')
+    if (cov) cov.field_sources.additional_categories = 'dataforseo'
     used.push('danh mục phụ')
   }
   if (cov && (extra.length || have.size || Array.isArray(info.additional_categories))) cov.sections.categories = 'ok'
