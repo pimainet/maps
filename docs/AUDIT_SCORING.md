@@ -27,7 +27,7 @@ Chỉ so khi cùng major `ENGINE_VERSION` **và** cùng `scoringVersion`. Báo c
 | Nhóm | Tổng | Check (trọng số) |
 |---|---|---|
 | Liên quan: danh mục, dịch vụ | 25 | R06 danh mục chính so với 3–5 quán top 7, R02 danh mục phụ so với đối thủ 6, R03 dịch vụ 3, R04 mô tả 3, R01 danh mục chính đúng ngành (AI) 5, R05 thuộc tính 1 |
-| Review | 25 | T03 review mới 8, T01 số review so đối thủ 6, T02 sao so đối thủ 6, T05 tỉ lệ phản hồi 3, VY03 so trung vị đối thủ 2 |
+| Review | 25 | T02 sao so đối thủ 6, T01 số review so đối thủ 5, T07 tốc độ review mới so với 3 đối thủ đứng đầu 5, T03 review mới nhất ≤ 21 ngày 4, T05 tỉ lệ phản hồi 3, VY03 so trung vị đối thủ 2 |
 | Hiển thị, khoảng cách | 20 | VY04 phủ quanh quán (lưới) 10, VY01 thứ hạng tìm theo khu vực 6, VY02 nhiều từ khoá 4 |
 | Nền tảng | 15 | F02 3, F04 3, F07 3, F01 2, F05 2, F03 1, F06 1 |
 | Website địa phương | 10 | W01 tên/địa chỉ/SĐT trên website khớp hồ sơ 4, W02 quận/thành phố trong title hoặc H1 3, W03 schema LocalBusiness 2, W04 HTTPS + viewport điện thoại 1 |
@@ -49,3 +49,12 @@ Chỉ so khi cùng major `ENGINE_VERSION` **và** cùng `scoringVersion`. Báo c
 - Tôn trọng robots.txt (RFC 9309); robots.txt lỗi 5xx hoặc không tải được thì không lấy trang.
 - Link là Facebook/Zalo/Instagram/sàn… thì không chấm (chưa đủ dữ liệu). Website chết đã tính ở F06, không trừ lần nữa.
 - Cache 7 ngày trong `gbp_snapshots.raw_json.audit_cache.website_signals` (theo URL + tên/SĐT/địa chỉ hồ sơ). Không cần migration.
+
+## Review gần đây so với đối thủ (T07) và T03
+
+- T03: review mới nhất phải trong **21 ngày** (trước đây 45). Sterling Sky ghi nhận thứ hạng tụt khi ~18 ngày không có review mới.
+- T07: số review 90 ngày của hồ sơ ≥ 50% trung vị của 3 đối thủ đứng đầu (cả hai bên đếm tối đa `COMPETITOR_REVIEW_LIMIT`
+  review để so công bằng). Hiện kèm số 30 ngày và tuổi review mới nhất của đối thủ.
+- Dữ liệu đối thủ: Outscraper `reviews-v3`, sort newest, `cutoff` = 90 ngày trước (chỉ trả/tính tiền review trong 90 ngày).
+  `COMPETITOR_REVIEW_SAMPLE` (mặc định 3, tối đa 5, 0 = tắt), `COMPETITOR_REVIEW_LIMIT` (mặc định 20, tối đa 30).
+  Cache 14 ngày trong `raw_json.audit_cache.competitor_velocity` theo tập đối thủ.

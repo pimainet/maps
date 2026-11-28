@@ -102,6 +102,9 @@ export interface AuditInput {
    */
   rankGrid?: RankGridAuditInput
 
+  /** Tốc độ review mới của các đối thủ đứng đầu (T07). */
+  competitorVelocity?: CompetitorVelocity
+
   /** Tín hiệu địa phương của website (W01–W04). undefined = chưa lấy (không có website / lỗi) -> "chưa đủ dữ liệu". */
   website?: WebsiteSignals
 
@@ -154,6 +157,22 @@ export interface WebsiteSignals {
   placeTerms?: string[]
   /** Dấu vân tay NAP hồ sơ dùng khi so — đổi thì không dùng lại cache. */
   profileKey?: string
+}
+
+/** Tốc độ review mới của 1 đối thủ (90 ngày gần nhất, tối đa `limit` review/quán). */
+export interface CompetitorVelocityItem {
+  name: string
+  placeId: string
+  newestAgeDays: number | null
+  last30: number
+  last90: number
+  /** Chạm giới hạn số review lấy về: last90 là cận dưới. */
+  capped: boolean
+}
+export interface CompetitorVelocity {
+  fetchedAt: string
+  limit: number
+  items: CompetitorVelocityItem[]
 }
 
 export interface CheckResult {

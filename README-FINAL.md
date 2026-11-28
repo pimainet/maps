@@ -79,7 +79,8 @@ Biến môi trường cho audit:
 | Biến | Vai trò | Thiếu thì |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Phân loại + viết lời | Các mục cần AI "chưa đủ dữ liệu", lời nhận xét dựng bằng code |
-| `OUTSCRAPER_API_KEY` | Lấy hồ sơ Maps, review, **nhóm đối thủ** | Không có hồ sơ thì audit không chạy (422); không có nhóm đối thủ thì VY01/VY03/T01/T02 "chưa đủ dữ liệu" |
+| `OUTSCRAPER_API_KEY` | Lấy hồ sơ Maps, review, **nhóm đối thủ**, review gần đây của 3 đối thủ đứng đầu (T07) | Không có hồ sơ thì audit không chạy (422); không có nhóm đối thủ thì VY01/VY03/T01/T02/R06/T07 "chưa đủ dữ liệu" |
+| `COMPETITOR_REVIEW_SAMPLE`, `COMPETITOR_REVIEW_LIMIT` | Giới hạn chi phí T07: số đối thủ (mặc định 3, 0 = tắt) × số review tối đa mỗi quán (mặc định 20) | Dùng mặc định |
 | `SEARCHAPI_API_KEY`, `SERPAPI_API_KEY` | Bù từng trường (mô tả, bài đăng có ngày, review kèm phản hồi chủ, giờ, thuộc tính, hỏi–đáp) | Một số mục đọc chưa đủ, không kết luận là thiếu |
 | `GOOGLE_PLACES_API_KEY` | Bù dữ liệu cơ bản | Như trên |
 | `DATAFORSEO_LOGIN/PASSWORD` + cờ lưới thứ hạng | VY02/VY04 (độ phủ theo vị trí) | Hai mục này "chưa đủ dữ liệu" |

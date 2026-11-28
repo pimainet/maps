@@ -24,6 +24,7 @@ export const CHECK_LABEL_VI: Record<string, string> = {
   R01: 'Danh mục chính',
   R02: 'Danh mục phụ',
   R06: 'Danh mục chính so với quán top',
+  T07: 'Tốc độ có review mới so với đối thủ',
   W01: 'Website ghi đúng tên, địa chỉ, SĐT',
   W02: 'Website nhắc khu vực ở tiêu đề',
   W03: 'Website có schema doanh nghiệp địa phương',

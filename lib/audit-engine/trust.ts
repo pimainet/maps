@@ -66,10 +66,12 @@ function checkT02(input: AuditInput): CheckResult {
  * T03 — Review Recency: dựa trên review_stats tính từ danh sách review đã tải
  * (tuổi review mới nhất). Không có review_stats (vd chỉ có Places) -> insufficient.
  */
+export const T03_MAX_NEWEST_AGE_DAYS = 21
 function checkT03(input: AuditInput): CheckResult {
   const st = input.snapshot.review_stats
   if (!st || st.newest_age_days == null) return insufficient('T03', 'Review Recency', 'high')
-  const ok = st.newest_age_days <= 45
+  // ~3 tuần: Sterling Sky ghi nhận thứ hạng tụt khi quá ~18 ngày không có review mới; 21 ngày để chừa sai số nguồn dữ liệu.
+  const ok = st.newest_age_days <= T03_MAX_NEWEST_AGE_DAYS
   return {
     id: 'T03',
     group: 'trust',
@@ -80,7 +82,50 @@ function checkT03(input: AuditInput): CheckResult {
     message: `Review mới nhất cách đây khoảng ${st.newest_age_days} ngày${
       st.last_90d != null ? `; ${st.window_complete ? '' : 'ít nhất '}${st.last_90d} review trong 90 ngày gần đây` : ''
     }.`,
-    action: ok ? undefined : 'Review mới đã thưa — đặt quy trình xin review đều đặn sau mỗi lượt phục vụ.',
+    action: ok ? undefined : `Đã hơn ${T03_MAX_NEWEST_AGE_DAYS} ngày chưa có review mới — đặt quy trình xin review đều đặn sau mỗi lượt phục vụ (mục tiêu: có review mới ít nhất mỗi 2–3 tuần).`,
+  }
+}
+
+/**
+ * T07 — Tốc độ review mới so với 3 đối thủ đứng đầu: số review trong 90 ngày của hồ sơ so với trung vị của đối thủ (cùng giới
+ * hạn đếm tối đa `limit` review/quán cho cả hai bên để so công bằng). Đạt khi ≥ 50% trung vị. Cần ≥ 2 đối thủ có số liệu và
+ * số review 90 ngày của hồ sơ phải đếm được (tải đủ cửa sổ 90 ngày hoặc đã chạm giới hạn).
+ */
+export const T07_MIN_RATIO = 0.5
+function checkT07(input: AuditInput): CheckResult {
+  const base = insufficient('T07', 'Review velocity vs competitors', 'high')
+  const v = input.competitorVelocity
+  const st = input.snapshot.review_stats
+  const comps = (v?.items ?? []).filter((x) => Number.isFinite(x.last90))
+  if (!v || comps.length < 2) return { ...base, message: 'Chưa có số review gần đây của ít nhất 2 đối thủ đứng đầu để so.' }
+  if (!st || st.last_90d == null) return { ...base, message: 'Chưa đếm được số review gần đây của hồ sơ.' }
+  const limit = v.limit
+  const ownCapped = Math.min(st.last_90d, limit)
+  // Chưa tải đủ 90 ngày và cũng chưa chạm giới hạn đếm => số của hồ sơ chưa chắc chắn.
+  if (!st.window_complete && st.last_90d < limit) return { ...base, message: 'Danh sách review đã tải chưa phủ đủ 90 ngày để đếm chính xác.' }
+  const sorted = comps.map((c) => Math.min(c.last90, limit)).sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  const median = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
+  const passed = median === 0 || ownCapped >= median * T07_MIN_RATIO
+  const plus = (n: number, capped: boolean) => (capped ? `≥${n}` : String(n))
+  const compText = comps.map((c) => `${c.name}: ${plus(Math.min(c.last90, limit), c.capped || c.last90 >= limit)}`).join('; ')
+  const newestComp = comps.map((c) => c.newestAgeDays).filter((x): x is number => x != null)
+  const perMonth = Math.max(1, Math.ceil((median * T07_MIN_RATIO) / 3))
+  return {
+    id: 'T07',
+    group: 'trust',
+    label: 'Review velocity vs competitors',
+    severity: 'high',
+    confidence: 'estimated',
+    passed,
+    message:
+      `90 ngày gần đây: hồ sơ có ${plus(ownCapped, st.last_90d >= limit)} review, trung vị ${comps.length} đối thủ đứng đầu ${median} (${compText})` +
+      (st.last_30d != null ? `; 30 ngày: hồ sơ ${st.last_30d}, đối thủ ${comps.map((c) => c.last30).join('/')}` : '') +
+      (newestComp.length ? `; review mới nhất của đối thủ cách đây ${Math.min(...newestComp)} ngày` : '') +
+      '.',
+    action: passed
+      ? undefined
+      : `Đối thủ đứng đầu nhận khoảng ${median} review mỗi 90 ngày — đặt mục tiêu ít nhất ${perMonth} review mới mỗi tháng bằng cách xin review sau mỗi lượt phục vụ (không mua, không đổi quà lấy review).`,
   }
 }
 
@@ -215,5 +260,5 @@ async function checkT06(input: AuditInput, ai: AIClassifier): Promise<CheckResul
 
 export async function runTrustChecks(input: AuditInput, ai: AIClassifier): Promise<CheckResult[]> {
   const t06 = await checkT06(input, ai)
-  return [checkT01(input), checkT02(input), checkT03(input), checkT04(input), checkT05(input), t06]
+  return [checkT01(input), checkT02(input), checkT03(input), checkT07(input), checkT04(input), checkT05(input), t06]
 }

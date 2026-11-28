@@ -3,6 +3,7 @@ import { buildAdvice } from '@/lib/audit-engine/advice'
 import { resolveCompetitorSet } from '@/lib/competitors-store'
 import { loadRankGridAuditInput } from '@/lib/rankgrid/audit-input'
 import { collectWebsiteSignals } from '@/lib/website-signals'
+import { collectCompetitorVelocity } from '@/lib/competitor-velocity'
 import { createSupabaseClassifierStore } from '@/lib/audit-classifier-store'
 import {
   checkWebsiteReachable,
@@ -24,6 +25,7 @@ export type AuditV2Output = {
     competitors: { from: 'cache' | 'live' | 'none'; note: string | null; count: number }
     reviewHistoryPoints: number
     website: { from: 'cache' | 'live' | 'none'; status: string | null }
+    competitorVelocity: { from: 'cache' | 'live' | 'none'; count: number; note: string | null }
     classifier: { hits: number; misses: number }
   }
 }
@@ -63,6 +65,13 @@ export async function runAuditV2(args: {
   const competitors = comp.set?.items.length ? comp.set.items : undefined
   const visibility = comp.set ? { query: comp.set.query, selfRank: comp.set.selfRank, total: comp.set.total } : undefined
 
+  // T07: review gần đây của 3 đối thủ đứng đầu (Outscraper, giới hạn chi phí + cache 14 ngày). Lỗi => T07 "chưa đủ dữ liệu".
+  const vel = await collectCompetitorVelocity({ competitors, clientId: client.id, workspaceId }).catch((e: any) => ({
+    velocity: undefined,
+    from: 'none' as const,
+    note: String(e?.message || e).slice(0, 120),
+  }))
+
   const ai = createCachedClassifier(createRealAIClassifier(), createSupabaseClassifierStore())
   const report = await runAudit(
     {
@@ -75,6 +84,7 @@ export async function runAuditV2(args: {
       reviewCountHistory: history.length ? history : undefined,
       rankGrid,
       website: web.signals,
+      competitorVelocity: vel.velocity,
     },
     ai,
   )
@@ -108,6 +118,7 @@ export async function runAuditV2(args: {
       competitors: { from: comp.from, note: comp.note ?? null, count: comp.set?.items.length ?? 0 },
       reviewHistoryPoints: history.length,
       website: { from: web.from, status: web.signals?.status ?? null },
+      competitorVelocity: { from: vel.from, count: vel.velocity?.items.length ?? 0, note: vel.note ?? null },
       classifier: { hits: ai.stats.hits, misses: ai.stats.misses },
     },
   }
