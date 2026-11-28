@@ -37,6 +37,11 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith('/u/') ||
     pathname.startsWith('/api/photos/') ||
     pathname.startsWith('/api/autopost/') ||
+    // Hộp thư review: link duyệt của chủ quán (token) và các API Make gọi (Bearer AUTOPOST_SECRET).
+    pathname.startsWith('/r/') ||
+    pathname.startsWith('/api/reviews/prepare') ||
+    pathname.startsWith('/api/reviews/sync') ||
+    pathname.startsWith('/api/reviews/result') ||
     // DataForSEO pingback: xác thực bằng HMAC (RANKGRID_PINGBACK_SECRET).
     pathname.startsWith('/api/rankgrid/pingback')
 

@@ -34,6 +34,22 @@ export type RankGridEntitlement = {
   monthlyPointCap: number
 }
 
+/** Hộp thư review (Review Watch + phản hồi). Xem lib/reviews/* và supabase/migrations/029_review_inbox.sql. */
+export type ReviewEntitlement = {
+  /** Tự lấy review mới: 'none' = không tự quét (chỉ xem review có sẵn từ lần kiểm tra hồ sơ gần nhất). */
+  frequency: 'none' | 'weekly' | 'daily'
+  /** Tự soạn nháp AI khi có review mới chưa được phản hồi. */
+  autoDraft: boolean
+  /** Trần lượt soạn nháp AI mỗi tháng của workspace (tự động + bấm tay + chủ quán xin soạn lại). */
+  monthlyDrafts: number
+  /** Gửi link duyệt phản hồi không cần đăng nhập cho chủ quán (/r/<token>). */
+  ownerLink: boolean
+  /** Cho phép đăng phản hồi lên Google qua Make (Business Profile API). Không có thì copy và dán tay. */
+  postViaMake: boolean
+  /** Số lần bấm "Kiểm tra review ngay" (gọi nguồn dữ liệu trả phí) mỗi tháng. */
+  manualChecksPerMonth: number
+}
+
 export type Entitlements = {
   /** Số việc trong kế hoạch được mở (null = tất cả). */
   taskLimit: number | null
@@ -45,6 +61,7 @@ export type Entitlements = {
   monitoring: boolean
   maxClients: number
   rankGrid: RankGridEntitlement
+  reviews: ReviewEntitlement
 }
 
 /**
@@ -60,10 +77,33 @@ export const RANK_GRID_LIMITS: Record<PlanKey, RankGridEntitlement> = {
   full: { gridSizes: [5, 7, 9], defaultGridSize: 7, maxKeywords: 10, frequency: 'weekly', manualScansPerMonth: 8, trialScans: 0, monthlyPointCap: 4_700 },
 }
 
+/**
+ * Hạn mức hộp thư review (chốt mặc định 28/11/2026, đổi ở đây là đủ).
+ * Chi phí (ước tính, 26.800đ/USD): Outscraper ~$3/1.000 review (500 review đầu mỗi 30 ngày miễn phí cho cả tài khoản),
+ * Claude Sonnet ~170đ/bản nháp. Hồ sơ nhỏ ở VN thường có 5–30 review mới/tháng.
+ *  - Miễn phí: không tự quét; xem review lấy được từ lần kiểm tra hồ sơ gần nhất, 5 bản nháp AI bấm tay/tháng, copy và dán.
+ *  - Khởi động: quét hàng tuần, tự soạn nháp, 40 nháp/tháng, link duyệt cho chủ quán, đăng qua Make, 2 lần quét tay/tháng.
+ *  - Nâng cao: quét hàng ngày, tự soạn nháp, 150 nháp/tháng, link duyệt, đăng qua Make, 8 lần quét tay/tháng.
+ * Có thể ghi đè trần nháp bằng env REVIEW_DRAFTS_FREE / REVIEW_DRAFTS_BASIC / REVIEW_DRAFTS_FULL (xem reviewEntitlement()).
+ */
+export const REVIEW_LIMITS: Record<PlanKey, ReviewEntitlement> = {
+  free: { frequency: 'none', autoDraft: false, monthlyDrafts: 5, ownerLink: false, postViaMake: false, manualChecksPerMonth: 0 },
+  basic: { frequency: 'weekly', autoDraft: true, monthlyDrafts: 40, ownerLink: true, postViaMake: true, manualChecksPerMonth: 2 },
+  full: { frequency: 'daily', autoDraft: true, monthlyDrafts: 150, ownerLink: true, postViaMake: true, manualChecksPerMonth: 8 },
+}
+
+/** Hạn mức review sau khi áp env ghi đè (số không hợp lệ thì bỏ qua). Thuần, test được (truyền env giả). */
+export function reviewEntitlement(plan: PlanKey, env: Record<string, string | undefined> = process.env): ReviewEntitlement {
+  const base = REVIEW_LIMITS[plan]
+  const raw = env[`REVIEW_DRAFTS_${plan.toUpperCase()}`]
+  const n = raw != null && raw !== '' ? Number(raw) : NaN
+  return Number.isInteger(n) && n >= 0 && n <= 10_000 ? { ...base, monthlyDrafts: n } : base
+}
+
 export const ENTITLEMENTS: Record<PlanKey, Entitlements> = {
-  free: { taskLimit: 3, auditActionLimit: 3, advanceAdvice: false, monitoring: false, maxClients: 1, rankGrid: RANK_GRID_LIMITS.free },
-  basic: { taskLimit: null, auditActionLimit: null, advanceAdvice: true, monitoring: false, maxClients: 1, rankGrid: RANK_GRID_LIMITS.basic },
-  full: { taskLimit: null, auditActionLimit: null, advanceAdvice: true, monitoring: true, maxClients: 1, rankGrid: RANK_GRID_LIMITS.full },
+  free: { taskLimit: 3, auditActionLimit: 3, advanceAdvice: false, monitoring: false, maxClients: 1, rankGrid: RANK_GRID_LIMITS.free, reviews: REVIEW_LIMITS.free },
+  basic: { taskLimit: null, auditActionLimit: null, advanceAdvice: true, monitoring: false, maxClients: 1, rankGrid: RANK_GRID_LIMITS.basic, reviews: REVIEW_LIMITS.basic },
+  full: { taskLimit: null, auditActionLimit: null, advanceAdvice: true, monitoring: true, maxClients: 1, rankGrid: RANK_GRID_LIMITS.full, reviews: REVIEW_LIMITS.full },
 }
 
 export function normalizePlan(v: unknown): PlanKey {

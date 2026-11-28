@@ -1,0 +1,391 @@
+{
+  "name": "AUTOPOST + REVIEWS – Đăng bài và phản hồi review GBP (bản mở rộng)",
+  "description": "Thiết kế mở rộng scenario 8857752 (AUTOPOST) thêm 2 nhánh cho hộp thư review, để vẫn chỉ dùng 1 scenario trên gói Make Free. CHƯA tạo/sửa gì trên Make. Nhánh 1 (autopost) giữ nguyên các module 2–7 của make-autopost-blueprint.json.",
+  "targetScenarioId": 8857752,
+  "teamId": 3787580,
+  "organizationId": 9757224,
+  "zone": "eu1.make.com",
+  "isActive": false,
+  "scheduling": {
+    "type": "daily",
+    "time": [
+      "09:00",
+      "19:00"
+    ],
+    "_note": "Make chạy cả 3 nhánh mỗi lần. Nhánh review chỉ tốn thao tác khi app trả item (prepare trả items rỗng = 2 thao tác/lần)."
+  },
+  "placeholders": {
+    "APP_URL": "https://REPLACE_WITH_APP_URL",
+    "AUTOPOST_SECRET": "REPLACE_WITH_AUTOPOST_SECRET (hoặc REVIEWS_MAKE_SECRET nếu đặt riêng)",
+    "gbp_connection": null,
+    "instructions": [
+      "Chỉ làm sau khi: migration 029 đã chạy, NEXT_PUBLIC_REVIEW_INBOX_ENABLED=true đã deploy, và nhánh autopost đã đăng thử thành công với connection Google Business Profile.",
+      "Trong editor scenario 8857752: chèn Router (id 20) ngay sau module 1 (Set variables). Kéo các module autopost cũ (2–7) vào nhánh 1.",
+      "Thêm nhánh 2 (đồng bộ review) và nhánh 3 (đăng phản hồi) như flow dưới. Make chạy các nhánh của Router THEO THỨ TỰ, nên nhánh 3 luôn chạy sau khi nhánh 2 xong (ghép tên review trước rồi mới đăng).",
+      "Gắn CÙNG connection Google Business Profile cho module 23 và 32 (__IMTCONN__).",
+      "Mỗi doanh nghiệp cần clients.gbp_location_resource dạng accounts/{accountId}/locations/{locationId} (giống autopost). Tài khoản Google của connection phải là Owner/Manager của hồ sơ.",
+      "Run once để thử; xem kết quả trong app: /clients/<id>/reviews."
+    ]
+  },
+  "flow": [
+    {
+      "id": 1,
+      "module": "util:SetVariables",
+      "version": 1,
+      "label": "Đặt APP_URL và AUTOPOST_SECRET (module có sẵn)",
+      "mapper": {
+        "variables": [
+          {
+            "name": "APP_URL",
+            "value": "https://REPLACE_WITH_APP_URL"
+          },
+          {
+            "name": "AUTOPOST_SECRET",
+            "value": "REPLACE_WITH_AUTOPOST_SECRET"
+          }
+        ]
+      },
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 20,
+      "module": "builtin:BasicRouter",
+      "version": 1,
+      "label": "Router: autopost → đồng bộ review → đăng phản hồi",
+      "routes": [
+        {
+          "label": "1. Autopost (giữ nguyên module 2–7 hiện có)",
+          "flow": [
+            {
+              "_ref": "make-autopost-blueprint.json flow id 2..7"
+            }
+          ]
+        },
+        {
+          "label": "2. Đồng bộ review từ Business Profile API",
+          "flow": [
+            {
+              "id": 21,
+              "module": "http:MakeRequest",
+              "version": 4,
+              "label": "Lấy danh sách location cần đồng bộ",
+              "parameters": {
+                "authenticationType": "noAuth"
+              },
+              "mapper": {
+                "url": "{{1.APP_URL}}/api/reviews/prepare",
+                "method": "post",
+                "headers": [
+                  {
+                    "name": "Authorization",
+                    "value": "Bearer {{1.AUTOPOST_SECRET}}"
+                  }
+                ],
+                "contentType": "json",
+                "inputMethod": "jsonString",
+                "jsonStringBodyContent": "{\"phase\":\"sync\",\"limit\":20}",
+                "parseResponse": true,
+                "stopOnHttpError": true
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": 300
+                }
+              }
+            },
+            {
+              "id": 22,
+              "module": "builtin:BasicFeeder",
+              "version": 1,
+              "label": "Lặp từng location",
+              "mapper": {
+                "array": "{{21.data.items}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 900,
+                  "y": 300
+                }
+              }
+            },
+            {
+              "id": 23,
+              "module": "google-my-business:makeApiCall",
+              "version": 1,
+              "label": "GET danh sách review (50 mới nhất)",
+              "parameters": {
+                "__IMTCONN__": null
+              },
+              "mapper": {
+                "domain": "https://mybusiness.googleapis.com",
+                "method": "GET",
+                "url": "{{22.path}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 1200,
+                  "y": 300
+                }
+              },
+              "onerror": [
+                {
+                  "id": 25,
+                  "module": "http:MakeRequest",
+                  "version": 4,
+                  "label": "Báo lỗi đồng bộ",
+                  "parameters": {
+                    "authenticationType": "noAuth"
+                  },
+                  "mapper": {
+                    "url": "{{1.APP_URL}}/api/reviews/sync",
+                    "method": "post",
+                    "headers": [
+                      {
+                        "name": "Authorization",
+                        "value": "Bearer {{1.AUTOPOST_SECRET}}"
+                      }
+                    ],
+                    "contentType": "json",
+                    "inputMethod": "jsonString",
+                    "jsonStringBodyContent": "{\"client_id\":\"{{22.client_id}}\",\"location_resource\":\"{{22.location_resource}}\",\"response\":{\"error\":{\"message\":\"Make: lỗi gọi GBP API {{23.statusCode}}\"}}}",
+                    "parseResponse": true,
+                    "stopOnHttpError": false
+                  },
+                  "metadata": {
+                    "designer": {
+                      "x": 1200,
+                      "y": 600
+                    }
+                  }
+                },
+                {
+                  "id": 26,
+                  "module": "builtin:Ignore",
+                  "version": 1,
+                  "label": "Sang location tiếp",
+                  "mapper": {},
+                  "metadata": {
+                    "designer": {
+                      "x": 1500,
+                      "y": 600
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "id": 27,
+              "module": "json:TransformToJSON",
+              "version": 1,
+              "label": "Chuyển body GBP thành chuỗi JSON",
+              "mapper": {
+                "object": "{{23.body}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 1500,
+                  "y": 300
+                }
+              }
+            },
+            {
+              "id": 24,
+              "module": "http:MakeRequest",
+              "version": 4,
+              "label": "Gửi review về app (/api/reviews/sync)",
+              "parameters": {
+                "authenticationType": "noAuth"
+              },
+              "mapper": {
+                "url": "{{1.APP_URL}}/api/reviews/sync",
+                "method": "post",
+                "headers": [
+                  {
+                    "name": "Authorization",
+                    "value": "Bearer {{1.AUTOPOST_SECRET}}"
+                  }
+                ],
+                "contentType": "json",
+                "inputMethod": "jsonString",
+                "jsonStringBodyContent": "{\"client_id\":\"{{22.client_id}}\",\"location_resource\":\"{{22.location_resource}}\",\"response\":{{27.json}}}",
+                "parseResponse": true,
+                "stopOnHttpError": false
+              },
+              "metadata": {
+                "designer": {
+                  "x": 1800,
+                  "y": 300
+                }
+              }
+            }
+          ]
+        },
+        {
+          "label": "3. Đăng phản hồi đã duyệt",
+          "flow": [
+            {
+              "id": 31,
+              "module": "http:MakeRequest",
+              "version": 4,
+              "label": "Nhận phản hồi đã duyệt (khoá để đăng)",
+              "parameters": {
+                "authenticationType": "noAuth"
+              },
+              "mapper": {
+                "url": "{{1.APP_URL}}/api/reviews/prepare",
+                "method": "post",
+                "headers": [
+                  {
+                    "name": "Authorization",
+                    "value": "Bearer {{1.AUTOPOST_SECRET}}"
+                  }
+                ],
+                "contentType": "json",
+                "inputMethod": "jsonString",
+                "jsonStringBodyContent": "{\"phase\":\"post\",\"limit\":20}",
+                "parseResponse": true,
+                "stopOnHttpError": true
+              },
+              "metadata": {
+                "designer": {
+                  "x": 600,
+                  "y": 900
+                }
+              }
+            },
+            {
+              "id": 30,
+              "module": "builtin:BasicFeeder",
+              "version": 1,
+              "label": "Lặp từng phản hồi",
+              "mapper": {
+                "array": "{{31.data.items}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 900,
+                  "y": 900
+                }
+              }
+            },
+            {
+              "id": 32,
+              "module": "google-my-business:makeApiCall",
+              "version": 1,
+              "label": "PUT reviews/{r}/reply",
+              "parameters": {
+                "__IMTCONN__": null
+              },
+              "mapper": {
+                "domain": "https://mybusiness.googleapis.com",
+                "method": "PUT",
+                "url": "{{30.path}}",
+                "body": "{{30.body_json}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 1200,
+                  "y": 900
+                }
+              },
+              "onerror": [
+                {
+                  "id": 34,
+                  "module": "http:MakeRequest",
+                  "version": 4,
+                  "label": "Báo kết quả lỗi",
+                  "parameters": {
+                    "authenticationType": "noAuth"
+                  },
+                  "mapper": {
+                    "url": "{{1.APP_URL}}/api/reviews/result",
+                    "method": "post",
+                    "headers": [
+                      {
+                        "name": "Authorization",
+                        "value": "Bearer {{1.AUTOPOST_SECRET}}"
+                      }
+                    ],
+                    "contentType": "json",
+                    "inputMethod": "jsonString",
+                    "jsonStringBodyContent": "{\"reply_id\":\"{{30.reply_id}}\",\"success\":false,\"http_status\":\"{{32.statusCode}}\",\"error_message\":\"{{replace(replace(32.message; \"\\\"\"; \"'\"); newline; \" \")}}\",\"make_execution_id\":\"{{execution.id}}\"}",
+                    "parseResponse": true,
+                    "stopOnHttpError": false
+                  },
+                  "metadata": {
+                    "designer": {
+                      "x": 1200,
+                      "y": 1200
+                    }
+                  }
+                },
+                {
+                  "id": 35,
+                  "module": "builtin:Ignore",
+                  "version": 1,
+                  "label": "Sang phản hồi tiếp",
+                  "mapper": {},
+                  "metadata": {
+                    "designer": {
+                      "x": 1500,
+                      "y": 1200
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "id": 33,
+              "module": "http:MakeRequest",
+              "version": 4,
+              "label": "Báo kết quả thành công",
+              "parameters": {
+                "authenticationType": "noAuth"
+              },
+              "mapper": {
+                "url": "{{1.APP_URL}}/api/reviews/result",
+                "method": "post",
+                "headers": [
+                  {
+                    "name": "Authorization",
+                    "value": "Bearer {{1.AUTOPOST_SECRET}}"
+                  }
+                ],
+                "contentType": "json",
+                "inputMethod": "jsonString",
+                "jsonStringBodyContent": "{\"reply_id\":\"{{30.reply_id}}\",\"success\":true,\"http_status\":\"{{32.statusCode}}\",\"reply_state\":\"{{32.body.reviewReplyState}}\",\"make_execution_id\":\"{{execution.id}}\"}",
+                "parseResponse": true,
+                "stopOnHttpError": false
+              },
+              "metadata": {
+                "designer": {
+                  "x": 1500,
+                  "y": 900
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0
+        }
+      }
+    }
+  ],
+  "operations_estimate": {
+    "_note": "Make Free = 1.000 thao tác/tháng. Mỗi module chạy = 1 thao tác. Ước tính cho 10 hồ sơ, 2 lượt/ngày (60 lượt/tháng).",
+    "branch2_sync": "prepare 1/lượt (60) + mỗi location cần đồng bộ: GET 1 + JSON 1 + HTTP 1 = 3. Mặc định đồng bộ mỗi 7 ngày hoặc khi có phản hồi chờ ghép: ~10 hồ sơ × ~6 lần/tháng × 3 = ~180.",
+    "branch3_post": "prepare 1/lượt (60) + mỗi phản hồi: PUT 1 + báo kết quả 1 = 2. 10 hồ sơ × ~6 phản hồi/tháng × 2 = ~120.",
+    "total_reviews": "~420 thao tác/tháng (+ phần autopost). Nếu sát trần: giảm lịch còn 1 lượt/ngày (−60 mỗi nhánh) hoặc tăng REVIEWS_GBP_SYNC_EVERY_HOURS."
+  },
+  "alternative_standalone": "Nếu muốn tách riêng: tạo scenario thứ 2 (gói Free cho 2 scenario hoạt động, hiện dùng 1) chỉ gồm module 1 + nhánh 2 + nhánh 3, lịch 1 lần/ngày 10:00. Khi đó hết slot cho scenario khác."
+}

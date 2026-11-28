@@ -1,6 +1,6 @@
 // Phía server: đọc gói hiệu lực của workspace + cắt dữ liệu theo gói. Dùng service role (người dùng không tự sửa được gói).
 import { supabaseAdmin } from '@/lib/supabase/admin'
-import { ENTITLEMENTS, normalizePlan, resolveEffectivePlan, type Entitlements, type PlanKey } from './plans'
+import { ENTITLEMENTS, normalizePlan, resolveEffectivePlan, reviewEntitlement, type Entitlements, type PlanKey, type ReviewEntitlement } from './plans'
 
 export type PlanState = {
   plan: PlanKey
@@ -67,6 +67,34 @@ export async function workspaceIdsWithMonitoring(workspaceIds: string[]): Promis
     }
   }
   return out
+}
+
+/**
+ * Gói hiệu lực của nhiều workspace một lúc (cho cron hộp thư review). Cùng quy tắc ân hạn với getPlanState.
+ * Lỗi truy vấn -> ném lỗi (không chạy), để không vô tình tặng tính năng trả phí.
+ */
+export async function effectivePlansFor(workspaceIds: string[]): Promise<Map<string, PlanKey>> {
+  const ids = [...new Set(workspaceIds.filter(Boolean))]
+  const out = new Map<string, PlanKey>()
+  for (let i = 0; i < ids.length; i += 100) {
+    const chunk = ids.slice(i, i + 100)
+    const [wsRes, subRes] = await Promise.all([
+      supabaseAdmin.from('workspaces').select('id,plan').in('id', chunk),
+      supabaseAdmin.from('subscriptions').select('workspace_id,current_period_end').eq('status', 'active').in('workspace_id', chunk),
+    ])
+    if (wsRes.error) throw wsRes.error
+    if (subRes.error) throw subRes.error
+    const activeByWs = new Map<string, { current_period_end: string }>()
+    for (const sub of subRes.data || []) activeByWs.set((sub as any).workspace_id, sub as any)
+    for (const ws of wsRes.data || []) out.set((ws as any).id, resolveEffectivePlan((ws as any).plan, activeByWs.get((ws as any).id)))
+  }
+  return out
+}
+
+/** Hạn mức hộp thư review của 1 workspace (đã áp env ghi đè). */
+export async function getReviewEntitlement(workspaceId: string): Promise<{ plan: PlanKey; reviews: ReviewEntitlement }> {
+  const { plan } = await getPlanState(workspaceId)
+  return { plan, reviews: reviewEntitlement(plan) }
 }
 
 export async function getEntitlements(workspaceId: string): Promise<Entitlements> {

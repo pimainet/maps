@@ -56,18 +56,20 @@ thiếu `posts` thì ghi "không kết luận là chưa đăng bài". Danh sách
 
 Kiểm tra: `npm run test:logic` (mapping Outscraper, lớp mạng với fetch giả, dựng prompt audit...).
 
-## Review Watch (theo dõi review hàng tuần)
+## Hộp thư review (Review Watch + phản hồi) — mặc định TẮT
 
-Mỗi thứ Hai 09:00 giờ Việt Nam (`vercel.json`), hệ thống lấy review mới của từng doanh nghiệp (chỉ phần mới từ lần trước,
-rẻ), tự tạo việc **ưu tiên cao kèm bản nháp phản hồi** cho review ≤ 3★ chưa được phản hồi, và gộp review tốt chưa phản hồi
-thành 1 việc mức thấp. Không tạo việc trùng.
+Chi tiết: `docs/REVIEW_INBOX.md`. Thay thế 018 (chưa từng chạy trên DB thật) bằng `029_review_inbox.sql`:
+mỗi review 1 dòng (khớp giữa Outscraper / SearchApi / SerpApi / Business Profile API), phân loại khẩn, nháp phản hồi AI theo
+số sao, vòng đời duyệt `new → drafted → approved → posted | manual_copied | ignored | replied_elsewhere | failed`,
+trang `/clients/<id>/reviews`, link duyệt cho chủ quán `/r/<token>`, đăng qua Make (tuỳ chọn) hoặc copy dán tay.
 
-1. Chạy migration `supabase/migrations/018_review_watch.sql`.
-2. Đặt `REVIEW_WATCH_ENABLED=true` (mặc định TẮT vì tốn credit Outscraper và Claude), cùng `CRON_SECRET`, `OUTSCRAPER_API_KEY`.
-3. Xem trước: `GET /api/cron/review-watch?dry=1` với header `Authorization: Bearer <CRON_SECRET>`. Thêm `&client_id=<uuid>` để thử 1 doanh nghiệp.
-4. `REVIEW_WATCH_MAX_CLIENTS` (mặc định 30) giới hạn số doanh nghiệp mỗi lần chạy; doanh nghiệp kiểm tra lâu nhất được ưu tiên.
+1. Chạy migration `supabase/migrations/029_review_inbox.sql` (KHÔNG chạy 018).
+2. `NEXT_PUBLIC_REVIEW_INBOX_ENABLED=true` rồi redeploy. Cron tự lấy review (hàng ngày 09:00 VN, tần suất thật theo gói):
+   thêm `REVIEW_WATCH_ENABLED=true`, `CRON_SECRET`, `OUTSCRAPER_API_KEY` (tuỳ chọn `SEARCHAPI_API_KEY`, `SERPAPI_API_KEY`).
+3. Xem trước: `GET /api/cron/review-watch?dry=1` (header `Authorization: Bearer <CRON_SECRET>`), `&client_id=<uuid>` cho 1 doanh nghiệp.
+4. `REVIEW_WATCH_MAX_CLIENTS` (mặc định 30) giới hạn số doanh nghiệp mỗi lượt; `REVIEW_DRAFTS_FREE|BASIC|FULL` ghi đè trần nháp AI.
 
-Kiểm tra logic: `npx tsx scripts/test-review-watch.ts`.
+Kiểm tra logic: `npx tsx scripts/test-review-watch.ts && npx tsx scripts/test-review-inbox.ts`.
 
 ## So sánh đối thủ và thứ hạng tìm kiếm (Audit Engine v2)
 

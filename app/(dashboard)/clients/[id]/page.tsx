@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowUpRight, BarChart3, ClipboardCheck, FileText, ImagePlus, MapPinned, Target } from 'lucide-react'
+import { ArrowUpRight, BarChart3, ClipboardCheck, FileText, ImagePlus, MapPinned, MessageSquareReply, Target } from 'lucide-react'
 import { Card } from '@/components/dashboard/shared'
 import { TASK_TYPE_LABEL, PRIORITY_LABEL } from '@/lib/ui-constants'
 import { useToast } from '@/components/dashboard/toast-context'
 import { ClientInfoCard } from '@/components/dashboard/client-info-card'
-import { AUTO_POST_ENABLED, RANK_GRID_ENABLED } from '@/lib/features'
+import { AUTO_POST_ENABLED, RANK_GRID_ENABLED, REVIEW_INBOX_ENABLED } from '@/lib/features'
 
 export default function ClientDetailPage() {
   const router = useRouter()
@@ -113,6 +113,11 @@ export default function ClientDetailPage() {
           {AUTO_POST_ENABLED && (
             <button className="secondary-button" onClick={() => router.push(`/clients/${client.id}/photos`)}>
               <ImagePlus size={18} /> Kho ảnh đăng bài
+            </button>
+          )}
+          {REVIEW_INBOX_ENABLED && (
+            <button className="secondary-button" onClick={() => router.push(`/clients/${client.id}/reviews`)}>
+              <MessageSquareReply size={18} /> Hộp thư review
             </button>
           )}
           {RANK_GRID_ENABLED && (

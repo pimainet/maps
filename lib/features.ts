@@ -15,3 +15,15 @@ export const AUTO_POST_ENABLED = false
  * Trước khi bật: chạy migration 027 và đặt DATAFORSEO_LOGIN/DATAFORSEO_PASSWORD + RANKGRID_PINGBACK_SECRET.
  */
 export const RANK_GRID_ENABLED = process.env.NEXT_PUBLIC_RANK_GRID_ENABLED === 'true'
+
+/**
+ * REVIEW_INBOX_ENABLED (mặc định TẮT) -> hộp thư review: trang /clients/[id]/reviews, link duyệt /r/<token>,
+ * API /api/reviews/* và /api/public/reviews. Bật bằng NEXT_PUBLIC_REVIEW_INBOX_ENABLED=true rồi redeploy.
+ * Trước khi bật: chạy migration 029_review_inbox.sql (và có ANTHROPIC_API_KEY để soạn nháp).
+ * Cron tự lấy review (tốn credit) cần THÊM REVIEW_WATCH_ENABLED=true (chỉ đọc ở server).
+ */
+export const REVIEW_INBOX_ENABLED = process.env.NEXT_PUBLIC_REVIEW_INBOX_ENABLED === 'true'
+
+export function reviewWatchCronOn(): boolean {
+  return REVIEW_INBOX_ENABLED && process.env.REVIEW_WATCH_ENABLED === 'true'
+}
