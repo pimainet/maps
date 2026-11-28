@@ -1,3 +1,4 @@
+-- ĐÃ ĐƯỢC THAY THẾ bởi 029_review_inbox.sql — KHÔNG chạy file này nữa (giữ lại để tham khảo lịch sử).
 -- Migration 018: Review Watch — theo dõi review mới hàng tuần và tự tạo việc phản hồi.
 --
 -- - review_watch_state: mỗi doanh nghiệp 1 dòng, nhớ lần kiểm tra gần nhất (làm mốc `cutoff` cho Outscraper)
