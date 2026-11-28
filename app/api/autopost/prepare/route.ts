@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { publicError } from '@/lib/api-error'
 import { autoPostFeatureOn, authorizedAutopost, isUuid } from '@/lib/autopost/secret'
 import { generateCaption } from '@/lib/autopost/write-caption'
+import { DONE_FOR_YOU_ENABLED } from '@/lib/features'
+import { isDoneForYouWorkspace } from '@/lib/agency/server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -46,9 +48,14 @@ export async function POST(req: Request) {
     for (const row of rows) {
       const { data: client } = await supabaseAdmin
         .from('clients')
-        .select('id, name, industry, area, brand_voice, autopost_review_mode')
+        .select('id, name, industry, area, brand_voice, autopost_review_mode, workspace_id')
         .eq('id', row.client_id)
         .maybeSingle()
+
+      // Gói Làm hộ: khách không duyệt, nhưng bài VẪN phải qua tay nhân viên (hàng đợi /agency) trước khi đăng.
+      // Nên luôn để needs_review, kể cả khi doanh nghiệp tắt "duyệt tay".
+      const staffReview = DONE_FOR_YOU_ENABLED && !!client?.workspace_id && (await isDoneForYouWorkspace(client.workspace_id).catch(() => false))
+      const needsReview = client?.autopost_review_mode !== false || staffReview
 
       const { data: recent } = await supabaseAdmin
         .from('autopost_queue')
@@ -75,7 +82,7 @@ export async function POST(req: Request) {
         p_queue_id: row.queue_id,
         p_caption: caption,
         p_max_similarity: 0.55,
-        p_needs_review: client?.autopost_review_mode !== false,
+        p_needs_review: needsReview,
       })
       if (setErr) throw setErr
 
@@ -96,7 +103,7 @@ export async function POST(req: Request) {
           p_queue_id: row.queue_id,
           p_caption: retry,
           p_max_similarity: 0.55,
-          p_needs_review: client?.autopost_review_mode !== false,
+          p_needs_review: needsReview,
         })
         if (setErr2) throw setErr2
         captionResult = setRes2
@@ -107,7 +114,7 @@ export async function POST(req: Request) {
         // Để needs_review nếu không chèn được — không đẩy sang Make.
         continue
       }
-      if (client?.autopost_review_mode !== false) {
+      if (needsReview) {
         // Bài chờ duyệt tay, không đưa vào lượt đăng lần này.
         continue
       }

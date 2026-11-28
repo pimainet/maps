@@ -15,7 +15,8 @@ export type ActionInput = {
   text?: string | null
   instruction?: string | null
   userId?: string | null
-  via: 'dashboard' | 'owner_link'
+  /** 'agency' = nhân viên agency duyệt thay khách (gói Làm hộ). */
+  via: 'dashboard' | 'owner_link' | 'agency'
 }
 
 export type ActionResult =

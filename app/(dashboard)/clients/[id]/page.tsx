@@ -7,7 +7,7 @@ import { Card } from '@/components/dashboard/shared'
 import { TASK_TYPE_LABEL, PRIORITY_LABEL } from '@/lib/ui-constants'
 import { useToast } from '@/components/dashboard/toast-context'
 import { ClientInfoCard } from '@/components/dashboard/client-info-card'
-import { AUTO_POST_ENABLED, RANK_GRID_ENABLED, REVIEW_INBOX_ENABLED } from '@/lib/features'
+import { AUTO_POST_ENABLED, DONE_FOR_YOU_ENABLED, RANK_GRID_ENABLED, REVIEW_INBOX_ENABLED } from '@/lib/features'
 
 export default function ClientDetailPage() {
   const router = useRouter()
@@ -20,6 +20,12 @@ export default function ClientDetailPage() {
   const [error, setError] = useState('')
   const [pendingTasks, setPendingTasks] = useState<any[]>([])
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [managed, setManaged] = useState(false)
+
+  useEffect(() => {
+    if (!DONE_FOR_YOU_ENABLED) return
+    fetch('/api/billing/plan').then((r) => (r.ok ? r.json() : null)).then((d) => setManaged(d?.plan === 'done_for_you')).catch(() => {})
+  }, [])
 
   useEffect(() => {
     async function load() {
@@ -118,6 +124,11 @@ export default function ClientDetailPage() {
           {REVIEW_INBOX_ENABLED && (
             <button className="secondary-button" onClick={() => router.push(`/clients/${client.id}/reviews`)}>
               <MessageSquareReply size={18} /> Hộp thư review
+            </button>
+          )}
+          {managed && (
+            <button className="secondary-button" onClick={() => router.push(`/clients/${client.id}/monthly-report`)}>
+              <BarChart3 size={18} /> Báo cáo hằng tháng
             </button>
           )}
           {RANK_GRID_ENABLED && (

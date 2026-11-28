@@ -4,13 +4,15 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Card } from '@/components/dashboard/shared'
 import { useToast } from '@/components/dashboard/toast-context'
+import { ConsultCard } from '@/components/agency/consult-card'
 
 type Catalog = { plan: 'basic' | 'full'; label: string; monthly: number; entitlements: any; prices: { months: number; amount: number }[] }
-type PlanInfo = { plan: string; label: string; period_end: string | null; scheduled: { plan: string; start: string } | null; catalog: Catalog[] }
+type PlanInfo = { plan: string; label: string; period_end: string | null; scheduled: { plan: string; start: string } | null; catalog: Catalog[]; done_for_you?: { label: string; monthly: number } | null }
 type Transfer = { bank_id: string; account_no: string; account_name: string; amount: number; content: string; qr_url: string }
 type Order = { order_code: number; plan: string; period_months: number; amount_vnd: number; paid_amount_vnd?: number | null; status: string; created_at: string; paid_at: string | null; expires_at?: string; receipt_no?: string | null; transfer?: Transfer }
 
 const vnd = (n: number) => n.toLocaleString('vi-VN') + 'đ'
+const PLAN_NAME: Record<string, string> = { basic: 'Khởi động', full: 'Nâng cao', done_for_you: 'Làm hộ' }
 const date = (s: string | null) => (s ? new Date(s).toLocaleDateString('vi-VN') : '')
 
 // Tính năng đang bật theo cờ (bản dựng nào tắt thì không quảng cáo)
@@ -182,6 +184,8 @@ export default function BillingPage() {
         {error && <div className="alert alert-error" style={{ marginTop: 12 }}>{error}</div>}
       </Card>
 
+      {info.done_for_you && <ConsultCard monthly={info.done_for_you.monthly} currentPlan={info.plan} periodEnd={info.period_end} />}
+
       {transfer && (
         <Card>
           <div className="section-head"><div><h2>Chuyển khoản</h2><p>Quét mã QR bằng app ngân hàng (đã điền sẵn số tiền và nội dung). Gói tự bật sau khi tiền vào tài khoản, thường trong 1–2 phút; biên nhận gửi qua email. Giữ nguyên nội dung chuyển khoản để hệ thống nhận ra đơn của bạn.</p></div></div>
@@ -212,7 +216,7 @@ export default function BillingPage() {
           {orders.map((o) => (
             <div key={o.order_code} className="client-row" style={{ gap: 12, flexWrap: 'wrap' }}>
               <div className="row-main">
-                <strong>{o.plan === 'full' ? 'Nâng cao' : 'Khởi động'} · {o.period_months} tháng · {vnd(o.amount_vnd)}</strong>
+                <strong>{PLAN_NAME[o.plan] || o.plan} · {o.period_months} tháng · {vnd(o.amount_vnd)}</strong>
                 <span>
                   LGOS{o.order_code} · {STATUS_LABEL[o.status] || o.status}
                   {o.status === 'partial' && o.paid_amount_vnd ? ` (đã nhận ${vnd(o.paid_amount_vnd)}, còn thiếu ${vnd(o.amount_vnd - o.paid_amount_vnd)})` : ''}

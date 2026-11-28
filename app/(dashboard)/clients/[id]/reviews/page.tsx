@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { Check, Copy, ExternalLink, Link2, MessageSquareReply, RefreshCw, Sparkles, Star, Undo2, X } from 'lucide-react'
 import { Card } from '@/components/dashboard/shared'
 import { useToast } from '@/components/dashboard/toast-context'
-import { REVIEW_INBOX_ENABLED } from '@/lib/features'
+import { DONE_FOR_YOU_ENABLED, REVIEW_INBOX_ENABLED } from '@/lib/features'
 
 type Review = {
   id: string
@@ -283,7 +283,7 @@ export default function ClientReviewsPage() {
         ) : (
           <div style={{ display: 'grid', gap: 12 }}>
             {list.map((r) => (
-              <ReviewCard key={r.id} r={r} busy={busy} autoPost={autoPost} canDraft={data.drafts_used < ent.monthlyDrafts} onAct={act} />
+              <ReviewCard key={r.id} r={r} busy={busy} autoPost={autoPost} canDraft={data.drafts_used < ent.monthlyDrafts} managed={DONE_FOR_YOU_ENABLED && data.plan === 'done_for_you'} onAct={act} />
             ))}
           </div>
         )}
@@ -297,12 +297,14 @@ function ReviewCard({
   busy,
   autoPost,
   canDraft,
+  managed,
   onAct,
 }: {
   r: Review
   busy: string | null
   autoPost: boolean
   canDraft: boolean
+  managed: boolean
   onAct: (r: Review, action: string, extra?: { text?: string; instruction?: string }) => Promise<boolean>
 }) {
   const { showToast } = useToast()
@@ -361,13 +363,13 @@ function ReviewCard({
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          readOnly={!open}
+          readOnly={!open || managed}
           rows={Math.min(8, Math.max(3, Math.ceil(text.length / 90)))}
           placeholder={open ? 'Chưa có bản nháp. Bấm "Soạn bằng AI" hoặc tự viết phản hồi…' : ''}
           style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, fontFamily: 'inherit' }}
         />
       ) : null}
-      {open ? (
+      {open && !managed ? (
         <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
           <input
             value={instruction}
@@ -379,7 +381,10 @@ function ReviewCard({
         </div>
       ) : null}
 
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+      {managed ? (
+        <p style={{ fontSize: 13, color: '#6b7280', marginTop: 8 }}>Gói Làm hộ: đội ngũ của chúng tôi soạn, duyệt và đăng phản hồi này thay bạn, bạn không cần làm gì.</p>
+      ) : null}
+      <div style={{ display: managed ? 'none' : 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
         {open ? (
           <>
             <button

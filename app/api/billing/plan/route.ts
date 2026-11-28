@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { errorStatus, publicError } from '@/lib/api-error'
 import { requireActiveWorkspaceId } from '@/lib/auth'
 import { getPlanState } from '@/lib/billing/server'
+import { DONE_FOR_YOU_ENABLED } from '@/lib/features'
 import { ENTITLEMENTS, MONTHLY_PRICE_VND, PERIODS, PLAN_LABEL, priceFor } from '@/lib/billing/plans'
 
 export const runtime = 'nodejs'
@@ -18,6 +19,8 @@ export async function GET() {
       period_end: state.periodEnd,
       scheduled: state.scheduled,
       entitlements: state.entitlements,
+      // Gói Làm hộ: không tự mua (không có trong catalog); chỉ hiện thẻ "Liên hệ tư vấn" khi bật cờ
+      done_for_you: DONE_FOR_YOU_ENABLED ? { label: PLAN_LABEL.done_for_you, monthly: MONTHLY_PRICE_VND.done_for_you, entitlements: ENTITLEMENTS.done_for_you } : null,
       catalog: (['basic', 'full'] as const).map((p) => ({
         plan: p,
         label: PLAN_LABEL[p],

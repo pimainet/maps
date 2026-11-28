@@ -64,7 +64,7 @@ export type ReviewRow = {
   draft_count: number
   final_reply: string | null
   approved_at: string | null
-  approved_via: 'dashboard' | 'owner_link' | null
+  approved_via: 'dashboard' | 'owner_link' | 'agency' | null
   status: ReviewStatus
   status_changed_at: string
   post_attempts: number

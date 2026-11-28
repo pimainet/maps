@@ -1,8 +1,9 @@
 // POST /api/reviews/action { review_id, action: save|approve|unapprove|copied|ignore|reopen|redraft, text?, instruction? }
 import { NextResponse } from 'next/server'
-import { getCurrentUser, requireActiveWorkspaceId } from '@/lib/auth'
+import { getCurrentUser, isSuperAdmin, requireActiveWorkspaceId } from '@/lib/auth'
 import { isUuid } from '@/lib/autopost/secret'
 import { getReviewEntitlement } from '@/lib/billing/server'
+import { isStaffManaged } from '@/lib/billing/plans'
 import { isActionName } from '@/lib/reviews/lifecycle'
 import { applyReviewAction } from '@/lib/reviews/actions'
 import { inboxOff, REVIEW_COLUMNS, routeError } from '@/lib/reviews/server'
@@ -40,7 +41,11 @@ export async function POST(req: Request) {
       .maybeSingle()
     if (!client) return NextResponse.json({ error: 'Không tìm thấy doanh nghiệp.' }, { status: 404 })
 
-    const { reviews: ent } = await getReviewEntitlement(workspaceId)
+    const { plan, reviews: ent } = await getReviewEntitlement(workspaceId)
+    // Gói Làm hộ: đội ngũ agency duyệt và đăng phản hồi thay khách (xem /agency); khách không sửa/duyệt để tránh đè lên nhau.
+    if (isStaffManaged(plan) && !(await isSuperAdmin())) {
+      return NextResponse.json({ error: 'Gói Làm hộ: đội ngũ của chúng tôi phản hồi review giúp bạn, bạn không cần duyệt.', code: 'staff_managed' }, { status: 403 })
+    }
     const res = await applyReviewAction(admin, review as any, client as any, ent, {
       action: body.action,
       text: body.text ?? null,

@@ -27,3 +27,12 @@ export const REVIEW_INBOX_ENABLED = process.env.NEXT_PUBLIC_REVIEW_INBOX_ENABLED
 export function reviewWatchCronOn(): boolean {
   return REVIEW_INBOX_ENABLED && process.env.REVIEW_WATCH_ENABLED === 'true'
 }
+
+/**
+ * DONE_FOR_YOU_ENABLED (mặc định TẮT) -> gói "Làm hộ" (2.490.000đ/tháng): thẻ gói + form "Liên hệ tư vấn" trên /billing,
+ * hàng đợi công việc của nhân viên (/agency), tạo đơn cho khách (/api/admin/billing/orders), báo cáo tháng.
+ * Bật bằng NEXT_PUBLIC_DONE_FOR_YOU_ENABLED=true rồi redeploy. Trước khi bật: chạy migration 032_done_for_you.sql.
+ * Từng phần của hàng đợi vẫn theo cờ riêng: bài tự đăng cần AUTO_POST_ENABLED, phản hồi review cần REVIEW_INBOX_ENABLED,
+ * báo cáo thứ hạng cần RANK_GRID_ENABLED.
+ */
+export const DONE_FOR_YOU_ENABLED = process.env.NEXT_PUBLIC_DONE_FOR_YOU_ENABLED === 'true'

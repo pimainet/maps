@@ -8,11 +8,12 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { ChevronsUpDown, ClipboardCheck, CreditCard, FileText, House, LogOut, Menu, Plus, Settings, Store, X } from 'lucide-react'
+import { ChevronsUpDown, ClipboardCheck, CreditCard, FileText, House, ListChecks, LogOut, Menu, Plus, Settings, Store, X } from 'lucide-react'
 import { ToastProvider } from './toast-context'
 import { Brand } from './brand'
 import { ROLE_LABEL } from '@/lib/ui-constants'
 import { dedupeFetch } from '@/lib/dedupe-fetch'
+import { DONE_FOR_YOU_ENABLED } from '@/lib/features'
 
 function NavItem({ icon: Icon, label, active, href, count, onNavigate }: any) {
   return (
@@ -30,6 +31,7 @@ type CurrentUser = {
   initials: string
   workspaceName: string
   clientLimit: { maxClients: number; clientCount: number; canAddMore: boolean } | null
+  isSuperadmin: boolean
 }
 
 type PageInfo = { title: string; subtitle: string }
@@ -42,6 +44,8 @@ function pageInfo(pathname: string, clientName: string): PageInfo {
       return { title: 'Kiểm tra hồ sơ Google', subtitle: 'Xem hồ sơ của bạn đang mạnh ở đâu và cần sửa gì.' }
     if (pathname.includes('/plan'))
       return { title: 'Kế hoạch 30 ngày', subtitle: 'Từng bước để khách tìm thấy bạn nhiều hơn trên Google Maps.' }
+    if (pathname.includes('/monthly-report'))
+      return { title: 'Báo cáo hằng tháng', subtitle: 'Thứ hạng trên bản đồ và những việc đã làm trong tháng.' }
     if (pathname.includes('/report'))
       return { title: 'Kết quả', subtitle: 'So sánh trước và sau để thấy kế hoạch có hiệu quả không.' }
     if (pathname.includes('/photos'))
@@ -58,6 +62,8 @@ function pageInfo(pathname: string, clientName: string): PageInfo {
     return { title: 'Tạo không gian làm việc', subtitle: '' }
   if (pathname.startsWith('/workspaces'))
     return { title: 'Không gian làm việc', subtitle: 'Chuyển giữa các không gian làm việc của bạn.' }
+  if (pathname.startsWith('/agency'))
+    return { title: 'Công việc Làm hộ', subtitle: 'Duyệt bài, phản hồi review, việc hồ sơ và báo cáo tháng cho khách gói Làm hộ.' }
   if (pathname.startsWith('/settings'))
     return { title: 'Cài đặt', subtitle: 'Thông tin tài khoản và những người cùng sử dụng.' }
   return { title: 'Trang chủ', subtitle: '' }
@@ -102,6 +108,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           initials,
           workspaceName: data.activeWorkspace?.name || 'Chưa có không gian làm việc',
           clientLimit: data.clientLimit || null,
+          isSuperadmin: !!data.profile.is_superadmin,
         })
         if (Array.isArray(data.workspaces) && data.workspaces.length === 0) {
           router.push('/workspaces/new')
@@ -177,6 +184,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
             href="/contents"
             onNavigate={closeMenu}
           />
+          {DONE_FOR_YOU_ENABLED && currentUser?.isSuperadmin && <NavItem icon={ListChecks} label="Công việc Làm hộ" active={pathname.startsWith('/agency')} href="/agency" onNavigate={closeMenu} />}
           <div className="nav-gap" />
           <NavItem icon={CreditCard} label="Gói dịch vụ" active={pathname.startsWith('/billing')} href="/billing" onNavigate={closeMenu} />
           <NavItem icon={Settings} label="Cài đặt" active={pathname.startsWith('/settings')} href="/settings" onNavigate={closeMenu} />

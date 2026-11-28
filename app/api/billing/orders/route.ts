@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { errorStatus, publicError } from '@/lib/api-error'
 import { getCurrentUser, requireActiveWorkspaceAdmin } from '@/lib/auth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
-import { isPaidPlan, isPeriod, priceFor, transferContent } from '@/lib/billing/plans'
+import { isSelfServePlan, isPeriod, priceFor, transferContent } from '@/lib/billing/plans'
 import { newOrderCode, readBankInfo, vietQrUrl } from '@/lib/billing/orders'
 import { readJsonObject } from '@/lib/request-body'
 
@@ -23,7 +23,8 @@ export async function POST(req: Request) {
     if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: parsed.status })
     const plan = parsed.value.plan
     const months = Number(parsed.value.months)
-    if (!isPaidPlan(plan) || !isPeriod(months)) return NextResponse.json({ error: 'Gói hoặc kỳ hạn không hợp lệ.' }, { status: 400 })
+    // Gói Làm hộ không tự mua được: khách bấm "Liên hệ tư vấn", admin tạo đơn (POST /api/admin/billing/orders)
+    if (!isSelfServePlan(plan) || !isPeriod(months)) return NextResponse.json({ error: 'Gói hoặc kỳ hạn không hợp lệ.' }, { status: 400 })
 
     // Chặn spam đơn: quá 5 đơn đang chờ thì huỷ đơn cũ nhất
     const { data: pending } = await supabaseAdmin.from('payments').select('id').eq('workspace_id', workspaceId).eq('status', 'pending').order('created_at', { ascending: true })

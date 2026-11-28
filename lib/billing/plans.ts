@@ -1,20 +1,27 @@
 // Định nghĩa gói + quyền lợi. THUẦN (không đụng DB) để test được; mọi giá tính ở server từ đây.
-export type PlanKey = 'free' | 'basic' | 'full'
+export type PlanKey = 'free' | 'basic' | 'full' | 'done_for_you'
 export type PaidPlan = Exclude<PlanKey, 'free'>
+/** Gói khách tự mua (tạo đơn + QR trên /billing). 'done_for_you' (Làm hộ) chỉ bán qua tư vấn: admin tạo đơn. */
+export type SelfServePlan = 'basic' | 'full'
 export type PeriodMonths = 1 | 3 | 12
 
 export const PERIODS: PeriodMonths[] = [1, 3, 12]
 
-export const PLAN_LABEL: Record<PlanKey, string> = { free: 'Miễn phí', basic: 'Khởi động', full: 'Nâng cao' }
+export const PLAN_LABEL: Record<PlanKey, string> = { free: 'Miễn phí', basic: 'Khởi động', full: 'Nâng cao', done_for_you: 'Làm hộ' }
 
 /** Giá 1 tháng (VND). Giá phiên bản đầu (349k/799k) giữ nguyên cho tới khi có dữ liệu thực tế về chuyển đổi, chi phí AI/vận hành và mức sẵn sàng chi trả; đổi ở đây là đủ. */
-export const MONTHLY_PRICE_VND: Record<PaidPlan, number> = { basic: 349_000, full: 799_000 }
+export const MONTHLY_PRICE_VND: Record<PaidPlan, number> = { basic: 349_000, full: 799_000, done_for_you: 2_490_000 }
 
 /** Trả trước nhiều tháng được giảm: 3 tháng -5%, 12 tháng -15% (làm tròn nghìn). */
 export const PERIOD_DISCOUNT: Record<PeriodMonths, number> = { 1: 0, 3: 0.05, 12: 0.15 }
 
+/** Gói Làm hộ chưa có giảm giá theo kỳ (chưa chốt): 2.490.000đ x số tháng. Chốt giảm giá thì đổi ở đây. */
+export function periodDiscountFor(plan: PaidPlan, months: PeriodMonths): number {
+  return plan === 'done_for_you' ? 0 : PERIOD_DISCOUNT[months]
+}
+
 export function priceFor(plan: PaidPlan, months: PeriodMonths): number {
-  const raw = MONTHLY_PRICE_VND[plan] * months * (1 - PERIOD_DISCOUNT[months])
+  const raw = MONTHLY_PRICE_VND[plan] * months * (1 - periodDiscountFor(plan, months))
   return Math.round(raw / 1000) * 1000
 }
 
@@ -62,6 +69,10 @@ export type Entitlements = {
   maxClients: number
   rankGrid: RankGridEntitlement
   reviews: ReviewEntitlement
+  /** Gói Làm hộ: nhân viên agency duyệt bài/phản hồi thay khách (khách không phải duyệt) và có báo cáo tháng. */
+  staffManaged: boolean
+  /** Báo cáo tháng (tóm tắt từ lưới thứ hạng + việc agency đã làm). */
+  monthlyReport: boolean
 }
 
 /**
@@ -75,6 +86,9 @@ export const RANK_GRID_LIMITS: Record<PlanKey, RankGridEntitlement> = {
   free: { gridSizes: [5], defaultGridSize: 5, maxKeywords: 1, frequency: 'none', manualScansPerMonth: 0, trialScans: 1, monthlyPointCap: 25 },
   basic: { gridSizes: [5], defaultGridSize: 5, maxKeywords: 5, frequency: 'biweekly', manualScansPerMonth: 2, trialScans: 0, monthlyPointCap: 450 },
   full: { gridSizes: [5, 7, 9], defaultGridSize: 7, maxKeywords: 10, frequency: 'weekly', manualScansPerMonth: 8, trialScans: 0, monthlyPointCap: 4_700 },
+  // Làm hộ (chốt 28/11/2026): >= Nâng cao. 7x7 mặc định (cho chọn 9x9), 10 từ khoá, hàng tuần + báo cáo tháng.
+  // 12 lần quét tay/tháng để nhân viên quét lại sau khi tối ưu; trần 5.500 điểm = 5 tuần x 10 từ khoá x 81 điểm + 12 x 81 (xấu nhất, 9x9) ~ 5.000, dư chút.
+  done_for_you: { gridSizes: [5, 7, 9], defaultGridSize: 7, maxKeywords: 10, frequency: 'weekly', manualScansPerMonth: 12, trialScans: 0, monthlyPointCap: 5_500 },
 }
 
 /**
@@ -90,6 +104,8 @@ export const REVIEW_LIMITS: Record<PlanKey, ReviewEntitlement> = {
   free: { frequency: 'none', autoDraft: false, monthlyDrafts: 5, ownerLink: false, postViaMake: false, manualChecksPerMonth: 0 },
   basic: { frequency: 'weekly', autoDraft: true, monthlyDrafts: 40, ownerLink: true, postViaMake: true, manualChecksPerMonth: 2 },
   full: { frequency: 'daily', autoDraft: true, monthlyDrafts: 150, ownerLink: true, postViaMake: true, manualChecksPerMonth: 8 },
+  // Làm hộ: trả lời MỌI review (hàng ngày, soạn nháp tự động, trần nháp cao). Không gửi link duyệt cho chủ quán: nhân viên duyệt thay.
+  done_for_you: { frequency: 'daily', autoDraft: true, monthlyDrafts: 400, ownerLink: false, postViaMake: true, manualChecksPerMonth: 30 },
 }
 
 /** Hạn mức review sau khi áp env ghi đè (số không hợp lệ thì bỏ qua). Thuần, test được (truyền env giả). */
@@ -101,13 +117,19 @@ export function reviewEntitlement(plan: PlanKey, env: Record<string, string | un
 }
 
 export const ENTITLEMENTS: Record<PlanKey, Entitlements> = {
-  free: { taskLimit: 3, auditActionLimit: 3, advanceAdvice: false, monitoring: false, maxClients: 1, rankGrid: RANK_GRID_LIMITS.free, reviews: REVIEW_LIMITS.free },
-  basic: { taskLimit: null, auditActionLimit: null, advanceAdvice: true, monitoring: false, maxClients: 1, rankGrid: RANK_GRID_LIMITS.basic, reviews: REVIEW_LIMITS.basic },
-  full: { taskLimit: null, auditActionLimit: null, advanceAdvice: true, monitoring: true, maxClients: 1, rankGrid: RANK_GRID_LIMITS.full, reviews: REVIEW_LIMITS.full },
+  free: { taskLimit: 3, auditActionLimit: 3, advanceAdvice: false, monitoring: false, maxClients: 1, rankGrid: RANK_GRID_LIMITS.free, reviews: REVIEW_LIMITS.free, staffManaged: false, monthlyReport: false },
+  basic: { taskLimit: null, auditActionLimit: null, advanceAdvice: true, monitoring: false, maxClients: 1, rankGrid: RANK_GRID_LIMITS.basic, reviews: REVIEW_LIMITS.basic, staffManaged: false, monthlyReport: false },
+  full: { taskLimit: null, auditActionLimit: null, advanceAdvice: true, monitoring: true, maxClients: 1, rankGrid: RANK_GRID_LIMITS.full, reviews: REVIEW_LIMITS.full, staffManaged: false, monthlyReport: false },
+  done_for_you: { taskLimit: null, auditActionLimit: null, advanceAdvice: true, monitoring: true, maxClients: 1, rankGrid: RANK_GRID_LIMITS.done_for_you, reviews: REVIEW_LIMITS.done_for_you, staffManaged: true, monthlyReport: true },
 }
 
 export function normalizePlan(v: unknown): PlanKey {
-  return v === 'basic' || v === 'full' ? v : 'free'
+  return v === 'basic' || v === 'full' || v === 'done_for_you' ? v : 'free'
+}
+
+/** Gói do nhân viên agency vận hành (duyệt thay khách). */
+export function isStaffManaged(plan: unknown): boolean {
+  return ENTITLEMENTS[normalizePlan(plan)].staffManaged
 }
 
 /** Quá hạn bao nhiêu ngày (sau khi kỳ hết) thì hạ về gói miễn phí nếu cron chưa kịp hạ. */
@@ -127,11 +149,15 @@ export function resolveEffectivePlan(
   if (plan !== 'free' && active) {
     if (new Date(active.current_period_end).getTime() + PLAN_GRACE_DAYS * 86_400_000 < now) plan = 'free'
   }
-  if (plan === 'free' && wsPlan && !['free', 'basic', 'full'].includes(String(wsPlan))) plan = 'full'
+  if (plan === 'free' && wsPlan && !['free', 'basic', 'full', 'done_for_you'].includes(String(wsPlan))) plan = 'full'
   return plan
 }
 
 export function isPaidPlan(v: unknown): v is PaidPlan {
+  return v === 'basic' || v === 'full' || v === 'done_for_you'
+}
+/** Gói khách tự mua trên /billing (không gồm Làm hộ: chỉ admin tạo đơn sau tư vấn). */
+export function isSelfServePlan(v: unknown): v is SelfServePlan {
   return v === 'basic' || v === 'full'
 }
 export function isPeriod(v: unknown): v is PeriodMonths {
