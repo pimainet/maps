@@ -50,11 +50,17 @@ export async function POST(req: Request) {
     }
 
     const supabase = await createClient()
+    // Chỉ chèn (id, name): migration 035 chỉ GRANT INSERT 2 cột này, plan/max_clients luôn lấy mặc định của DB.
+    // Không dùng .insert().select(): RETURNING bị policy SELECT kiểm tra TRƯỚC khi trigger on_workspace_created
+    // (AFTER INSERT) thêm người tạo làm owner, nên luôn lỗi 42501. Tự sinh id rồi đọc lại sau khi insert xong.
+    const id = crypto.randomUUID()
+    const { error: insertError } = await supabase.from('workspaces').insert({ id, name })
+    if (insertError) throw insertError
+
     const { data, error } = await supabase
       .from('workspaces')
-      // Keep plan assignment server-controlled; the database default is free.
-      .insert({ name })
       .select('id, name, plan')
+      .eq('id', id)
       .single()
 
     if (error) throw error

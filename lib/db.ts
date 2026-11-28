@@ -345,8 +345,6 @@ export async function updateGoogleConnection(
     access_token_encrypted?: string
     refresh_token_encrypted?: string
     expires_at?: string
-    gbp_account_resource?: string | null
-    gbp_location_resource?: string | null
     status?: 'connected' | 'revoked' | 'error'
     last_error?: string | null
   },
@@ -361,6 +359,26 @@ export async function updateGoogleConnection(
 
   if (error) throw error
   return data
+}
+
+/**
+ * Ghi account/location Google Business Profile cho 1 connection. Chỉ service role được ghi 2 cột này (migration 035),
+ * để người dùng không tự trỏ connection sang location của doanh nghiệp khác qua REST. Chỉ gọi với giá trị vừa tra
+ * từ chính token Google của khách (resolveAccountAndLocation), và luôn khóa theo workspace của connection.
+ */
+export async function setGoogleConnectionLocation(
+  id: string,
+  workspaceId: string,
+  loc: { gbp_account_resource: string | null; gbp_location_resource: string | null },
+) {
+  const { supabaseAdmin } = await import('@/lib/supabase/admin')
+  const { error } = await supabaseAdmin
+    .from('google_connections')
+    .update({ ...loc, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('workspace_id', workspaceId)
+
+  if (error) throw error
 }
 
 export async function deleteGoogleConnection(clientId: string, workspaceId: string) {

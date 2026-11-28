@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { saveGoogleConnection, updateGoogleConnection } from '@/lib/db'
+import { saveGoogleConnection, setGoogleConnectionLocation, updateGoogleConnection } from '@/lib/db'
 import { encryptToken, exchangeCodeForTokens, verifyOAuthState } from '@/lib/google-oauth'
 import { resolveAccountAndLocation } from '@/lib/gbp-business-api'
 
@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
     // vẫn coi như "connected", có thể thử lại lúc thực thi task đầu tiên.
     try {
       const { accountResource, locationResource } = await resolveAccountAndLocation(tokens.access_token)
-      await updateGoogleConnection(saved.id, {
+      await setGoogleConnectionLocation(saved.id, verified.workspaceId, {
         gbp_account_resource: accountResource,
         gbp_location_resource: locationResource,
       })
