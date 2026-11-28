@@ -83,7 +83,8 @@ Biến môi trường cho audit:
 | `COMPETITOR_REVIEW_SAMPLE`, `COMPETITOR_REVIEW_LIMIT` | Giới hạn chi phí T07: số đối thủ (mặc định 3, 0 = tắt) × số review tối đa mỗi quán (mặc định 20) | Dùng mặc định |
 | `SEARCHAPI_API_KEY`, `SERPAPI_API_KEY` | Bù từng trường (mô tả, bài đăng có ngày, review kèm phản hồi chủ, giờ, thuộc tính, hỏi–đáp) | Một số mục đọc chưa đủ, không kết luận là thiếu |
 | `GOOGLE_PLACES_API_KEY` | Bù dữ liệu cơ bản | Như trên |
-| `DATAFORSEO_LOGIN/PASSWORD` + cờ lưới thứ hạng | VY02/VY04 (độ phủ theo vị trí) | Hai mục này "chưa đủ dữ liệu" |
+| `DATAFORSEO_LOGIN/PASSWORD` + cờ lưới thứ hạng | VY02/VY04 (độ phủ theo vị trí) từ lần quét lưới ≤ 14 ngày | Hai mục này "chưa đủ dữ liệu" |
+| `AUDIT_MINI_GRID_ENABLED=true` (+ `DATAFORSEO_LOGIN/PASSWORD`, migration 034) | Lưới mini 5×5, 1 từ khoá kèm audit khi chưa có lần quét lưới gần đây -> VY04 có dữ liệu. `AUDIT_MINI_GRID_WORKSPACE_POINTS` (mặc định 125 điểm = 5 lưới/workspace/tháng), chung trần `RANKGRID_MONTHLY_BUDGET_USD` | VY04 "chưa đủ dữ liệu" (VY02 cần ≥3 từ khoá nên vẫn chỉ từ lưới đầy đủ) |
 
 Kiểm tra website của khách (F06 và W01–W04: tên/địa chỉ/SĐT khớp hồ sơ, khu vực trong tiêu đề, schema LocalBusiness, HTTPS) là HTTP GET trực tiếp, không cần khoá — chống SSRF, tôn trọng robots.txt, cache 7 ngày (xem `docs/AUDIT_SCORING.md`). Lịch sử số review (T04) lấy từ snapshot đã lưu.
 
@@ -94,6 +95,8 @@ lần audit mới đầu tiên sẽ báo rõ điều đó. Không có dòng nào
 Đo nhiễu thật trên một doanh nghiệp (tốn lượt Claude / credit Outscraper):
 `npx tsx --env-file=.env.local scripts/measure-audit-noise.ts --url "<link Maps>" --area "<khu vực>" --runs 5`
 Kết quả cho biết check nào nên thêm vào `VOLATILE_CHECK_IDS` (`lib/audit-engine/stability.ts`).
+
+Chi phí mỗi audit (VND, tỉ giá 26.030đ/USD): xem bảng trong `docs/AUDIT_SCORING.md` — khoảng 7.500đ khi đã có cache, tối đa ~13.500đ lần đầu khi bật đủ T07 + lưới mini.
 
 Cách tính điểm (scoring v3: trọng số theo từng check, chuẩn hoá minh bạch, ngưỡng độ phủ 30%): xem `docs/AUDIT_SCORING.md`.
 

@@ -128,7 +128,7 @@ export function checkVY04(input?: AuditInput): CheckResult {
     severity: 'high',
     confidence: 'estimated',
     passed,
-    message: `Từ khoá "${g.keyword}": top 3 ở ${pctTxt(g.solv)} khu vực quanh quán (${g.points} điểm), hạng tại quán ${g.centerRank ?? 'ngoài top 20'}.${where}${leader}`,
+    message: `${input?.rankGrid?.source === 'audit_mini' ? 'Lưới mini 5×5 kèm audit — ' : ''}Từ khoá "${g.keyword}": top 3 ở ${pctTxt(g.solv)} khu vực quanh quán (${g.points} điểm), hạng tại quán ${g.centerRank ?? 'ngoài top 20'}.${where}${leader}`,
     action: passed
       ? undefined
       : 'Mở rộng vùng hiển thị: danh mục phụ/dịch vụ đúng từ khoá, mô tả nhắc địa danh thật ở khu vực yếu, ảnh và bài đăng đều đặn, xin đánh giá thật nhắc dịch vụ.',

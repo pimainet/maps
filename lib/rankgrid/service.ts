@@ -136,7 +136,7 @@ export function monthlyBudgetUsd(): number {
   return Number.isFinite(n) && n > 0 ? n : 50
 }
 
-async function globalSpendUsd(now = new Date()): Promise<number> {
+export async function globalSpendUsd(now = new Date()): Promise<number> {
   const { data, error } = await supabaseAdmin.from('rank_usage').select('cost_usd').eq('period_start', usagePeriodStart(now))
   if (error) throw error
   return (data || []).reduce((s: number, r: any) => s + Number(r.cost_usd || 0), 0)

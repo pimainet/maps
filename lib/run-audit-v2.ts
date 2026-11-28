@@ -4,6 +4,7 @@ import { resolveCompetitorSet } from '@/lib/competitors-store'
 import { loadRankGridAuditInput } from '@/lib/rankgrid/audit-input'
 import { collectWebsiteSignals } from '@/lib/website-signals'
 import { collectCompetitorVelocity } from '@/lib/competitor-velocity'
+import { defaultMiniGridDeps, runMiniGrid } from '@/lib/rankgrid/mini-grid'
 import { createSupabaseClassifierStore } from '@/lib/audit-classifier-store'
 import {
   checkWebsiteReachable,
@@ -26,6 +27,7 @@ export type AuditV2Output = {
     reviewHistoryPoints: number
     website: { from: 'cache' | 'live' | 'none'; status: string | null }
     competitorVelocity: { from: 'cache' | 'live' | 'none'; count: number; note: string | null }
+    miniGrid: { from: 'scan' | 'cache' | 'live' | 'none'; note: string | null; costUsd: number }
     classifier: { hits: number; misses: number }
   }
 }
@@ -46,7 +48,7 @@ export async function runAuditV2(args: {
 }): Promise<AuditV2Output> {
   const { client, workspaceId, snapshot } = args
 
-  const [websiteReachable, comp, history, rankGrid, web] = await Promise.all([
+  const [websiteReachable, comp, history, scanGrid, web] = await Promise.all([
     checkWebsiteReachable(snapshot.website_url).catch(() => undefined),
     resolveCompetitorSet({ snapshot, clientId: client.id, workspaceId, declaredArea: client.area, force: args.forceCompetitors }).catch(
       () => ({ set: null, from: 'none' as const, note: 'Lỗi tìm đối thủ' }),
@@ -66,11 +68,33 @@ export async function runAuditV2(args: {
   const visibility = comp.set ? { query: comp.set.query, selfRank: comp.set.selfRank, total: comp.set.total } : undefined
 
   // T07: review gần đây của 3 đối thủ đứng đầu (Outscraper, giới hạn chi phí + cache 14 ngày). Lỗi => T07 "chưa đủ dữ liệu".
-  const vel = await collectCompetitorVelocity({ competitors, clientId: client.id, workspaceId }).catch((e: any) => ({
-    velocity: undefined,
-    from: 'none' as const,
-    note: String(e?.message || e).slice(0, 120),
-  }))
+  // VY04: chưa có lần quét lưới ≤ 14 ngày thì chạy lưới mini 5×5 (cờ AUDIT_MINI_GRID_ENABLED, hạn mức workspace, cache 14 ngày).
+  const [vel, mini] = await Promise.all([
+    collectCompetitorVelocity({ competitors, clientId: client.id, workspaceId }).catch((e: any) => ({
+      velocity: undefined,
+      from: 'none' as const,
+      note: String(e?.message || e).slice(0, 120),
+    })),
+    scanGrid
+      ? Promise.resolve({ input: scanGrid, from: 'scan' as const, note: undefined, costUsd: 0 })
+      : defaultMiniGridDeps(client.id, workspaceId, { name: client.name, area: client.area })
+          .then((deps) =>
+            runMiniGrid(
+              {
+                clientId: client.id,
+                workspaceId,
+                primaryCategory: snapshot.primary_category,
+                additionalCategories: snapshot.additional_categories,
+                industry: client.industry,
+                area: client.area,
+                snapshotPlaceId: snapshot.place_id,
+              },
+              deps,
+            ),
+          )
+          .catch((e: any) => ({ input: undefined, from: 'none' as const, note: String(e?.message || e).slice(0, 120), costUsd: 0 })),
+  ])
+  const rankGrid = mini.input
 
   const ai = createCachedClassifier(createRealAIClassifier(), createSupabaseClassifierStore())
   const report = await runAudit(
@@ -119,6 +143,7 @@ export async function runAuditV2(args: {
       reviewHistoryPoints: history.length,
       website: { from: web.from, status: web.signals?.status ?? null },
       competitorVelocity: { from: vel.from, count: vel.velocity?.items.length ?? 0, note: vel.note ?? null },
+      miniGrid: { from: mini.from, note: mini.note ?? null, costUsd: mini.costUsd },
       classifier: { hits: ai.stats.hits, misses: ai.stats.misses },
     },
   }

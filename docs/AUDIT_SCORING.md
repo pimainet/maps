@@ -58,3 +58,27 @@ Chỉ so khi cùng major `ENGINE_VERSION` **và** cùng `scoringVersion`. Báo c
 - Dữ liệu đối thủ: Outscraper `reviews-v3`, sort newest, `cutoff` = 90 ngày trước (chỉ trả/tính tiền review trong 90 ngày).
   `COMPETITOR_REVIEW_SAMPLE` (mặc định 3, tối đa 5, 0 = tắt), `COMPETITOR_REVIEW_LIMIT` (mặc định 20, tối đa 30).
   Cache 14 ngày trong `raw_json.audit_cache.competitor_velocity` theo tập đối thủ.
+
+## Lưới mini 5×5 kèm audit (VY04)
+
+- Chỉ chạy khi `AUDIT_MINI_GRID_ENABLED=true`, có `DATAFORSEO_LOGIN/PASSWORD`, và khách **chưa** có lần quét lưới ≤ 14 ngày
+  (có thì dùng lần quét đó).
+- 1 từ khoá: từ khoá chính đã cấu hình ở Lưới thứ hạng, không có thì danh mục chính (không kèm địa danh). 25 điểm quanh toạ độ
+  của quán (cấu hình lưới -> toạ độ đã lưu, toạ độ Places quá 30 ngày bỏ qua -> tra cứu tạm, không lưu). DataForSEO live.
+- Chốt chi phí: trần hệ thống `RANKGRID_MONTHLY_BUDGET_USD` (gộp cả lưới đầy đủ và lưới mini); hạn mức mỗi workspace
+  `AUDIT_MINI_GRID_WORKSPACE_POINTS` điểm/tháng (mặc định 125) giữ chỗ nguyên tử bằng RPC `audit_minigrid_reserve`
+  (**migration 034, chưa áp**); điểm lỗi được trả lại; cache 14 ngày. Thiếu bất kỳ điều kiện nào: VY04 "chưa đủ dữ liệu".
+- VY02 (nhiều từ khoá) cần ≥ 3 từ khoá nên vẫn chỉ có dữ liệu khi khách dùng lưới đầy đủ.
+
+## Chi phí mỗi audit (VND, tỉ giá 26.030đ/USD)
+
+| Phần | Khi nào tốn | Chi phí |
+|---|---|---|
+| Claude Sonnet 4.5 (phân loại + lời nhận xét + lời khuyên, tối đa 8 lần) | Mỗi audit; phân loại trùng nội dung lấy từ cache | ≤ ~3.400đ |
+| Outscraper hồ sơ + review + nhóm đối thủ | Snapshot mới; nhóm đối thủ cache 14 ngày | ≤ ~4.000đ |
+| SearchApi / SerpApi bù trường | Khi thiếu trường | ~100đ |
+| **Mới** T07: review 90 ngày của 3 đối thủ (≤ 3 × 20 review, $3/1.000) | Lần đầu hoặc sau 14 ngày / đổi nhóm đối thủ | ≤ ~4.700đ (thường ~2.000đ vì chỉ tính review trong 90 ngày; 0đ trong 500 review miễn phí/tháng) |
+| **Mới** Website W01–W04 | Mỗi 7 ngày | 0đ |
+| **Mới** R06 danh mục so với quán top | Dùng dữ liệu đã có | 0đ |
+| **Mới** Lưới mini 5×5 (25 × $0,002) | Chỉ khi bật cờ, chưa có lưới đầy đủ ≤ 14 ngày, không có cache | ~1.300đ |
+| **Tổng** | | ~7.500đ khi có cache; tối đa ~13.500đ lần đầu (bật đủ) |

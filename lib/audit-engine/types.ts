@@ -113,6 +113,8 @@ export interface AuditInput {
 
 export interface RankGridAuditInput {
   scannedAt: string
+  /** 'scan' = lần quét lưới thứ hạng của khách; 'audit_mini' = lưới mini 5×5, 1 từ khoá chạy kèm audit. */
+  source?: 'scan' | 'audit_mini'
   primary: {
     keyword: string
     /** % điểm lưới trong top 3. */

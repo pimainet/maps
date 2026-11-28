@@ -60,6 +60,7 @@ export async function loadRankGridAuditInput(clientId: string, workspaceId: stri
     const leader = (comps || [])[0] as any
     return {
       scannedAt: primary.completed_at,
+      source: 'scan',
       primary: {
         keyword: primary.keyword,
         solv: primary.solv != null ? Number(primary.solv) : null,

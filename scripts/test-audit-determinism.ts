@@ -238,6 +238,8 @@ async function main() {
   assert.ok(parsed.strengths.length > 0)
   assert.ok(text.includes('- Cách tính: mỗi mục có trọng số riêng'), 'văn bản giải thích cách tính trọng số')
   assert.equal(r1.scoringVersion, SCORING_VERSION)
+  for (const id of ['R06', 'T07', 'W01', 'W02', 'W03', 'W04']) assert.ok(r1.checks.some((c) => c.id === id), `engine chạy ${id}`)
+  assert.ok(r1.checks.filter((c) => c.group === 'website').every((c) => c.passed === null), 'chưa lấy website -> chưa đủ dữ liệu')
   assert.ok(r1.weighting && r1.weighting.coveragePct > 0)
   assert.equal(renderAuditText(r1, fallbackNarrative(r1)), text, 'dựng chữ cũng tất định')
   const textSparse = renderAuditText(sparse, fallbackNarrative(sparse))
