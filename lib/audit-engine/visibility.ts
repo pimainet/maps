@@ -10,9 +10,10 @@ import type { AuditInput, CheckResult } from './types'
  *  - VY01 Keyword Visibility: thứ hạng của hồ sơ khi tìm đúng truy vấn đó.
  *  - VY03 Competitor Benchmark: so review / sao / ảnh với TRUNG VỊ nhóm đối thủ (trung vị, không phải trung bình,
  *    để chuỗi lớn vài nghìn review không kéo lệch).
- *  - VY02 Keyword Coverage và VY04 Geographic Visibility cần nhiều từ khoá / lưới vị trí: tốn credit gấp nhiều lần nên
- *    chưa làm, vẫn trả insufficient.
+ *  - VY02 Keyword Coverage và VY04 Geographic Visibility dùng LƯỚI THỨ HẠNG (lib/rankgrid, input.rankGrid) khi tính năng
+ *    bật và có lần quét ≤ 14 ngày; không có thì vẫn trả insufficient. Vẫn là 'estimated' (dữ liệu bên thứ ba, không cá nhân hoá).
  */
+import { VY02_MIN_KEYWORDS, VY02_SOLV_PASS, VY04_SOLV_PASS } from '@/lib/rankgrid/insights'
 
 const MIN_COMPETITORS = 3
 
@@ -110,11 +111,62 @@ function medianOf(values: number[]): number | undefined {
   return v.length % 2 ? v[mid] : (v[mid - 1] + v[mid]) / 2
 }
 
+const pctTxt = (n: number | null | undefined) => (n == null ? '—' : `${Math.round(n)}%`)
+
+export function checkVY04(input?: AuditInput): CheckResult {
+  const g = input?.rankGrid?.primary
+  if (!g || g.solv == null) {
+    return insufficient('VY04', 'Geographic Visibility', 'Cần xếp hạng theo lưới vị trí — chưa có lần quét lưới thứ hạng gần đây.')
+  }
+  const passed = g.solv >= VY04_SOLV_PASS && g.centerRank != null && g.centerRank <= 3
+  const where = g.weakSector ? ` Yếu nhất ở ${g.weakSector.label} (top 3 ở ${pctTxt(g.weakSector.solv)} số điểm).` : ''
+  const leader = g.leader ? ` Đối thủ dẫn đầu: ${g.leader.title} (top 3 ở ${pctTxt(g.leader.solv)} khu vực).` : ''
+  return {
+    id: 'VY04',
+    group: 'visibility',
+    label: 'Geographic Visibility',
+    severity: 'high',
+    confidence: 'estimated',
+    passed,
+    message: `Từ khoá "${g.keyword}": top 3 ở ${pctTxt(g.solv)} khu vực quanh quán (${g.points} điểm), hạng tại quán ${g.centerRank ?? 'ngoài top 20'}.${where}${leader}`,
+    action: passed
+      ? undefined
+      : 'Mở rộng vùng hiển thị: danh mục phụ/dịch vụ đúng từ khoá, mô tả nhắc địa danh thật ở khu vực yếu, ảnh và bài đăng đều đặn, xin đánh giá thật nhắc dịch vụ.',
+  }
+}
+
+export function checkVY02(input?: AuditInput): CheckResult {
+  const kws = (input?.rankGrid?.keywords ?? []).filter((k) => k.solv != null)
+  if (kws.length < VY02_MIN_KEYWORDS) {
+    return insufficient(
+      'VY02',
+      'Keyword Coverage',
+      `Cần xếp hạng nhiều từ khoá — cần ít nhất ${VY02_MIN_KEYWORDS} từ khoá đã quét lưới (hiện có ${kws.length}).`,
+    )
+  }
+  const strong = kws.filter((k) => (k.solv ?? 0) >= VY02_SOLV_PASS)
+  const need = Math.ceil((kws.length * 2) / 3)
+  const passed = strong.length >= need
+  const invisible = kws.filter((k) => (k.foundPct ?? 0) < 20).map((k) => `"${k.keyword}"`)
+  return {
+    id: 'VY02',
+    group: 'visibility',
+    label: 'Keyword Coverage',
+    severity: 'high',
+    confidence: 'estimated',
+    passed,
+    message: `${strong.length}/${kws.length} từ khoá có top 3 ở ≥ ${VY02_SOLV_PASS}% khu vực.${invisible.length ? ` Gần như vô hình: ${invisible.join(', ')}.` : ''}`,
+    action: passed
+      ? undefined
+      : 'Với từ khoá yếu: thêm danh mục phụ/dịch vụ tương ứng, viết mô tả và bài đăng về đúng dịch vụ đó, xin đánh giá nhắc tên dịch vụ. Không nhồi từ khoá vào tên.',
+  }
+}
+
 export function runVisibilityChecks(input?: AuditInput): CheckResult[] {
   return [
     input ? checkVY01(input) : insufficient('VY01', 'Keyword Visibility'),
-    insufficient('VY02', 'Keyword Coverage', 'Cần xếp hạng nhiều từ khoá — chưa triển khai (tốn credit gấp nhiều lần).'),
+    checkVY02(input),
     input ? checkVY03(input) : insufficient('VY03', 'Competitor Benchmark'),
-    insufficient('VY04', 'Geographic Visibility', 'Cần xếp hạng theo lưới vị trí — chưa triển khai (tốn credit gấp nhiều lần).'),
+    checkVY04(input),
   ]
 }

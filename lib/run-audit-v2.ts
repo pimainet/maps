@@ -1,6 +1,7 @@
 import { getReviewCountHistory } from '@/lib/db'
 import { buildAdvice } from '@/lib/audit-engine/advice'
 import { resolveCompetitorSet } from '@/lib/competitors-store'
+import { loadRankGridAuditInput } from '@/lib/rankgrid/audit-input'
 import { createSupabaseClassifierStore } from '@/lib/audit-classifier-store'
 import {
   checkWebsiteReachable,
@@ -43,12 +44,13 @@ export async function runAuditV2(args: {
 }): Promise<AuditV2Output> {
   const { client, workspaceId, snapshot } = args
 
-  const [websiteReachable, comp, history] = await Promise.all([
+  const [websiteReachable, comp, history, rankGrid] = await Promise.all([
     checkWebsiteReachable(snapshot.website_url).catch(() => undefined),
     resolveCompetitorSet({ snapshot, clientId: client.id, workspaceId, declaredArea: client.area, force: args.forceCompetitors }).catch(
       () => ({ set: null, from: 'none' as const, note: 'Lỗi tìm đối thủ' }),
     ),
     getReviewCountHistory(client.id, workspaceId).catch(() => []),
+    loadRankGridAuditInput(client.id, workspaceId).catch(() => undefined),
   ])
 
   const competitors = comp.set?.items.length ? comp.set.items : undefined
@@ -64,6 +66,7 @@ export async function runAuditV2(args: {
       competitors,
       visibility,
       reviewCountHistory: history.length ? history : undefined,
+      rankGrid,
     },
     ai,
   )

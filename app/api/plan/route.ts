@@ -16,6 +16,8 @@ import {
   getCycleHistory,
 } from '@/lib/db'
 import { PLAN_30_DAYS_PROMPT } from '@/lib/prompts'
+import { loadRankGridAuditInput } from '@/lib/rankgrid/audit-input'
+import { buildRankGridPlanContext } from '@/lib/rankgrid/insights'
 import { requireActiveWorkspaceId } from '@/lib/auth'
 import { getEntitlements } from '@/lib/billing/server'
 import { limitPlanText } from '@/lib/billing/shape'
@@ -151,6 +153,14 @@ export async function POST(req: Request) {
       console.error('getClientProgress plan:', e?.message)
       progress_context =
         '### Tiến độ đã ghi nhận trong hệ thống\n- Không lấy được tiến độ (bỏ qua).'
+    }
+
+    // Lưới thứ hạng (nếu bật + có lần quét gần đây): thêm vào khối tiến độ để kế hoạch / việc bám dữ liệu từng khu vực, từ khoá.
+    try {
+      const rankCtx = buildRankGridPlanContext(await loadRankGridAuditInput(input.client_id, workspaceId))
+      if (rankCtx) progress_context = `${progress_context}\n\n${rankCtx}`
+    } catch (e: any) {
+      console.error('rankgrid plan context (non-fatal):', e?.message)
     }
 
     const prompt = PLAN_30_DAYS_PROMPT.replaceAll(

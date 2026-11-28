@@ -18,6 +18,22 @@ export function priceFor(plan: PaidPlan, months: PeriodMonths): number {
   return Math.round(raw / 1000) * 1000
 }
 
+/** Lưới thứ hạng (bản đồ nhiệt). null = gói không có tính năng này. */
+export type RankGridEntitlement = {
+  /** Cỡ lưới được chọn (cạnh). */
+  gridSizes: Array<3 | 5 | 7 | 9>
+  defaultGridSize: 3 | 5 | 7 | 9
+  maxKeywords: number
+  /** Quét định kỳ; 'none' = không tự quét. */
+  frequency: 'weekly' | 'biweekly' | 'none'
+  /** Lần "Quét ngay" mỗi tháng (giờ VN). */
+  manualScansPerMonth: number
+  /** Lần quét thử trọn đời của workspace (gói Miễn phí). */
+  trialScans: number
+  /** Trần điểm quét mỗi tháng của workspace — chốt chặn chi phí cuối cùng (xem rankgrid_reserve_points). */
+  monthlyPointCap: number
+}
+
 export type Entitlements = {
   /** Số việc trong kế hoạch được mở (null = tất cả). */
   taskLimit: number | null
@@ -28,12 +44,26 @@ export type Entitlements = {
   /** Cảnh báo đánh giá xấu, theo dõi thứ hạng (gói Nâng cao). */
   monitoring: boolean
   maxClients: number
+  rankGrid: RankGridEntitlement
+}
+
+/**
+ * Hạn mức lưới thứ hạng (chốt 28/11/2026). Chi phí dữ liệu DataForSEO ~16đ/điểm (Standard), ~32đ/điểm (Priority):
+ *  - Miễn phí: 1 lần quét thử 5x5, 1 từ khoá, không quét định kỳ (~800đ trọn đời).
+ *  - Khởi động: 5x5, 5 từ khoá, 2 tuần/lần, 2 lần quét tay/tháng (tối đa ~7.000đ/tháng).
+ *  - Nâng cao: 7x7 (cho chọn 9x9), 10 từ khoá, hàng tuần, 8 lần quét tay/tháng (tối đa ~77.000đ/tháng).
+ * monthlyPointCap = trường hợp xấu nhất (5 tuần trong tháng / 3 kỳ 2 tuần) + quét tay, làm tròn lên.
+ */
+export const RANK_GRID_LIMITS: Record<PlanKey, RankGridEntitlement> = {
+  free: { gridSizes: [5], defaultGridSize: 5, maxKeywords: 1, frequency: 'none', manualScansPerMonth: 0, trialScans: 1, monthlyPointCap: 25 },
+  basic: { gridSizes: [5], defaultGridSize: 5, maxKeywords: 5, frequency: 'biweekly', manualScansPerMonth: 2, trialScans: 0, monthlyPointCap: 450 },
+  full: { gridSizes: [5, 7, 9], defaultGridSize: 7, maxKeywords: 10, frequency: 'weekly', manualScansPerMonth: 8, trialScans: 0, monthlyPointCap: 4_700 },
 }
 
 export const ENTITLEMENTS: Record<PlanKey, Entitlements> = {
-  free: { taskLimit: 3, auditActionLimit: 3, advanceAdvice: false, monitoring: false, maxClients: 1 },
-  basic: { taskLimit: null, auditActionLimit: null, advanceAdvice: true, monitoring: false, maxClients: 1 },
-  full: { taskLimit: null, auditActionLimit: null, advanceAdvice: true, monitoring: true, maxClients: 1 },
+  free: { taskLimit: 3, auditActionLimit: 3, advanceAdvice: false, monitoring: false, maxClients: 1, rankGrid: RANK_GRID_LIMITS.free },
+  basic: { taskLimit: null, auditActionLimit: null, advanceAdvice: true, monitoring: false, maxClients: 1, rankGrid: RANK_GRID_LIMITS.basic },
+  full: { taskLimit: null, auditActionLimit: null, advanceAdvice: true, monitoring: true, maxClients: 1, rankGrid: RANK_GRID_LIMITS.full },
 }
 
 export function normalizePlan(v: unknown): PlanKey {

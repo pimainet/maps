@@ -7,7 +7,7 @@
     "build": "next build --webpack",
     "start": "next start",
     "check:outscraper": "tsx --env-file=.env.local scripts/check-outscraper-live.ts",
-    "test:logic": "tsx scripts/test-outscraper-mapping.ts && tsx scripts/test-outscraper-fetch.ts && tsx scripts/test-audit-fields.ts && tsx scripts/test-review-watch.ts && tsx scripts/test-competitors.ts && tsx scripts/test-audit-quota.ts && tsx scripts/test-audit-determinism.ts && tsx scripts/test-client-edit.ts && tsx scripts/test-place-search.ts && tsx scripts/test-audit-readability.ts && tsx scripts/test-dataforseo.ts && tsx scripts/test-advice.ts && tsx scripts/test-serpapi.ts && tsx scripts/test-billing.ts && tsx scripts/test-task-types.ts && tsx scripts/test-content-selection.ts && tsx scripts/test-task-dedupe.ts && tsx scripts/test-autopost-helpers.ts"
+    "test:logic": "tsx scripts/test-outscraper-mapping.ts && tsx scripts/test-outscraper-fetch.ts && tsx scripts/test-audit-fields.ts && tsx scripts/test-review-watch.ts && tsx scripts/test-competitors.ts && tsx scripts/test-audit-quota.ts && tsx scripts/test-audit-determinism.ts && tsx scripts/test-client-edit.ts && tsx scripts/test-place-search.ts && tsx scripts/test-audit-readability.ts && tsx scripts/test-dataforseo.ts && tsx scripts/test-advice.ts && tsx scripts/test-serpapi.ts && tsx scripts/test-billing.ts && tsx scripts/test-task-types.ts && tsx scripts/test-content-selection.ts && tsx scripts/test-task-dedupe.ts && tsx scripts/test-autopost-helpers.ts && tsx scripts/test-rankgrid.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",
@@ -18,6 +18,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "heic2any": "^0.0.4",
+    "leaflet": "^1.9.4",
     "lucide-react": "^1.16.0",
     "next": "16.4.3",
     "piexifjs": "^1.0.6",
@@ -29,6 +30,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
+    "@types/leaflet": "^1.9.23",
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",

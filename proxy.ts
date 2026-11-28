@@ -36,7 +36,9 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith('/api/notifications/unsubscribe') ||
     pathname.startsWith('/u/') ||
     pathname.startsWith('/api/photos/') ||
-    pathname.startsWith('/api/autopost/')
+    pathname.startsWith('/api/autopost/') ||
+    // DataForSEO pingback: xác thực bằng HMAC (RANKGRID_PINGBACK_SECRET).
+    pathname.startsWith('/api/rankgrid/pingback')
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone()

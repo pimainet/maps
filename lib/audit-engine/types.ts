@@ -91,7 +91,30 @@ export interface AuditInput {
     total: number
   }
 
+  /**
+   * Lưới thứ hạng (lần quét ≤ 14 ngày, xem lib/rankgrid/audit-input.ts). undefined = tính năng tắt / chưa quét
+   * -> VY02/VY04 trả insufficient như cũ.
+   */
+  rankGrid?: RankGridAuditInput
+
   now?: Date
+}
+
+export interface RankGridAuditInput {
+  scannedAt: string
+  primary: {
+    keyword: string
+    /** % điểm lưới trong top 3. */
+    solv: number | null
+    atrp: number | null
+    arp: number | null
+    foundPct: number | null
+    centerRank: number | null
+    points: number
+    weakSector?: { label: string; solv: number } | null
+    leader?: { title: string; solv: number; reviews: number | null } | null
+  }
+  keywords: Array<{ keyword: string; solv: number | null; foundPct: number | null }>
 }
 
 export interface CheckResult {
@@ -163,5 +186,5 @@ export interface AuditReport {
 }
 
 /** Tăng PATCH khi sửa lỗi không đổi thang điểm; tăng MAJOR khi đổi check/ngưỡng/trọng số (điểm không còn so sánh được). */
-export const ENGINE_VERSION = '2.2.0'
+export const ENGINE_VERSION = '2.3.0'
 export const engineMajor = (v: string | undefined | null): string | null => (v ? v.split('.')[0] : null)
