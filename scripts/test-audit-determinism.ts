@@ -7,6 +7,7 @@ import {
   memoryClassifierStore,
   diffAuditReports,
   ENGINE_VERSION,
+  SCORING_VERSION,
   type AIClassifier,
   type AuditInput,
   type AuditReport,
@@ -144,7 +145,8 @@ async function main() {
   assert.equal(rIssue.checks.find((c) => c.id === 'T06')?.scored, false)
   assert.equal(rIssue.checks.find((c) => c.id === 'T06')?.passed, false)
   assert.equal(rIssue.overallScore, rClean.overallScore)
-  assert.equal(rClean.coverage!.informational, 1)
+  assert.equal(rClean.coverage!.informational, rClean.checks.filter((c) => c.scored === false).length)
+  assert.ok(rClean.checks.filter((c) => c.id.startsWith('CV')).every((c) => c.scored === false), 'Chuyển đổi suy ra -> chỉ hiển thị')
 
   // Check nhiễu được gắn cờ volatile.
   for (const id of ['C01', 'C02', 'V01', 'T05']) assert.equal(r1.checks.find((c) => c.id === id)?.volatile, true, id)
@@ -159,10 +161,10 @@ async function main() {
   const mk = (id: string, group: CheckResult['group'], passed: boolean | null, extra: Partial<CheckResult> = {}): CheckResult => ({
     id, group, label: id, severity: 'high', confidence: passed === null ? 'insufficient' : 'verified', passed, message: id, ...extra,
   })
-  const report = (checks: CheckResult[], version: string | undefined = ENGINE_VERSION): AuditReport => {
+  const report = (checks: CheckResult[], version: string | undefined = ENGINE_VERSION, scoringVersion: number | undefined = SCORING_VERSION): AuditReport => {
     const flagged = applyStabilityFlags(checks)
     const tiers = [...new Set(flagged.map((c) => c.group))].map((g) => ({ group: g, score: scoreOnSubset(flagged.filter((c) => c.group === g)), checkedCount: 0, insufficientCount: 0 }))
-    return { checks: flagged, tierScores: tiers as any, overallScore: scoreOnSubset(flagged), topOpportunities: [], generatedAt: '', engineVersion: version, coverage: coverageOf(flagged) }
+    return { checks: flagged, tierScores: tiers as any, overallScore: scoreOnSubset(flagged), topOpportunities: [], generatedAt: '', engineVersion: version, scoringVersion, coverage: coverageOf(flagged) }
   }
 
   // (a) lần 2 đọc được thêm dữ liệu (nhóm mới) -> điểm tổng thô nhảy, nhưng điểm cùng điều kiện = 0 và không có thay đổi thật
@@ -201,8 +203,15 @@ async function main() {
   const d6 = diffAuditReports(report([mk('F05', 'foundation', true)], '1.0.0'), report([mk('F05', 'foundation', false)]))
   assert.equal(d6.comparable, false)
   assert.equal(d6.regressed.length, 0)
-  const d7 = diffAuditReports(report([mk('F05', 'foundation', true)], undefined), report([mk('F05', 'foundation', true)]))
-  assert.equal(d7.comparable, true)
+  // báo cáo v2 cũ (không engineVersion/scoringVersion) -> không so với v3
+  const d7 = diffAuditReports({ ...report([mk('F05', 'foundation', true)]), engineVersion: undefined, scoringVersion: undefined }, report([mk('F05', 'foundation', true)]))
+  assert.equal(d7.comparable, false)
+  // cùng engine major nhưng khác cách tính điểm (trọng số) -> không so
+  const d8 = diffAuditReports(report([mk('F05', 'foundation', true)], ENGINE_VERSION, 2), report([mk('F05', 'foundation', false)]))
+  assert.equal(d8.comparable, false)
+  assert.match(d8.reason || '', /cách tính điểm/)
+  const d9 = diffAuditReports(report([mk('F05', 'foundation', true)]), report([mk('F05', 'foundation', true)]))
+  assert.equal(d9.comparable, true)
 
   // 6) Lời AI không được tự đưa điểm; checkId lạ bị bỏ; AI lỗi => lời dựng bằng code.
   assert.equal(parseNarrative({ summary: 'Hồ sơ đạt 8/10 rất tốt' }, new Set()), null)
@@ -227,6 +236,9 @@ async function main() {
   const parsed = parseAuditResult(text)
   assert.equal(parsed.overall, Math.round(r1.overallScore!) / 10)
   assert.ok(parsed.strengths.length > 0)
+  assert.ok(text.includes('- Cách tính: mỗi mục có trọng số riêng'), 'văn bản giải thích cách tính trọng số')
+  assert.equal(r1.scoringVersion, SCORING_VERSION)
+  assert.ok(r1.weighting && r1.weighting.coveragePct > 0)
   assert.equal(renderAuditText(r1, fallbackNarrative(r1)), text, 'dựng chữ cũng tất định')
   const textSparse = renderAuditText(sparse, fallbackNarrative(sparse))
   assert.ok(textSparse.includes('### 8.'), 'liệt kê mục chưa đủ dữ liệu để lộ trình không coi là "thiếu"')

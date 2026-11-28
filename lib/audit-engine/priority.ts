@@ -1,4 +1,6 @@
 import type { CheckResult, Opportunity } from './types'
+import { isScored } from './scoring'
+import { weightOf } from './weights'
 
 const SEVERITY_RANK: Record<CheckResult['severity'], number> = { critical: 0, high: 1, medium: 2, low: 3 }
 const CONFIDENCE_RANK: Record<CheckResult['confidence'], number> = { verified: 0, estimated: 1, insufficient: 2 }
@@ -11,9 +13,15 @@ const CONVERSION_DEPENDENCIES: Record<string, string[]> = {
 }
 
 export function pickTopOpportunities(checks: CheckResult[], limit = 5): Opportunity[] {
-  const failing = checks.filter((c): c is CheckResult & { action: string } => c.passed === false && !!c.action)
+  // Chỉ mục có tính điểm (mục suy ra như CV01–CV04 trọng số 0 không lặp lại việc của mục gốc).
+  const failing = checks.filter((c): c is CheckResult & { action: string } => c.passed === false && !!c.action && isScored(c))
 
+  // Thứ tự: lỗi nghiêm trọng (hồ sơ đóng cửa/chưa nhận quyền) trước, rồi theo TRỌNG SỐ (tác động tới thứ hạng), rồi độ tin cậy.
   const sorted = [...failing].sort((a, b) => {
+    const crit = Number(b.severity === 'critical') - Number(a.severity === 'critical')
+    if (crit !== 0) return crit
+    const w = weightOf(b.id) - weightOf(a.id)
+    if (w !== 0) return w
     const sev = SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]
     if (sev !== 0) return sev
     return CONFIDENCE_RANK[a.confidence] - CONFIDENCE_RANK[b.confidence]

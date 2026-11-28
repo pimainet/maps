@@ -27,6 +27,7 @@ export type CheckGroup =
   | 'visual'
   | 'content'
   | 'visibility'
+  | 'website'
   | 'conversion'
 
 export interface AIClassifyInput {
@@ -145,6 +146,24 @@ export interface TierScore {
   score: number | null
   checkedCount: number
   insufficientCount: number
+  /** Tổng trọng số các check tính điểm của nhóm (scoring v3; báo cáo cũ không có). */
+  weight?: number
+  /** Phần trọng số của nhóm có dữ liệu. */
+  knownWeight?: number
+}
+
+/** Cách tính điểm minh bạch (scoring v3) — xem scoring.ts weightingOf. */
+export interface AuditWeighting {
+  scoringVersion: number
+  /** Tổng trọng số các check tính điểm có trong báo cáo. */
+  totalWeight: number
+  /** Phần trọng số có dữ liệu (đã kết luận đạt/chưa đạt). */
+  knownWeight: number
+  /** knownWeight / totalWeight, %. Dưới minCoveragePct thì không chấm điểm tổng. */
+  coveragePct: number
+  minCoveragePct: number
+  /** Trọng số gốc và trọng số thực tế (sau khi loại mục thiếu dữ liệu) của từng check, %. */
+  checks: Array<{ id: string; weight: number; effectivePct: number }>
 }
 
 export interface Opportunity {
@@ -177,6 +196,13 @@ export interface AuditReport {
    * (đổi tập check / ngưỡng / trọng số thì thang đo đã khác). Báo cáo cũ không có trường này.
    */
   engineVersion?: string
+  /**
+   * Phiên bản cách tính điểm (trọng số). Báo cáo không có trường này = cách tính cũ (v2: chia đều nhóm). Chỉ so sánh điểm
+   * giữa 2 lần audit cùng scoringVersion (xem diff.ts).
+   */
+  scoringVersion?: number
+  /** Trọng số từng check + độ phủ trọng số (scoring v3). */
+  weighting?: AuditWeighting
   coverage?: AuditCoverage
   /**
    * Lời khuyên danh mục + hồ sơ doanh nghiệp (xem advice.ts). KHÔNG tham gia chấm điểm hay so sánh giữa hai lần audit;
@@ -186,5 +212,5 @@ export interface AuditReport {
 }
 
 /** Tăng PATCH khi sửa lỗi không đổi thang điểm; tăng MAJOR khi đổi check/ngưỡng/trọng số (điểm không còn so sánh được). */
-export const ENGINE_VERSION = '2.3.0'
+export const ENGINE_VERSION = '3.0.0'
 export const engineMajor = (v: string | undefined | null): string | null => (v ? v.split('.')[0] : null)

@@ -1,6 +1,7 @@
 import { ENGINE_VERSION, engineMajor } from './types'
 import type { AuditReport, CheckResult } from './types'
 import { isScored, scoreOnSubset } from './scoring'
+import { SCORING_VERSION } from './weights'
 
 export interface AuditDiffEntry {
   id: string
@@ -49,7 +50,7 @@ const entry = (c: CheckResult): AuditDiffEntry => ({ id: c.id, label: c.label })
  *  1. Chỉ so các check CÓ Ở CẢ 2 LẦN, được tính điểm, và có kết luận (passed != null) ở cả 2 lần.
  *  2. Điểm chênh lệch tính lại trên đúng tập check chung đó (comparableScoreDelta).
  *  3. Check nhiễu chuyển đạt -> không đạt được tách ra `unconfirmed`, không kéo điểm xuống.
- *  4. Khác major version của engine thì không so (comparable = false).
+ *  4. Khác major version của engine hoặc khác scoringVersion (trọng số) thì không so (comparable = false).
  */
 export function diffAuditReports(previous: AuditReport, latest: AuditReport): AuditDiff {
   const empty: AuditDiff = {
@@ -67,11 +68,14 @@ export function diffAuditReports(previous: AuditReport, latest: AuditReport): Au
   // Báo cáo trước khi có đánh số phiên bản (v2 preview 2.0) coi như major 2.
   const prevMajor = engineMajor(previous.engineVersion) ?? '2'
   const lastMajor = engineMajor(latest.engineVersion) ?? engineMajor(ENGINE_VERSION)
-  if (prevMajor !== lastMajor) {
+  // Báo cáo không ghi scoringVersion = cách tính v2 (chia đều nhóm). Khác cách tính thì không so điểm.
+  const prevScoring = previous.scoringVersion ?? 2
+  const lastScoring = latest.scoringVersion ?? SCORING_VERSION
+  if (prevMajor !== lastMajor || prevScoring !== lastScoring) {
     return {
       ...empty,
       comparable: false,
-      reason: 'Lần kiểm tra trước dùng thang điểm khác, không so sánh trực tiếp được. Từ lần này trở đi sẽ so sánh với nhau.',
+      reason: 'Lần kiểm tra trước dùng cách tính điểm khác (trọng số cũ), không so sánh trực tiếp được. Từ lần này trở đi sẽ so sánh với nhau.',
     }
   }
 

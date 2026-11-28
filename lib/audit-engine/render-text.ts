@@ -1,5 +1,6 @@
 import { GROUP_LABEL_VI, checkLabelVi } from './labels'
 import { isScored } from './scoring'
+import { weightOf } from './weights'
 import type { Narrative } from './narrative'
 import type { AuditReport, CheckGroup, CheckResult } from './types'
 
@@ -8,12 +9,19 @@ import type { AuditReport, CheckGroup, CheckResult } from './types'
  * chữ — lộ trình 30 ngày (api/plan), trí nhớ khách hàng (client-memory), parseAuditResult — chạy không cần sửa.
  * Mọi con số trong văn bản này do code tính từ AuditReport; AI không tham gia.
  */
-const GROUP_ORDER: CheckGroup[] = ['foundation', 'relevance', 'trust', 'visual', 'content', 'visibility', 'conversion']
+const GROUP_ORDER: CheckGroup[] = ['foundation', 'relevance', 'trust', 'visual', 'content', 'visibility', 'website', 'conversion']
 
 const to10 = (score100: number) => (Math.round(score100) / 10).toFixed(1)
 
-function priorityOf(c: CheckResult): 'high' | 'medium' | 'low' {
-  return c.severity === 'critical' || c.severity === 'high' ? 'high' : c.severity === 'medium' ? 'medium' : 'low'
+/**
+ * Mức ưu tiên theo TRỌNG SỐ (tác động tới thứ hạng/khách liên hệ), không theo nhãn mức độ: ≥6 Cao, 3–5 Trung bình, còn lại Thấp.
+ * Lỗi nghiêm trọng (hồ sơ đóng cửa / chưa nhận quyền) luôn Cao. Báo cáo cũ (không có scoringVersion) giữ cách cũ theo mức độ.
+ */
+function priorityOf(c: CheckResult, weighted: boolean): 'high' | 'medium' | 'low' {
+  if (!weighted) return c.severity === 'critical' || c.severity === 'high' ? 'high' : c.severity === 'medium' ? 'medium' : 'low'
+  if (c.severity === 'critical') return 'high'
+  const w = weightOf(c.id)
+  return w >= 6 ? 'high' : w >= 3 ? 'medium' : 'low'
 }
 
 export function renderAuditText(report: AuditReport, narrative: Narrative): string {
@@ -28,12 +36,23 @@ export function renderAuditText(report: AuditReport, narrative: Narrative): stri
         (report.engineVersion ? ` (thang điểm ${report.engineVersion})` : ''),
     )
   }
+  if (report.weighting) {
+    const w = report.weighting
+    lines.push(
+      `- Cách tính: mỗi mục có trọng số riêng (danh mục, đánh giá, hiện ra quanh quán nặng nhất; ảnh, bài đăng nhẹ). ` +
+        `Lần này có dữ liệu cho ${w.coveragePct}% tổng trọng số; mục chưa đủ dữ liệu không bị trừ điểm` +
+        (report.overallScore == null ? ` (dưới ${w.minCoveragePct}% nên chưa chấm điểm tổng).` : '.'),
+    )
+  }
   lines.push('')
 
   lines.push('### 2. Điểm theo từng nhóm (thang 10)')
   for (const g of GROUP_ORDER) {
     const t = report.tierScores.find((x) => x.group === g)
-    lines.push(`- ${GROUP_LABEL_VI[g]}: ${t?.score == null ? 'Chưa đủ dữ liệu' : to10(t.score)}`)
+    if (t && t.weight === 0) continue // nhóm chỉ hiển thị (vd Chuyển đổi suy ra từ mục khác)
+    const share = t?.weight && report.weighting?.totalWeight ? ` (trọng số ${Math.round((t.weight / report.weighting.totalWeight) * 100)}%)` : ''
+    // Điểm đứng trước trọng số: parser cũ lấy con số đầu tiên của dòng.
+    lines.push(`- ${GROUP_LABEL_VI[g]}: ${t?.score == null ? 'Chưa đủ dữ liệu' : to10(t.score)}${share}`)
   }
   lines.push('')
 
@@ -53,7 +72,7 @@ export function renderAuditText(report: AuditReport, narrative: Narrative): stri
     narrative.opportunities[c.id] || `${checkLabelVi(c.id, c.label)}: ${c.message}`
   for (const [key, title] of [['high', 'Ưu tiên Cao'], ['medium', 'Ưu tiên Trung bình'], ['low', 'Ưu tiên Thấp']] as const) {
     lines.push(`- ${title}:`)
-    const items = failing.filter((c) => priorityOf(c) === key)
+    const items = failing.filter((c) => priorityOf(c, report.scoringVersion != null) === key)
     if (items.length === 0) lines.push('  - Không có mục nào.')
     for (const c of items) lines.push(`  - ${textFor(c)}`)
   }

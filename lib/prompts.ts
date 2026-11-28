@@ -54,6 +54,8 @@ Yêu cầu bắt buộc:
 - Chỉ đề xuất địa điểm, dịch vụ, ưu đãi, số liệu hoặc trải nghiệm có thật; không nhồi từ khóa, tạo địa chỉ/đánh giá giả hoặc hứa hẹn thứ hạng.
 - Bài viết phải tiến từ giải đáp thông tin cơ bản sang chủ đề chuyên sâu/khác biệt khi phù hợp, nhưng mỗi bài vẫn hữu ích độc lập và không lặp chủ đề cũ.
 - Không giả định thông tin không có trong Audit.
+- Mức ưu tiên Cao/Trung bình/Thấp trong Audit đã xếp theo trọng số tác động (danh mục, đánh giá, hiện ra quanh quán, website địa phương nặng; ảnh, bài đăng nhẹ). Đừng dồn tuần 1 vào việc đăng bài hay thêm ảnh khi còn việc ưu tiên Cao về danh mục, đánh giá hoặc website.
+- Mục ghi "chưa đủ dữ liệu" (nếu Audit có mục 8) KHÔNG phải là thiếu sót của hồ sơ: không lập việc "khắc phục" cho chúng, chỉ có thể đề xuất kiểm tra lại.
 - Viết ngắn gọn, cụ thể, có tính hành động.
 - Nếu có tiến độ hệ thống: không đưa việc one-shot đã done vào lộ trình; ưu tiên task còn mở và chủ đề nội dung chưa đăng; việc duy trì (đăng bài) phải đề xuất góc/chủ đề mới, không trùng bài đã có.
 `

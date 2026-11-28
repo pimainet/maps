@@ -1,37 +1,65 @@
-import type { AuditCoverage, CheckGroup, CheckResult, TierScore } from './types'
+import type { AuditCoverage, AuditWeighting, CheckGroup, CheckResult, TierScore } from './types'
+import { MIN_WEIGHT_COVERAGE_PCT, SCORING_VERSION, weightOf } from './weights'
 
-const SEVERITY_WEIGHT: Record<CheckResult['severity'], number> = {
-  critical: 4,
-  high: 3,
-  medium: 2,
-  low: 1,
-}
+export const GROUPS: CheckGroup[] = ['foundation', 'relevance', 'trust', 'visual', 'content', 'visibility', 'website', 'conversion']
 
-const GROUPS: CheckGroup[] = ['foundation', 'relevance', 'trust', 'visual', 'content', 'visibility', 'conversion']
+/** Check có được tính vào điểm không: không phải insight (scored=false) và có trọng số > 0. */
+export const isScored = (c: CheckResult): boolean => c.scored !== false && weightOf(c.id) > 0
 
-/** Check có được tính vào điểm không (insight như T06 thì không). */
-export const isScored = (c: CheckResult): boolean => c.scored !== false
+const round1 = (n: number) => Math.round(n * 10) / 10
 
 export function scoreTier(group: CheckGroup, checks: CheckResult[]): TierScore {
   const groupChecks = checks.filter((c) => c.group === group && isScored(c))
   const known = groupChecks.filter((c) => c.passed !== null)
+  const weight = groupChecks.reduce((s, c) => s + weightOf(c.id), 0)
+  const knownWeight = known.reduce((s, c) => s + weightOf(c.id), 0)
   const insufficientCount = groupChecks.length - known.length
-  if (known.length === 0) {
-    return { group, score: null, checkedCount: 0, insufficientCount }
+  if (known.length === 0 || knownWeight === 0) {
+    return { group, score: null, checkedCount: 0, insufficientCount, weight, knownWeight: 0 }
   }
-  const totalWeight = known.reduce((sum, c) => sum + SEVERITY_WEIGHT[c.severity], 0)
-  const passedWeight = known.filter((c) => c.passed === true).reduce((sum, c) => sum + SEVERITY_WEIGHT[c.severity], 0)
-  return { group, score: Math.round((passedWeight / totalWeight) * 100), checkedCount: known.length, insufficientCount }
+  const passedWeight = known.filter((c) => c.passed === true).reduce((s, c) => s + weightOf(c.id), 0)
+  return { group, score: Math.round((passedWeight / knownWeight) * 100), checkedCount: known.length, insufficientCount, weight, knownWeight }
 }
 
 export function scoreAllTiers(checks: CheckResult[]): TierScore[] {
   return GROUPS.map((group) => scoreTier(group, checks))
 }
 
-export function scoreOverall(tierScores: TierScore[]): number | null {
-  const known = tierScores.filter((t): t is TierScore & { score: number } => t.score !== null)
-  if (known.length === 0) return null
-  return Math.round(known.reduce((sum, t) => sum + t.score, 0) / known.length)
+/**
+ * Cách tính điểm, minh bạch: trọng số gốc của từng check, phần trọng số có dữ liệu, và trọng số THỰC TẾ sau khi
+ * chuẩn hoá lại (mục thiếu dữ liệu bị loại, phần của nó chia đều theo tỉ lệ cho các mục còn lại — theo từng check,
+ * nên 1 mục đơn lẻ không thể chiếm cả phần của một nhóm).
+ */
+export function weightingOf(checks: CheckResult[]): AuditWeighting {
+  const scored = checks.filter(isScored)
+  const totalWeight = scored.reduce((s, c) => s + weightOf(c.id), 0)
+  const knownWeight = scored.filter((c) => c.passed !== null).reduce((s, c) => s + weightOf(c.id), 0)
+  const coveragePct = totalWeight > 0 ? round1((knownWeight / totalWeight) * 100) : 0
+  return {
+    scoringVersion: SCORING_VERSION,
+    totalWeight,
+    knownWeight,
+    coveragePct,
+    minCoveragePct: MIN_WEIGHT_COVERAGE_PCT,
+    checks: scored.map((c) => ({
+      id: c.id,
+      weight: weightOf(c.id),
+      effectivePct: c.passed !== null && knownWeight > 0 ? round1((weightOf(c.id) / knownWeight) * 100) : 0,
+    })),
+  }
+}
+
+/** Điểm tổng 0–100 theo trọng số từng check; null khi phần trọng số có dữ liệu < MIN_WEIGHT_COVERAGE_PCT. */
+export function scoreChecks(checks: CheckResult[], opts?: { minCoveragePct?: number }): number | null {
+  const scored = checks.filter(isScored)
+  const totalWeight = scored.reduce((s, c) => s + weightOf(c.id), 0)
+  const known = scored.filter((c) => c.passed !== null)
+  const knownWeight = known.reduce((s, c) => s + weightOf(c.id), 0)
+  if (knownWeight === 0 || totalWeight === 0) return null
+  const min = opts?.minCoveragePct ?? MIN_WEIGHT_COVERAGE_PCT
+  if ((knownWeight / totalWeight) * 100 < min) return null
+  const passedWeight = known.filter((c) => c.passed === true).reduce((s, c) => s + weightOf(c.id), 0)
+  return Math.round((passedWeight / knownWeight) * 100)
 }
 
 export function coverageOf(checks: CheckResult[]): AuditCoverage {
@@ -46,9 +74,9 @@ export function coverageOf(checks: CheckResult[]): AuditCoverage {
 }
 
 /**
- * Điểm "cùng điều kiện" của 1 danh sách check, chỉ tính trên tập check cho trước (xem diff.ts).
- * Cùng công thức với scoreAllTiers + scoreOverall nên 2 lần chạy so sánh trên đúng cùng một tập check.
+ * Điểm "cùng điều kiện" của 1 danh sách check, chỉ tính trên tập check cho trước (xem diff.ts). Tập này đã là các check
+ * có dữ liệu ở cả 2 lần nên không áp ngưỡng độ phủ.
  */
 export function scoreOnSubset(checks: CheckResult[]): number | null {
-  return scoreOverall(scoreAllTiers(checks))
+  return scoreChecks(checks, { minCoveragePct: 0 })
 }

@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react'
-import { GROUP_LABEL_VI } from '@/lib/audit-engine/labels'
+import { GROUP_LABEL_VI, checkLabelVi } from '@/lib/audit-engine/labels'
 import type { AuditDiff, AuditReport, CheckGroup } from '@/lib/audit-engine'
 import type { ScoreOverride } from '@/components/dashboard/audit-result-view'
 
-const GROUP_ORDER: CheckGroup[] = ['foundation', 'relevance', 'trust', 'visual', 'content', 'visibility', 'conversion']
+const GROUP_ORDER: CheckGroup[] = ['foundation', 'relevance', 'trust', 'visual', 'content', 'visibility', 'website', 'conversion']
 const to10 = (score100: number) => Math.round(score100) / 10
 
 export type AuditComparison =
@@ -60,6 +60,50 @@ function ComparisonBlock({ c }: { c: AuditComparison }) {
   )
 }
 
+const STATUS_VI = (p: boolean | null) => (p === true ? 'Đạt' : p === false ? 'Chưa đạt' : 'Chưa đủ dữ liệu')
+
+/** Bảng "Cách tính điểm": trọng số gốc và trọng số thực tế của từng mục (chỉ báo cáo scoring v3). */
+export function WeightingBlock({ report }: { report: AuditReport }) {
+  const w = report.weighting
+  if (!w || w.checks.length === 0) return null
+  const byId = new Map(report.checks.map((c) => [c.id, c]))
+  const rows = [...w.checks].sort((a, b) => b.weight - a.weight)
+  const pct = (n: number) => (w.totalWeight > 0 ? Math.round((n / w.totalWeight) * 1000) / 10 : 0)
+  return (
+    <details className="insight" style={{ marginTop: 8 }}>
+      <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Cách tính điểm ({w.coveragePct}% trọng số có dữ liệu)</summary>
+      <p style={small}>
+        Mỗi mục có trọng số theo mức ảnh hưởng tới việc khách tìm thấy quán (danh mục, đánh giá, hiện ra quanh quán nặng nhất; ảnh và bài
+        đăng nhẹ). Mục chưa đủ dữ liệu được bỏ ra, phần của nó chia theo tỉ lệ cho các mục còn lại (cột "Thực tế").
+        {report.overallScore == null ? ` Dưới ${w.minCoveragePct}% trọng số có dữ liệu nên chưa chấm điểm tổng.` : ''}
+      </p>
+      <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ textAlign: 'left' }}>
+            <th>Mục</th>
+            <th>Trọng số</th>
+            <th>Thực tế</th>
+            <th>Kết quả</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => {
+            const c = byId.get(r.id)
+            return (
+              <tr key={r.id} style={{ borderTop: '1px solid var(--border, #eee)' }}>
+                <td>{checkLabelVi(r.id, c?.label ?? r.id)}</td>
+                <td>{pct(r.weight)}%</td>
+                <td>{r.effectivePct > 0 ? `${r.effectivePct}%` : '–'}</td>
+                <td>{STATUS_VI(c?.passed ?? null)}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </details>
+  )
+}
+
 /** Dựng phần thay thế điểm cho AuditResultView từ kết quả engine v2. */
 export function buildScoreOverride(report: AuditReport, comparison: AuditComparison | null): ScoreOverride {
   const cov = report.coverage
@@ -71,6 +115,7 @@ export function buildScoreOverride(report: AuditReport, comparison: AuditCompari
           {cov.insufficient > 0 ? `; ${cov.insufficient} mục chưa đủ dữ liệu để kết luận (không bị trừ điểm)` : ''}.
         </p>
       )}
+      <WeightingBlock report={report} />
       {comparison && <ComparisonBlock c={comparison} />}
     </>
   )
@@ -81,9 +126,12 @@ export function buildScoreOverride(report: AuditReport, comparison: AuditCompari
   return {
     delta,
     display: report.overallScore == null ? '–' : String(to10(report.overallScore)),
-    groups: GROUP_ORDER.map((g) => {
+    groups: GROUP_ORDER.flatMap((g) => {
       const t = report.tierScores.find((x) => x.group === g)
-      return { key: g, label: GROUP_LABEL_VI[g], score: t?.score == null ? null : to10(t.score) }
+      // Báo cáo v3: bỏ nhóm chỉ hiển thị (trọng số 0) và ghi trọng số cạnh tên nhóm. Báo cáo cũ giữ nguyên.
+      if (report.weighting && (!t || !t.weight)) return []
+      const share = report.weighting && t?.weight ? ` · ${Math.round((t.weight / report.weighting.totalWeight) * 100)}%` : ''
+      return [{ key: g, label: GROUP_LABEL_VI[g] + share, score: t?.score == null ? null : to10(t.score) }]
     }),
     extra,
   }

@@ -8,6 +8,7 @@ export const GROUP_LABEL_VI: Record<CheckGroup, string> = {
   visual: 'Hình ảnh',
   content: 'Bài đăng & nội dung',
   visibility: 'Hiện ra khi khách tìm',
+  website: 'Website địa phương',
   conversion: 'Khách liên hệ dễ dàng',
 }
 

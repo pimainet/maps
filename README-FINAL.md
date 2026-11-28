@@ -94,7 +94,10 @@ lần audit mới đầu tiên sẽ báo rõ điều đó. Không có dòng nào
 `npx tsx --env-file=.env.local scripts/measure-audit-noise.ts --url "<link Maps>" --area "<khu vực>" --runs 5`
 Kết quả cho biết check nào nên thêm vào `VOLATILE_CHECK_IDS` (`lib/audit-engine/stability.ts`).
 
-Quy ước so sánh: điểm chỉ so được giữa các lần cùng **major version** của `ENGINE_VERSION` (`lib/audit-engine/types.ts`).
+Cách tính điểm (scoring v3: trọng số theo từng check, chuẩn hoá minh bạch, ngưỡng độ phủ 30%): xem `docs/AUDIT_SCORING.md`.
+
+Quy ước so sánh: điểm chỉ so được giữa các lần cùng **major version** của `ENGINE_VERSION` (`lib/audit-engine/types.ts`)
+**và** cùng `SCORING_VERSION` (`lib/audit-engine/weights.ts`).
 Đổi tập check / ngưỡng / trọng số thì tăng MAJOR; sửa lỗi không đổi thang điểm thì tăng PATCH. Sửa prompt phân loại thì
 tăng `CLASSIFIER_PROMPT_VERSION` (`classifier-cache.ts`) để không dùng lại kết quả cache cũ.
 
