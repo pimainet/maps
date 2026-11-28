@@ -20,7 +20,7 @@ export const CHECK_WEIGHTS: Readonly<Record<string, number>> = {
   // Nền tảng (15)
   F01: 2, F02: 3, F03: 1, F04: 3, F05: 2, F06: 1, F07: 3,
   // Liên quan: danh mục, dịch vụ (25)
-  R01: 12, R02: 6, R03: 3, R04: 3, R05: 1,
+  R01: 5, R06: 7, R02: 6, R03: 3, R04: 3, R05: 1,
   // Review (25)
   T01: 6, T02: 6, T03: 8, T05: 3, VY03: 2,
   T04: 0, T06: 0,
@@ -40,7 +40,7 @@ export const weightOf = (id: string): number => CHECK_WEIGHTS[id] ?? 0
 
 /** Nhóm hiển thị theo bảng trọng số (để giao diện/tài liệu in đúng bảng). */
 export const WEIGHT_BUCKETS: Array<{ key: string; label: string; groups: CheckGroup[]; ids: string[] }> = [
-  { key: 'relevance', label: 'Liên quan: danh mục, dịch vụ', groups: ['relevance'], ids: ['R01', 'R02', 'R03', 'R04', 'R05'] },
+  { key: 'relevance', label: 'Liên quan: danh mục, dịch vụ', groups: ['relevance'], ids: ['R01', 'R06', 'R02', 'R03', 'R04', 'R05'] },
   { key: 'reviews', label: 'Review', groups: ['trust'], ids: ['T01', 'T02', 'T03', 'T05', 'VY03'] },
   { key: 'visibility', label: 'Hiển thị, khoảng cách', groups: ['visibility'], ids: ['VY01', 'VY02', 'VY04'] },
   { key: 'foundation', label: 'Nền tảng: đúng và đủ', groups: ['foundation'], ids: ['F01', 'F02', 'F03', 'F04', 'F05', 'F06', 'F07'] },

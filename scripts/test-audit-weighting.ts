@@ -31,12 +31,16 @@ const real = [
   mk('F01', 'foundation', true), mk('F02', 'foundation', true),
 ]
 const s = scoreChecks(real)!
-// trọng số có dữ liệu: R01 12 + T01 6 + T02 6 + V01 2 + C01 1 + F01 2 + F02 3 = 32; đạt: 2+1+2+3 = 8 -> 25
-assert.equal(s, 25)
+const knownW = sumIds(['R01', 'T01', 'T02', 'V01', 'C01', 'F01', 'F02'])
+const passW = sumIds(['V01', 'C01', 'F01', 'F02'])
+assert.equal(s, Math.round((passW / knownW) * 100))
+assert.ok(s < 40, 'trượt danh mục + sao thì điểm thấp dù đạt ảnh và bài đăng')
 const w = weightingOf(real)
-assert.equal(w.knownWeight, 32)
-assert.equal(w.totalWeight, 34)
-assert.equal(w.checks.find((c) => c.id === 'V01')!.effectivePct, 6.3, 'ảnh: ~6% thực tế, không phải 14,3%')
+assert.equal(w.knownWeight, knownW)
+assert.equal(w.totalWeight, knownW + weightOf('C02'))
+const v01 = w.checks.find((c) => c.id === 'V01')!.effectivePct
+assert.equal(v01, Math.round((weightOf('V01') / knownW) * 1000) / 10)
+assert.ok(v01 < 10, 'ảnh: dưới 10% thực tế, không phải 14,3% như v2')
 assert.equal(w.checks.find((c) => c.id === 'C02')!.effectivePct, 0, 'mục thiếu dữ liệu: 0% thực tế')
 const effSum = w.checks.reduce((a, c) => a + c.effectivePct, 0)
 assert.ok(Math.abs(effSum - 100) < 0.5, 'trọng số thực tế cộng lại ~100%')

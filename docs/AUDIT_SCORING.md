@@ -26,7 +26,7 @@ Chỉ so khi cùng major `ENGINE_VERSION` **và** cùng `scoringVersion`. Báo c
 
 | Nhóm | Tổng | Check (trọng số) |
 |---|---|---|
-| Liên quan: danh mục, dịch vụ | 25 | R01 danh mục chính đúng ngành 12, R02 danh mục phụ so với đối thủ 6, R03 dịch vụ 3, R04 mô tả 3, R05 thuộc tính 1 |
+| Liên quan: danh mục, dịch vụ | 25 | R06 danh mục chính so với 3–5 quán top 7, R02 danh mục phụ so với đối thủ 6, R03 dịch vụ 3, R04 mô tả 3, R01 danh mục chính đúng ngành (AI) 5, R05 thuộc tính 1 |
 | Review | 25 | T03 review mới 8, T01 số review so đối thủ 6, T02 sao so đối thủ 6, T05 tỉ lệ phản hồi 3, VY03 so trung vị đối thủ 2 |
 | Hiển thị, khoảng cách | 20 | VY04 phủ quanh quán (lưới) 10, VY01 thứ hạng tìm theo khu vực 6, VY02 nhiều từ khoá 4 |
 | Nền tảng | 15 | F02 3, F04 3, F07 3, F01 2, F05 2, F03 1, F06 1 |

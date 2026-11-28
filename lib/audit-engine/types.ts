@@ -79,6 +79,10 @@ export interface AuditInput {
     photoCountEst?: number
     category?: string | null
     subcategories?: string[]
+    /** Vị trí trong kết quả tìm (1 = đầu). Không có thì dùng thứ tự mảng. */
+    rank?: number
+    /** Place id (Outscraper) — để lấy thêm review của đối thủ (T07). */
+    placeId?: string | null
   }>
 
   /**

@@ -118,6 +118,59 @@ function checkR02(input: AuditInput): CheckResult {
   }
 }
 
+const R06_TOP_N = 5
+const R06_MIN_WITH_CATEGORY = 3
+
+/**
+ * R06 — Danh mục chính so với 3–5 quán đứng đầu cùng truy vấn "<danh mục> <khu vực>" (dữ liệu Outscraper đã thu, không gọi thêm).
+ * Đạt khi danh mục chính của hồ sơ trùng với quán #1 hoặc với danh mục chính phổ biến nhất trong top (≥2 quán).
+ * Lưu ý: truy vấn tìm đối thủ dựng từ chính danh mục của hồ sơ nên top thường cùng danh mục; khi top lại dùng danh mục KHÁC
+ * thì đó là tín hiệu mạnh rằng Google xếp hạng truy vấn này theo danh mục khác. Danh mục là yếu tố #1 của Whitespark LSRF 2026.
+ */
+function checkR06(input: AuditInput): CheckResult {
+  const base = insufficient('R06', 'Primary category vs top competitors', 'high')
+  const own = input.snapshot.primary_category?.trim()
+  if (!own) return { ...base, message: 'Chưa đọc được danh mục chính của hồ sơ.' }
+  const ranked = (input.competitors ?? [])
+    .map((c, i) => ({ c, r: typeof c.rank === 'number' ? c.rank : i + 1 }))
+    .sort((a, b) => a.r - b.r)
+    .slice(0, R06_TOP_N)
+    .map((x) => x.c)
+    .filter((c) => typeof c.category === 'string' && c.category.trim())
+  if (ranked.length < R06_MIN_WITH_CATEGORY) {
+    return { ...base, message: `Chưa đủ danh mục của các quán top để so (cần ít nhất ${R06_MIN_WITH_CATEGORY}, có ${ranked.length}).` }
+  }
+  const counts = new Map<string, { label: string; n: number; firstIdx: number }>()
+  ranked.forEach((c, idx) => {
+    const k = normCategory(c.category!)
+    const cur = counts.get(k)
+    if (cur) cur.n++
+    else counts.set(k, { label: c.category!.trim(), n: 1, firstIdx: idx })
+  })
+  const sorted = [...counts.entries()].sort((a, b) => b[1].n - a[1].n || a[1].firstIdx - b[1].firstIdx)
+  const [modeKey, mode] = sorted[0]
+  const topKey = normCategory(ranked[0].category!)
+  const ownKey = normCategory(own)
+  const ownCount = counts.get(ownKey)?.n ?? 0
+  const passed = ownKey === topKey || (ownKey === modeKey && mode.n >= 2)
+  const dist = sorted.map(([, v]) => `${v.label} ${v.n}/${ranked.length}`).join('; ')
+  const suggest = mode.n >= 2 ? mode.label : ranked[0].category!.trim()
+  return {
+    id: 'R06',
+    group: 'relevance',
+    label: 'Primary category vs top competitors',
+    severity: 'high',
+    confidence: 'estimated',
+    passed,
+    message: passed
+      ? `Danh mục chính "${own}" khớp với ${ownCount}/${ranked.length} quán đứng đầu (${dist}).`
+      : `Danh mục chính "${own}" chỉ khớp ${ownCount}/${ranked.length} quán đứng đầu; các quán top dùng: ${dist}.`,
+    action: passed
+      ? undefined
+      : `Các quán đứng đầu chủ yếu dùng danh mục chính "${suggest}". Nếu đúng hoạt động cốt lõi, cân nhắc đổi danh mục chính sang "${suggest}"; nếu chỉ là dịch vụ phụ thì thêm làm danh mục phụ.`,
+  }
+}
+
 /** R03 — Services: trường `services` KHÔNG có trong GbpSnapshotPayload hiện tại. */
 function checkR03(input: AuditInput): CheckResult {
   const services = input.snapshot.services
@@ -208,5 +261,5 @@ function checkR05(input: AuditInput): CheckResult {
 
 export async function runRelevanceChecks(input: AuditInput, ai: AIClassifier): Promise<CheckResult[]> {
   const [r01, r04] = await Promise.all([checkR01(input, ai), checkR04(input, ai)])
-  return [r01, checkR02(input), checkR03(input), r04, checkR05(input)]
+  return [r01, checkR06(input), checkR02(input), checkR03(input), r04, checkR05(input)]
 }

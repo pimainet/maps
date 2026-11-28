@@ -23,6 +23,7 @@ export const CHECK_LABEL_VI: Record<string, string> = {
   F07: 'Giờ mở cửa',
   R01: 'Danh mục chính',
   R02: 'Danh mục phụ',
+  R06: 'Danh mục chính so với quán top',
   R03: 'Dịch vụ / sản phẩm',
   R04: 'Mô tả doanh nghiệp',
   R05: 'Tiện ích & thuộc tính',
