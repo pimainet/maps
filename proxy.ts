@@ -30,6 +30,9 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith('/login') ||
     pathname.startsWith('/signup') ||
     pathname.startsWith('/auth') ||
+    // Chính sách bảo mật / Điều khoản: phải xem được trước khi đăng ký (Luật TMĐT 122/2025 Điều 11).
+    pathname === '/privacy' ||
+    pathname === '/terms' ||
     pathname.startsWith('/api/public/') ||
     // Cron authenticates with CRON_SECRET; unsubscribe links use an HMAC signature.
     pathname.startsWith('/api/cron/') ||

@@ -7,6 +7,7 @@
  * Không tự ghi rate-limit/usage: route gọi hàm này quyết định khi nào tính 1 lượt.
  */
 
+import { minimizeSnapshotRaw } from '@/lib/privacy/policy'
 import {
   GBP_DEEP_KEYS,
   createPendingSnapshot,
@@ -115,7 +116,8 @@ async function captureLive(client: SnapshotClient, workspaceId: string) {
       photos_count_est: result.photos_count_est ?? null,
       reviews: result.reviews || [],
       // Bản sao các trường "sâu" trong raw_json.deep: dùng được cả khi chưa chạy migration 015.
-      raw_json: { ...(result.raw && typeof result.raw === 'object' ? (result.raw as object) : {}), deep },
+      // Chỉ giữ siêu dữ liệu: payload thô của nhà cung cấp có tên/ảnh người viết review và nội dung Google không được lưu lâu.
+      raw_json: { ...minimizeSnapshotRaw(result.raw), deep },
       // Cột riêng (migration 015) — chưa có cột thì updateSnapshot tự bỏ qua.
       opening_hours: result.opening_hours || null,
       additional_categories: result.additional_categories || null,
@@ -172,7 +174,7 @@ async function enrichStoredSnapshot(row: any, client: SnapshotClient, workspaceI
     }
     // Bản sao trong raw_json.deep (dùng khi chưa có cột migration 015; questions_answers chỉ nằm ở đây).
     const deep = Object.fromEntries(GBP_DEEP_KEYS.map((k) => [k, e[k] ?? null]))
-    const rawJson = { ...(row.raw_json && typeof row.raw_json === 'object' ? row.raw_json : {}), deep }
+    const rawJson = { ...minimizeSnapshotRaw(row.raw_json), deep }
     await updateSnapshot(row.id, workspaceId, { ...patch, raw_json: rawJson }).catch((err) =>
       console.warn('enrichStoredSnapshot save failed:', err?.message),
     )

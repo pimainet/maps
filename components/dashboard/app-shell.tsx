@@ -10,6 +10,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { ChevronsUpDown, ClipboardCheck, CreditCard, FileText, House, ListChecks, LogOut, Menu, Plus, Settings, Store, X } from 'lucide-react'
 import { ToastProvider } from './toast-context'
+import { ConsentGate } from '@/components/legal/consent-gate'
 import { Brand } from './brand'
 import { ROLE_LABEL } from '@/lib/ui-constants'
 import { dedupeFetch } from '@/lib/dedupe-fetch'
@@ -270,6 +271,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <ToastProvider>
       <AppShellInner>{children}</AppShellInner>
+      <ConsentGate />
     </ToastProvider>
   )
 }

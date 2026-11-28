@@ -1,5 +1,5 @@
 // Supabase giả trong bộ nhớ cho test logic (không gọi mạng). Hỗ trợ đủ các lệnh hộp thư review dùng:
-// select (count/head), insert, upsert (onConflict + ignoreDuplicates), update, eq/neq/in/is/not/lt/gte/or, order, limit,
+// select (count/head), insert, upsert (onConflict + ignoreDuplicates), update, delete, eq/neq/in/is/not/lt/lte/gte/or, order, limit,
 // maybeSingle/single. Không phải PostgREST đầy đủ — chỉ để test.
 type Row = Record<string, any>
 
@@ -56,6 +56,11 @@ export function fakeSupabase(seed: Record<string, Row[]> = {}, opts: { uniques?:
       if (mode === 'insert') {
         if (insertError) return { data: null, error: insertError }
         return { data: wantRows ? inserted : null, error: null }
+      }
+      if (mode === 'delete') {
+        const rows = matchRows()
+        db[table] = tbl(table).filter((r) => !rows.includes(r))
+        return { data: wantRows ? rows.map((r) => ({ ...r })) : null, error: null }
       }
       if (mode === 'update') {
         const rows = matchRows()
@@ -120,12 +125,17 @@ export function fakeSupabase(seed: Record<string, Row[]> = {}, opts: { uniques?:
         patch = p
         return api
       },
+      delete: () => {
+        mode = 'delete'
+        return api
+      },
       eq: (k: string, v: any) => (filters.push((r) => r[k] === v), api),
       neq: (k: string, v: any) => (filters.push((r) => r[k] !== v), api),
       in: (k: string, vs: any[]) => (filters.push((r) => vs.includes(r[k])), api),
       is: (k: string, v: null) => (filters.push((r) => (v === null ? r[k] == null : r[k] === v)), api),
       not: (k: string, op: string, v: any) => (filters.push((r) => (op === 'is' && v === null ? r[k] != null : r[k] !== v)), api),
       lt: (k: string, v: any) => (filters.push((r) => r[k] != null && r[k] < v), api),
+      lte: (k: string, v: any) => (filters.push((r) => r[k] != null && r[k] <= v), api),
       gte: (k: string, v: any) => (filters.push((r) => r[k] != null && r[k] >= v), api),
       or: (expr: string) => (filters.push(parseOr(expr)), api),
       order: (col: string, o?: { ascending?: boolean }) => (orderBy.push({ col, asc: o?.ascending !== false }), api),

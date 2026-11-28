@@ -148,6 +148,9 @@ function LoginForm() {
             Đăng ký ngay
           </Link>
         </p>
+        <p className="auth-legal">
+          <Link href="/privacy">Chính sách bảo mật</Link> · <Link href="/terms">Điều khoản sử dụng</Link>
+        </p>
       </div>
     </div>
   )

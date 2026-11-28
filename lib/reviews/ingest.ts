@@ -128,7 +128,8 @@ export function planIngest(
 
     const patch: Record<string, unknown> = {}
     let becameRepliedElsewhere = false
-    if (!hit.author_name && inc.author_name) patch.author_name = inc.author_name
+    // Tên người viết bị xoá theo hạn lưu trữ (run_privacy_retention) ở review đã xử lý xong thì không điền lại.
+    if (!hit.author_name && inc.author_name && OPEN_FOR_REPLY.includes(hit.status)) patch.author_name = inc.author_name
     if (!hit.source_review_id && inc.source_review_id && inc.source === hit.source) patch.source_review_id = inc.source_review_id
     if (inc.gbp_review_name && hit.gbp_review_name !== inc.gbp_review_name) patch.gbp_review_name = inc.gbp_review_name
     if (inc.reviewed_at && inc.reviewed_at_exact && !hit.reviewed_at_exact) {

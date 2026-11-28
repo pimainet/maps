@@ -4,9 +4,10 @@ import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { Card } from '@/components/dashboard/shared'
 import { ROLE_LABEL } from '@/lib/ui-constants'
+import { PrivacySettings } from '@/components/legal/privacy-settings'
 
 export default function SettingsPage() {
-  const [tab, setTab] = useState<'workspace' | 'members' | 'reminders'>('workspace')
+  const [tab, setTab] = useState<'workspace' | 'members' | 'reminders' | 'privacy'>('workspace')
   const [activeWorkspace, setActiveWorkspace] = useState<any>(null)
   const [activeRole, setActiveRole] = useState<string>('member')
   const [members, setMembers] = useState<any[]>([])
@@ -27,6 +28,11 @@ export default function SettingsPage() {
   const [testing, setTesting] = useState(false)
   const [prefsError, setPrefsError] = useState('')
   const [prefsNotice, setPrefsNotice] = useState('')
+
+  // Mở thẳng tab qua link /settings?tab=privacy (hộp đồng ý, email).
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('tab') === 'privacy') setTab('privacy')
+  }, [])
 
   useEffect(() => {
     fetch('/api/me')
@@ -168,6 +174,9 @@ export default function SettingsPage() {
         <button className={tab === 'reminders' ? 'active' : ''} onClick={() => setTab('reminders')}>
           Nhắc việc
         </button>
+        <button className={tab === 'privacy' ? 'active' : ''} onClick={() => setTab('privacy')}>
+          Dữ liệu &amp; quyền riêng tư
+        </button>
       </Card>
 
       {tab === 'workspace' && (
@@ -192,6 +201,12 @@ export default function SettingsPage() {
               <strong>{ROLE_LABEL[activeRole] || activeRole}</strong>
             </div>
           </div>
+        </Card>
+      )}
+
+      {tab === 'privacy' && (
+        <Card className="settings-content">
+          <PrivacySettings />
         </Card>
       )}
 

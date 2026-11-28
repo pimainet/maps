@@ -219,7 +219,7 @@ nav .nav-item { margin-bottom: 4px; }
 .overline, .eyebrow { margin: 0 0 6px; color: var(--muted-foreground); font-size: 13.5px; font-weight: 500; }
 
 /* ── Nút ──────────────────────────────────────────────── */
-.primary-button, .secondary-button {
+.primary-button, .secondary-button, .danger-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -666,6 +666,46 @@ button.check-box:hover:not(:disabled) { border-color: var(--success); background
 .google-button:disabled { opacity: 0.6; }
 .auth-divider { display: flex; align-items: center; gap: 14px; margin: 22px 0; color: var(--muted-foreground); font-size: 14px; }
 .auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+/* ── Đồng ý, chính sách, quyền riêng tư ───────────────── */
+.consent-list { display: flex; flex-direction: column; gap: 12px; margin: 0 0 22px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 14px; background: rgb(0 0 0 / 0.14); }
+.consent-list legend { padding: 0 6px; font-size: 13.5px; font-weight: 600; color: var(--muted-foreground); }
+.consent-check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.5; cursor: pointer; }
+.consent-check input { flex: 0 0 auto; width: 18px; height: 18px; margin-top: 2px; accent-color: var(--primary); }
+.consent-check small { display: block; margin-top: 3px; color: var(--muted-foreground); font-size: 12.5px; }
+.consent-check a { color: var(--primary); }
+.consent-required { color: var(--warning); font-weight: 600; }
+.consent-hint { margin: 10px 0 0; font-size: 13.5px; color: var(--muted-foreground); text-align: center; }
+.auth-legal { margin: 10px 0 0; text-align: center; font-size: 13px; color: var(--muted-foreground); }
+.auth-legal a { color: var(--muted-foreground); }
+.consent-overlay { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 20px; background: rgb(3 5 12 / 0.78); }
+.consent-modal { width: 100%; max-width: 560px; max-height: calc(100dvh - 40px); overflow: auto; padding: 28px; border: 1px solid var(--border-strong); border-radius: 20px; background: var(--card, #131a2b); box-shadow: 0 40px 100px rgb(0 0 0 / 0.5); }
+.consent-modal h2 { margin: 0 0 8px; font-size: 22px; }
+.consent-modal p { margin: 0 0 16px; color: var(--muted-foreground); font-size: 14.5px; line-height: 1.55; }
+.consent-modal small { display: block; margin-top: 14px; color: var(--muted-foreground); font-size: 13px; }
+.consent-modal small a { color: var(--primary); }
+.consent-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+.danger-button { background: var(--danger-soft); border-color: rgb(245 138 138 / 0.35); color: var(--danger); }
+.danger-button:hover:not(:disabled) { background: rgb(245 138 138 / 0.2); }
+.danger-button:disabled { opacity: 0.5; }
+.privacy-block { padding: 18px 0; border-top: 1px solid var(--border); }
+.privacy-block h3 { margin: 0 0 10px; font-size: 17px; }
+.privacy-list { margin: 0 0 12px; padding-left: 20px; font-size: 14px; line-height: 1.6; }
+.privacy-confirm { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.privacy-confirm label { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.privacy-confirm input { height: 44px; padding: 0 12px; border: 1px solid var(--input); border-radius: var(--r-field); background: rgb(0 0 0 / 0.22); color: var(--foreground); }
+.legal-page { min-height: 100vh; padding: 32px 20px 64px; background: var(--background); }
+.legal-card { max-width: 920px; margin: 0 auto; line-height: 1.65; font-size: 15.5px; }
+.legal-card h1 { margin: 8px 0 4px; font-family: var(--font-display), Georgia, serif; font-weight: 350; font-size: 34px; line-height: 1.15; }
+.legal-card h2 { margin: 32px 0 10px; font-size: 20px; }
+.legal-card a { color: var(--primary); }
+.legal-card td small { display: block; color: var(--muted-foreground); }
+.legal-meta { margin: 0 0 18px; color: var(--muted-foreground); font-size: 14px; }
+.legal-nav { display: flex; flex-wrap: wrap; gap: 16px; margin: -16px 0 18px; font-size: 14px; }
+.legal-draft { margin: 0 0 20px; }
+.legal-footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--muted-foreground); font-size: 13.5px; }
+.legal-footer p { margin: 4px 0; }
+@media print { .legal-nav, .legal-draft { display: none; } .legal-page { background: #fff; color: #000; } }
 
 /* ── Màn hình vừa ─────────────────────────────────────── */
 @media (max-width: 1100px) {

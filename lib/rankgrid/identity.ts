@@ -25,6 +25,8 @@ export type ResolvedIdentity = {
   cid: string | null
   lat: number | null
   lng: number | null
+  /** Nguồn của toạ độ: 'places' = Google Places API -> chỉ được lưu tối đa 30 ngày (GMP Service Specific Terms). */
+  latLngSource: 'saved' | 'places' | 'outscraper' | null
   name: string | null
   sources: string[]
   needsConfirm: boolean
@@ -72,6 +74,7 @@ export async function resolveClientIdentity(c: ClientIdentityInput): Promise<Res
     cid: c.gbp_cid || cidFromMapsUrl(c.gbp_link),
     lat: num(c.latitude),
     lng: num(c.longitude),
+    latLngSource: validLatLng(num(c.latitude), num(c.longitude)) ? 'saved' : null,
     name: c.name ?? null,
     sources: [],
     needsConfirm: false,
@@ -84,7 +87,7 @@ export async function resolveClientIdentity(c: ClientIdentityInput): Promise<Res
     try {
       const d = await placesDetails(out.placeId)
       if (d) {
-        if (validLatLng(d.lat, d.lng)) ((out.lat = d.lat), (out.lng = d.lng))
+        if (validLatLng(d.lat, d.lng)) ((out.lat = d.lat), (out.lng = d.lng), (out.latLngSource = 'places'))
         out.cid = out.cid || d.cid
         out.name = d.name || out.name
         out.sources.push('places')
@@ -111,7 +114,7 @@ export async function resolveClientIdentity(c: ClientIdentityInput): Promise<Res
         } else {
           out.placeId = out.placeId || o.placeId
           out.cid = out.cid || o.cid
-          if (!validLatLng(out.lat, out.lng) && validLatLng(o.lat, o.lng)) ((out.lat = o.lat), (out.lng = o.lng))
+          if (!validLatLng(out.lat, out.lng) && validLatLng(o.lat, o.lng)) ((out.lat = o.lat), (out.lng = o.lng), (out.latLngSource = 'outscraper'))
           out.name = o.name || out.name
           out.sources.push('outscraper')
           if (byName) out.needsConfirm = true
@@ -133,6 +136,6 @@ export async function resolveClientIdentity(c: ClientIdentityInput): Promise<Res
     } else if (r.error) out.errors.push(r.error)
   }
 
-  if (!validLatLng(out.lat, out.lng)) ((out.lat = null), (out.lng = null))
+  if (!validLatLng(out.lat, out.lng)) ((out.lat = null), (out.lng = null), (out.latLngSource = null))
   return out
 }

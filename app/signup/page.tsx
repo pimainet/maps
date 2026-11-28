@@ -5,6 +5,14 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Brand } from '@/components/dashboard/brand'
+import { ConsentChecklist } from '@/components/legal/consent-checklist'
+import { CONSENT_COOKIE, CONSENT_VERSION, encodeConsentCookie, missingRequiredPurposes, type ConsentChoice } from '@/lib/privacy/policy'
+
+/** Ghi lựa chọn đồng ý vào cookie tạm (2 ngày) để ghi nhận vào consent_records ngay sau khi có tài khoản. */
+function rememberConsent(choice: ConsentChoice, at: Date) {
+  const secure = window.location.protocol === 'https:' ? '; Secure' : ''
+  document.cookie = `${CONSENT_COOKIE}=${encodeConsentCookie(choice, at)}; Max-Age=172800; Path=/; SameSite=Lax${secure}`
+}
 
 export default function SignupPage() {
   const router = useRouter()
@@ -16,12 +24,20 @@ export default function SignupPage() {
   const [googleLoading, setGoogleLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [consent, setConsent] = useState<ConsentChoice>({})
+  const consentOk = missingRequiredPurposes(consent).length === 0
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault()
+    if (!consentOk) {
+      setError('Vui lòng đánh dấu các mục đồng ý bắt buộc để tạo tài khoản.')
+      return
+    }
     setLoading(true)
     setError('')
 
+    const consentAt = new Date()
+    rememberConsent(consent, consentAt)
     const supabase = createClient()
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -29,6 +45,10 @@ export default function SignupPage() {
       options: {
         data: {
           full_name: fullName,
+          // Bản sao lựa chọn đồng ý (khi xác nhận email ở thiết bị khác, cookie không còn).
+          consent_version: CONSENT_VERSION,
+          consent_at: consentAt.toISOString(),
+          consent_purposes: { service: consent.service === true, cross_border: consent.cross_border === true, marketing: consent.marketing === true },
         },
       },
     })
@@ -50,8 +70,13 @@ export default function SignupPage() {
   }
 
   async function handleGoogleSignup() {
+    if (!consentOk) {
+      setError('Vui lòng đánh dấu các mục đồng ý bắt buộc trước khi đăng ký với Google.')
+      return
+    }
     setGoogleLoading(true)
     setError('')
+    rememberConsent(consent, new Date())
 
     const supabase = createClient()
     const { error } = await supabase.auth.signInWithOAuth({
@@ -93,11 +118,13 @@ export default function SignupPage() {
         <h1>Tạo tài khoản</h1>
         <p className="auth-sub">Theo dõi và làm theo kế hoạch tăng khách từ Google Maps.</p>
 
+        <ConsentChecklist value={consent} onChange={setConsent} disabled={loading || googleLoading} />
+
         <button
           type="button"
           className="google-button"
           onClick={handleGoogleSignup}
-          disabled={googleLoading || loading}
+          disabled={googleLoading || loading || !consentOk}
         >
           <GoogleIcon />
           {googleLoading ? 'Đang chuyển hướng…' : 'Đăng ký với Google'}
@@ -147,13 +174,18 @@ export default function SignupPage() {
 
           {error && <p className="auth-error">{error}</p>}
 
-          <button type="submit" className="primary-button auth-submit" disabled={loading || googleLoading}>
+          <button type="submit" className="primary-button auth-submit" disabled={loading || googleLoading || !consentOk}>
             {loading ? 'Đang tạo tài khoản…' : 'Đăng ký bằng email'}
           </button>
         </form>
 
+        {!consentOk && <p className="consent-hint">Đánh dấu 2 mục bắt buộc ở trên để bật nút đăng ký.</p>}
+
         <p className="auth-footer">
           Đã có tài khoản? <Link href="/login">Đăng nhập</Link>
+        </p>
+        <p className="auth-legal">
+          <Link href="/privacy">Chính sách bảo mật</Link> · <Link href="/terms">Điều khoản sử dụng</Link>
         </p>
       </div>
     </div>

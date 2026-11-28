@@ -1,11 +1,13 @@
 // Cron hằng ngày (Vercel Hobby chỉ cho chạy 1 lần/ngày): đối soát bù giao dịch SePay 3 ngày gần nhất, chuyển kỳ đã xếp lịch,
-// hạ gói về miễn phí sau 3 ngày ân hạn, hết hạn đơn chờ > 7 ngày, gửi bù biên nhận, nhắc gia hạn, tóm tắt hàng chờ cho admin.
+// hạ gói về miễn phí sau 3 ngày ân hạn, hết hạn đơn chờ > 7 ngày, gửi bù biên nhận, nhắc gia hạn, tóm tắt hàng chờ cho admin,
+// thực hiện yêu cầu xoá tài khoản đến hạn và dọn dữ liệu cá nhân quá hạn lưu trữ.
 // Bảo vệ bằng CRON_SECRET như các cron khác. Mỗi bước độc lập: một bước lỗi không chặn bước sau.
 import crypto from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { pollSePay, runRenewalReminders, sendAdminDigest, sendPendingReceipts } from '@/lib/billing/reconcile'
 import { PLAN_GRACE_DAYS } from '@/lib/billing/plans'
+import { executeDueDeletions, runRetention } from '@/lib/privacy/server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -48,6 +50,10 @@ export async function GET(req: Request) {
   await step(out, 'receipts', () => sendPendingReceipts(supabaseAdmin))
   await step(out, 'reminders', () => runRenewalReminders(supabaseAdmin))
   await step(out, 'admin_digest', () => sendAdminDigest(supabaseAdmin))
+  // Bảo vệ dữ liệu cá nhân (gộp vào cron này vì Vercel Hobby giới hạn số cron): xoá tài khoản đã hết thời gian huỷ,
+  // rồi dọn dữ liệu quá hạn (gbp_snapshots, tên người viết review, toạ độ Places > 30 ngày...). Xem docs/DATA_PROTECTION.md.
+  await step(out, 'privacy_deletions', () => executeDueDeletions(supabaseAdmin))
+  await step(out, 'privacy_retention', () => runRetention(supabaseAdmin))
 
   const failed = Object.values(out).some((v: any) => v && typeof v === 'object' && 'error' in v)
   return NextResponse.json({ ok: !failed, ...out }, { status: failed ? 500 : 200 })

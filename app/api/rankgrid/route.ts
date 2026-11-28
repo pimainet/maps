@@ -27,6 +27,7 @@ import {
   suggestSpacingM,
 } from '@/lib/rankgrid/geometry'
 import { cleanKeyword, normalizeKeyword, suggestKeywords } from '@/lib/rankgrid/keywords'
+import { isMissingColumnError } from '@/lib/privacy/db-compat'
 import { resolveClientIdentity } from '@/lib/rankgrid/identity'
 import { NOMINATIM_DELAY_MS, nominatimTester } from '@/lib/rankgrid/water'
 import { nextRunAt } from '@/lib/rankgrid/period'
@@ -150,11 +151,13 @@ export async function POST(req: Request) {
           { status: 422 },
         )
       }
-      await supabaseAdmin
-        .from('clients')
-        .update({ latitude: id.lat, longitude: id.lng, ...(id.cid ? { gbp_cid: id.cid } : {}) })
-        .eq('id', client.id)
-        .eq('workspace_id', workspaceId)
+      const basePatch = { latitude: id.lat, longitude: id.lng, ...(id.cid ? { gbp_cid: id.cid } : {}) }
+      // Ghi nguồn toạ độ để run_privacy_retention xoá toạ độ Places sau 30 ngày (cột có từ migration 033; chưa có thì ghi như cũ).
+      const provenance = id.latLngSource && id.latLngSource !== 'saved' ? { latlng_source: id.latLngSource, latlng_cached_at: new Date().toISOString() } : {}
+      const upd = await supabaseAdmin.from('clients').update({ ...basePatch, ...provenance }).eq('id', client.id).eq('workspace_id', workspaceId)
+      if (upd.error && Object.keys(provenance).length && isMissingColumnError(upd.error)) {
+        await supabaseAdmin.from('clients').update(basePatch).eq('id', client.id).eq('workspace_id', workspaceId)
+      }
       const existing = await getConfig(client.id, workspaceId)
       const patch = { target_place_id: id.placeId, target_cid: id.cid, updated_at: new Date().toISOString() }
       if (existing) {
