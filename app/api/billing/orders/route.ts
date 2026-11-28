@@ -62,18 +62,38 @@ export async function POST(req: Request) {
   }
 }
 
-/** Lịch sử đơn của workspace (RLS cũng cho đọc, nhưng đi qua server để trả gọn). */
+/** Lịch sử đơn của workspace + thông tin chuyển khoản cho đơn còn mở (để khách mở lại QR). */
 export async function GET() {
   try {
     const workspaceId = await requireActiveWorkspaceAdmin()
-    const { data, error } = await supabaseAdmin
+    const base = 'order_code, plan, period_months, amount_vnd, status, created_at, paid_at'
+    let res: any = await supabaseAdmin
       .from('payments')
-      .select('order_code, plan, period_months, amount_vnd, status, created_at, paid_at')
+      .select(`${base}, paid_amount_vnd, overpaid_vnd, expires_at, receipt_no`)
       .eq('workspace_id', workspaceId)
       .order('created_at', { ascending: false })
       .limit(20)
-    if (error) throw error
-    return NextResponse.json({ orders: data })
+    // Trước khi áp migration 030 chưa có các cột mới: đọc lại cột cũ
+    if (res.error?.code === '42703') res = await supabaseAdmin.from('payments').select(base).eq('workspace_id', workspaceId).order('created_at', { ascending: false }).limit(20)
+    if (res.error) throw res.error
+    const bank = readBankInfo()
+    const orders = (res.data || []).map((o: any) => {
+      const open = o.status === 'pending' || o.status === 'partial'
+      if (!open || !bank) return o
+      const remaining = Math.max(0, o.amount_vnd - (o.paid_amount_vnd || 0))
+      return {
+        ...o,
+        transfer: {
+          bank_id: bank.bankId,
+          account_no: bank.accountNo,
+          account_name: bank.accountName,
+          amount: remaining || o.amount_vnd,
+          content: transferContent(o.order_code),
+          qr_url: vietQrUrl(bank, remaining || o.amount_vnd, o.order_code),
+        },
+      }
+    })
+    return NextResponse.json({ orders })
   } catch (error) {
     return NextResponse.json({ error: publicError(error) }, { status: errorStatus(error) })
   }

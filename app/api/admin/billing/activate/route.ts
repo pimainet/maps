@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import { errorStatus, publicError } from '@/lib/api-error'
-import { requireSuperAdmin } from '@/lib/auth'
+import { getCurrentUser, requireSuperAdmin } from '@/lib/auth'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { readJsonObject } from '@/lib/request-body'
+import { sendReceipt } from '@/lib/billing/reconcile'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -13,8 +14,8 @@ export async function GET() {
     await requireSuperAdmin()
     const { data, error } = await supabaseAdmin
       .from('payments')
-      .select('order_code, workspace_id, plan, period_months, amount_vnd, status, created_at, workspace:workspaces(name)')
-      .in('status', ['pending', 'amount_mismatch'])
+      .select('order_code, workspace_id, plan, period_months, amount_vnd, paid_amount_vnd, status, created_at, workspace:workspaces(name)')
+      .in('status', ['pending', 'partial', 'amount_mismatch'])
       .order('created_at', { ascending: false })
       .limit(50)
     if (error) throw error
@@ -25,8 +26,9 @@ export async function GET() {
 }
 
 /**
- * Kích hoạt thủ công sau khi bạn ĐÃ thấy tiền vào tài khoản.
- * Phải nhập số tiền thực nhận: lệch số tiền của đơn thì không kích hoạt (hàm SQL tự chặn).
+ * Kích hoạt thủ công sau khi bạn ĐÃ thấy tiền vào tài khoản mà webhook/đối soát bù không bắt được.
+ * Phải nhập số tiền thực nhận: thiếu thì đơn ở trạng thái 'partial' (chưa kích hoạt), dư thì kích hoạt + vào hàng chờ hoàn phần dư.
+ * Đi qua sổ bank_transactions + nhật ký billing_events (migration 030).
  */
 export async function POST(req: Request) {
   try {
@@ -43,9 +45,12 @@ export async function POST(req: Request) {
       p_provider: 'manual',
       p_txn_id: `manual-${orderCode}`,
       p_paid_amount: paid,
-      p_raw: { by: 'superadmin', at: new Date().toISOString() },
+      p_raw: { by: 'superadmin', admin_id: (await getCurrentUser())?.id ?? null, at: new Date().toISOString() },
     })
     if (error) throw error
+    if (['activated', 'extended', 'scheduled'].includes(String(data))) {
+      await sendReceipt(supabaseAdmin, orderCode).catch((e) => console.error('receipt after manual activate failed:', e?.message))
+    }
     return NextResponse.json({ result: data })
   } catch (error) {
     return NextResponse.json({ error: publicError(error) }, { status: errorStatus(error) === 500 ? 403 : errorStatus(error) })

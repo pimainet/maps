@@ -43,7 +43,9 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith('/api/reviews/sync') ||
     pathname.startsWith('/api/reviews/result') ||
     // DataForSEO pingback: xác thực bằng HMAC (RANKGRID_PINGBACK_SECRET).
-    pathname.startsWith('/api/rankgrid/pingback')
+    pathname.startsWith('/api/rankgrid/pingback') ||
+    // Webhook ngân hàng/cổng thanh toán (SePay): tự xác thực bằng HMAC / API key trong route.
+    pathname.startsWith('/api/webhooks/')
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone()
