@@ -5,6 +5,7 @@ import { runContentBasicChecks, runContentAdvancedChecks } from './content'
 import { runVisualChecks } from './visual'
 import { runVisibilityChecks } from './visibility'
 import { runConversionChecks } from './conversion'
+import { runWebsiteChecks } from './website'
 import { coverageOf, scoreAllTiers, scoreChecks, weightingOf } from './scoring'
 import { SCORING_VERSION, weightOf } from './weights'
 import { applyStabilityFlags } from './stability'
@@ -45,8 +46,9 @@ export async function runAudit(input: AuditInput, ai: AIClassifier): Promise<Aud
   const contentBasic = runContentBasicChecks(input)
   const visual = runVisualChecks(input)
   const visibility = runVisibilityChecks(input)
+  const website = runWebsiteChecks(input)
 
-  const checksSoFar = [...foundation, ...relevance, ...trust, ...contentBasic, ...contentAdvanced, ...visual, ...visibility]
+  const checksSoFar = [...foundation, ...relevance, ...trust, ...contentBasic, ...contentAdvanced, ...visual, ...visibility, ...website]
   const conversion = runConversionChecks(checksSoFar)
 
   // Trọng số 0 (insight, mục suy ra, mục chưa thu thập) -> ghi rõ scored=false trong báo cáo đã lưu.

@@ -102,6 +102,9 @@ export interface AuditInput {
    */
   rankGrid?: RankGridAuditInput
 
+  /** Tín hiệu địa phương của website (W01–W04). undefined = chưa lấy (không có website / lỗi) -> "chưa đủ dữ liệu". */
+  website?: WebsiteSignals
+
   now?: Date
 }
 
@@ -120,6 +123,37 @@ export interface RankGridAuditInput {
     leader?: { title: string; solv: number; reviews: number | null } | null
   }
   keywords: Array<{ keyword: string; solv: number | null; foundPct: number | null }>
+}
+
+/**
+ * Tín hiệu địa phương của website (lấy bởi lib/website-signals.ts: GET an toàn, tôn trọng robots.txt, cache 7 ngày).
+ * Các trường boolean | null: null = không so được (vd hồ sơ không có số điện thoại) — check tương ứng "chưa đủ dữ liệu".
+ */
+export interface WebsiteSignals {
+  fetchedAt: string
+  url: string
+  finalUrl?: string
+  status: 'ok' | 'robots_disallowed' | 'robots_error' | 'unreachable' | 'unsafe' | 'not_html' | 'http_error' | 'social'
+  /** Chi tiết khi không ok (mã HTTP, lý do), để hiện cho người dùng. */
+  detail?: string
+  https?: boolean
+  hasViewport?: boolean
+  title?: string | null
+  h1?: string[]
+  schemaTypes?: string[]
+  localBusinessSchema?: boolean
+  /** Số điện thoại hồ sơ có trên trang (tel:, văn bản, schema). */
+  phoneOnPage?: boolean | null
+  /** Địa chỉ hồ sơ (số nhà + tên đường) có trên trang hoặc trong schema. */
+  addressOnPage?: boolean | null
+  /** Tên doanh nghiệp có trên trang. */
+  nameOnPage?: boolean | null
+  /** Quận/huyện, tỉnh/thành của hồ sơ có trong title hoặc H1. */
+  cityInTitleOrH1?: boolean | null
+  /** Các tên địa danh đã dùng để so (đã chuẩn hoá hiển thị). */
+  placeTerms?: string[]
+  /** Dấu vân tay NAP hồ sơ dùng khi so — đổi thì không dùng lại cache. */
+  profileKey?: string
 }
 
 export interface CheckResult {

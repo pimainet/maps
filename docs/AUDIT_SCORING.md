@@ -30,6 +30,7 @@ Chỉ so khi cùng major `ENGINE_VERSION` **và** cùng `scoringVersion`. Báo c
 | Review | 25 | T03 review mới 8, T01 số review so đối thủ 6, T02 sao so đối thủ 6, T05 tỉ lệ phản hồi 3, VY03 so trung vị đối thủ 2 |
 | Hiển thị, khoảng cách | 20 | VY04 phủ quanh quán (lưới) 10, VY01 thứ hạng tìm theo khu vực 6, VY02 nhiều từ khoá 4 |
 | Nền tảng | 15 | F02 3, F04 3, F07 3, F01 2, F05 2, F03 1, F06 1 |
+| Website địa phương | 10 | W01 tên/địa chỉ/SĐT trên website khớp hồ sơ 4, W02 quận/thành phố trong title hoặc H1 3, W03 schema LocalBusiness 2, W04 HTTPS + viewport điện thoại 1 |
 | Ảnh và bài đăng | 5 | V01 số ảnh 2, C02 bài đăng gần đây 2, C01 có bài đăng 1 |
 | Chỉ hiển thị (0) | – | CV01–CV04, T04, T06, C03, C04, V02–V04 |
 
@@ -38,3 +39,13 @@ Chỉ so khi cùng major `ENGINE_VERSION` **và** cùng `scoringVersion`. Báo c
 - Whitespark Local Search Ranking Factors 2026: danh mục chính #1, khoảng cách #2, sao #6; số ảnh #96, bài đăng #148.
 - Hướng dẫn của Google (relevance, distance, prominence): đánh giá và vị trí là tín hiệu nổi bật; bài đăng/ảnh hỗ trợ chuyển đổi.
 - Trọng số là lựa chọn sản phẩm, không phải số đo của Google. Khi có đủ audit + lưới thứ hạng thật, nên hồi quy lại.
+
+## Website địa phương (W01–W04)
+
+`lib/website-signals.ts` lấy trang chủ website trên hồ sơ (`lib/safe-fetch.ts`):
+- Chống SSRF: chỉ http/https cổng 80/443, không user:pass; phân giải DNS ngay lúc kết nối và từ chối IP nội bộ / loopback /
+  link-local (169.254.169.254) / CGNAT / IPv6 nội bộ / IPv4-mapped; kiểm tra lại ở mỗi lần chuyển hướng (tối đa 4).
+- Giới hạn 10 giây, 1,5 MB (cả sau giải nén). User-Agent `LocalGrowthOS-AuditBot/1.0`.
+- Tôn trọng robots.txt (RFC 9309); robots.txt lỗi 5xx hoặc không tải được thì không lấy trang.
+- Link là Facebook/Zalo/Instagram/sàn… thì không chấm (chưa đủ dữ liệu). Website chết đã tính ở F06, không trừ lần nữa.
+- Cache 7 ngày trong `gbp_snapshots.raw_json.audit_cache.website_signals` (theo URL + tên/SĐT/địa chỉ hồ sơ). Không cần migration.

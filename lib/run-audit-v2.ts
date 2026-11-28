@@ -2,6 +2,7 @@ import { getReviewCountHistory } from '@/lib/db'
 import { buildAdvice } from '@/lib/audit-engine/advice'
 import { resolveCompetitorSet } from '@/lib/competitors-store'
 import { loadRankGridAuditInput } from '@/lib/rankgrid/audit-input'
+import { collectWebsiteSignals } from '@/lib/website-signals'
 import { createSupabaseClassifierStore } from '@/lib/audit-classifier-store'
 import {
   checkWebsiteReachable,
@@ -22,6 +23,7 @@ export type AuditV2Output = {
   meta: {
     competitors: { from: 'cache' | 'live' | 'none'; note: string | null; count: number }
     reviewHistoryPoints: number
+    website: { from: 'cache' | 'live' | 'none'; status: string | null }
     classifier: { hits: number; misses: number }
   }
 }
@@ -42,13 +44,20 @@ export async function runAuditV2(args: {
 }): Promise<AuditV2Output> {
   const { client, workspaceId, snapshot } = args
 
-  const [websiteReachable, comp, history, rankGrid] = await Promise.all([
+  const [websiteReachable, comp, history, rankGrid, web] = await Promise.all([
     checkWebsiteReachable(snapshot.website_url).catch(() => undefined),
     resolveCompetitorSet({ snapshot, clientId: client.id, workspaceId, declaredArea: client.area, force: args.forceCompetitors }).catch(
       () => ({ set: null, from: 'none' as const, note: 'Lỗi tìm đối thủ' }),
     ),
     getReviewCountHistory(client.id, workspaceId).catch(() => []),
     loadRankGridAuditInput(client.id, workspaceId).catch(() => undefined),
+    // Tín hiệu địa phương của website (W01–W04): GET an toàn + robots.txt, cache 7 ngày.
+    collectWebsiteSignals({
+      url: snapshot.website_url,
+      profile: { name: snapshot.business_name || client.name, phone: snapshot.phone, address: snapshot.address_text, area: client.area },
+      clientId: client.id,
+      workspaceId,
+    }).catch(() => ({ signals: undefined, from: 'none' as const })),
   ])
 
   const competitors = comp.set?.items.length ? comp.set.items : undefined
@@ -65,6 +74,7 @@ export async function runAuditV2(args: {
       visibility,
       reviewCountHistory: history.length ? history : undefined,
       rankGrid,
+      website: web.signals,
     },
     ai,
   )
@@ -97,6 +107,7 @@ export async function runAuditV2(args: {
     meta: {
       competitors: { from: comp.from, note: comp.note ?? null, count: comp.set?.items.length ?? 0 },
       reviewHistoryPoints: history.length,
+      website: { from: web.from, status: web.signals?.status ?? null },
       classifier: { hits: ai.stats.hits, misses: ai.stats.misses },
     },
   }

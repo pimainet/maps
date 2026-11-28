@@ -26,6 +26,8 @@ export const CHECK_WEIGHTS: Readonly<Record<string, number>> = {
   T04: 0, T06: 0,
   // Hiển thị, khoảng cách (20)
   VY01: 6, VY02: 4, VY04: 10,
+  // Website địa phương (10)
+  W01: 4, W02: 3, W03: 2, W04: 1,
   // Ảnh & bài đăng (5)
   V01: 2, C01: 1, C02: 2,
   C03: 0, C04: 0, V02: 0, V03: 0, V04: 0,
@@ -44,5 +46,6 @@ export const WEIGHT_BUCKETS: Array<{ key: string; label: string; groups: CheckGr
   { key: 'reviews', label: 'Review', groups: ['trust'], ids: ['T01', 'T02', 'T03', 'T05', 'VY03'] },
   { key: 'visibility', label: 'Hiển thị, khoảng cách', groups: ['visibility'], ids: ['VY01', 'VY02', 'VY04'] },
   { key: 'foundation', label: 'Nền tảng: đúng và đủ', groups: ['foundation'], ids: ['F01', 'F02', 'F03', 'F04', 'F05', 'F06', 'F07'] },
+  { key: 'website', label: 'Website địa phương', groups: ['website'], ids: ['W01', 'W02', 'W03', 'W04'] },
   { key: 'media', label: 'Ảnh và bài đăng', groups: ['visual', 'content'], ids: ['V01', 'C01', 'C02'] },
 ]

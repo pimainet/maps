@@ -84,7 +84,7 @@ Biến môi trường cho audit:
 | `GOOGLE_PLACES_API_KEY` | Bù dữ liệu cơ bản | Như trên |
 | `DATAFORSEO_LOGIN/PASSWORD` + cờ lưới thứ hạng | VY02/VY04 (độ phủ theo vị trí) | Hai mục này "chưa đủ dữ liệu" |
 
-Kiểm tra website của khách (F-nhóm) là HTTP GET trực tiếp, không cần khoá. Lịch sử số review (T04) lấy từ snapshot đã lưu.
+Kiểm tra website của khách (F06 và W01–W04: tên/địa chỉ/SĐT khớp hồ sơ, khu vực trong tiêu đề, schema LocalBusiness, HTTPS) là HTTP GET trực tiếp, không cần khoá — chống SSRF, tôn trọng robots.txt, cache 7 ngày (xem `docs/AUDIT_SCORING.md`). Lịch sử số review (T04) lấy từ snapshot đã lưu.
 
 Audit **kiểu cũ** đã lưu (cột `checks_json` rỗng) vẫn xem được, chỉ đọc: trang Kiểm tra hồ sơ tự hiện audit gần nhất kèm ghi chú "kiểu cũ";
 lộ trình 30 ngày và trí nhớ khách hàng vẫn đọc văn bản `audit_result` của chúng. Điểm cũ (thang 10) không so sánh trực tiếp với điểm mới;
