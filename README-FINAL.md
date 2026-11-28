@@ -43,7 +43,7 @@ GBP_ENRICH_PLACE_ORDER=         # tùy chọn, mặc định "searchapi,serpapi"
 # Tùy chọn
 CRON_SECRET=
 REVIEW_WATCH_ENABLED=false
-AUDIT_ENGINE_MODE=v1            # v1 (mặc định) | shadow | v2 — xem mục "Điểm audit lặp lại được" bên dưới
+# AUDIT_ENGINE_MODE đã bị gỡ: chỉ còn một engine chấm điểm (v2). Có đặt biến này trong Vercel cũng bị bỏ qua — nên xoá cho gọn.
 ```
 
 ## Cài đặt nhanh
@@ -63,32 +63,32 @@ Chạy migration trong thư mục `supabase/migrations/` theo thứ tự số.
 npm run test:logic
 ```
 
-## Điểm audit lặp lại được (Audit Engine v2)
+## Audit: một engine duy nhất, điểm lặp lại được
 
-Vấn đề: ở chế độ `v1`, điểm do Claude tự chấm trong một prompt (temperature 0.4) nên cùng một hồ sơ có thể ra điểm khác nhau
-giữa hai lần. Engine v2 (`lib/audit-engine/`) sửa tận gốc: **rule quyết đạt/không đạt, điểm là số học thuần**; AI chỉ phân loại
-4 mục (temperature 0, kết quả được cache theo nội dung đầu vào) và viết lời giải thích — lời không ảnh hưởng điểm.
+Engine cũ (v1: một prompt Claude tự chấm, temperature 0.4, thang 10) **đã bị gỡ khỏi code**; công tắc `AUDIT_ENGINE_MODE` cũng bỏ.
+`POST /api/audit` luôn chạy engine trong `lib/audit-engine/` (qua `lib/run-audit-v2.ts`): **rule quyết đạt/không đạt, điểm là số học
+thuần (thang 100)**; AI chỉ phân loại một số mục (temperature 0, kết quả cache theo nội dung trong bảng `ai_classification_cache`) và
+viết lời giải thích — lời không ảnh hưởng điểm.
 
-Công tắc `AUDIT_ENGINE_MODE` (đổi env rồi redeploy, lùi về `v1` bất cứ lúc nào):
+Mỗi audit gọi Claude tối đa 8 lần (phân loại danh mục, mô tả, review, đa dạng + chất lượng bài đăng; 2 lần cho lời khuyên danh mục/mô tả mẫu;
+1 lần viết nhận xét). Các lần phân loại trùng nội dung được lấy từ cache nên audit lặp lại rẻ hơn. Nếu AI lỗi: mục đó thành
+"chưa đủ dữ liệu", lời nhận xét dựng bằng code — điểm vẫn ra, audit không hỏng.
 
-| Giá trị | Khách thấy | Ghi chú |
+Biến môi trường cho audit:
+
+| Biến | Vai trò | Thiếu thì |
 |---|---|---|
-| `v1` (mặc định) | Kết quả cũ | Không đổi gì |
-| `shadow` | Kết quả cũ | v2 chạy ngầm sau khi đã trả lời, lưu vào `audits` (`module_key='maps_seo_v2'`, `raw_input.shadow_of`) để đối chiếu |
-| `v2` | Kết quả v2 | Có độ phủ dữ liệu, so sánh với lần trước theo từng mục |
+| `ANTHROPIC_API_KEY` | Phân loại + viết lời | Các mục cần AI "chưa đủ dữ liệu", lời nhận xét dựng bằng code |
+| `OUTSCRAPER_API_KEY` | Lấy hồ sơ Maps, review, **nhóm đối thủ** | Không có hồ sơ thì audit không chạy (422); không có nhóm đối thủ thì VY01/VY03/T01/T02 "chưa đủ dữ liệu" |
+| `SEARCHAPI_API_KEY`, `SERPAPI_API_KEY` | Bù từng trường (mô tả, bài đăng có ngày, review kèm phản hồi chủ, giờ, thuộc tính, hỏi–đáp) | Một số mục đọc chưa đủ, không kết luận là thiếu |
+| `GOOGLE_PLACES_API_KEY` | Bù dữ liệu cơ bản | Như trên |
+| `DATAFORSEO_LOGIN/PASSWORD` + cờ lưới thứ hạng | VY02/VY04 (độ phủ theo vị trí) | Hai mục này "chưa đủ dữ liệu" |
 
-Lộ trình khuyến nghị: chạy migration 019 + 020 → `shadow` 1–2 tuần → xem đối chiếu → `v2`.
+Kiểm tra website của khách (F-nhóm) là HTTP GET trực tiếp, không cần khoá. Lịch sử số review (T04) lấy từ snapshot đã lưu.
 
-Đối chiếu v1 ↔ v2 trên khách thật (SQL Editor):
-
-```sql
-select c.name, count(*) as lan,
-       round(stddev_pop((a.raw_input->>'v1_overall_10')::numeric), 2) as v1_dao_dong_tren_10,
-       round(stddev_pop(a.score_overview / 10.0), 2)                  as v2_dao_dong_tren_10
-from audits a join clients c on c.id = a.client_id
-where a.module_key = 'maps_seo_v2' and a.raw_input ? 'shadow_of'
-group by c.name having count(*) >= 2 order by 1;
-```
+Audit **kiểu cũ** đã lưu (cột `checks_json` rỗng) vẫn xem được, chỉ đọc: trang Kiểm tra hồ sơ tự hiện audit gần nhất kèm ghi chú "kiểu cũ";
+lộ trình 30 ngày và trí nhớ khách hàng vẫn đọc văn bản `audit_result` của chúng. Điểm cũ (thang 10) không so sánh trực tiếp với điểm mới;
+lần audit mới đầu tiên sẽ báo rõ điều đó. Không có dòng nào bị sửa hay xoá.
 
 Đo nhiễu thật trên một doanh nghiệp (tốn lượt Claude / credit Outscraper):
 `npx tsx --env-file=.env.local scripts/measure-audit-noise.ts --url "<link Maps>" --area "<khu vực>" --runs 5`

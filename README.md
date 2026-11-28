@@ -73,7 +73,7 @@ Kiểm tra logic: `npx tsx scripts/test-review-watch.ts && npx tsx scripts/test-
 
 ## So sánh đối thủ và thứ hạng tìm kiếm (Audit Engine v2)
 
-`/api/audit/v2-preview` giờ tự tìm "<danh mục chính> <khu vực>" qua Outscraper (tối đa `COMPETITOR_SEARCH_LIMIT`, mặc định 20 địa điểm) để bật:
+`/api/audit` tự tìm "<danh mục chính> <khu vực>" qua Outscraper (tối đa `COMPETITOR_SEARCH_LIMIT`, mặc định 20 địa điểm) để bật:
 
 - **VY01 Keyword Visibility**: hồ sơ đứng thứ mấy khi tìm đúng truy vấn đó (đạt nếu top 3).
 - **VY03 Competitor Benchmark**: so review, sao, ảnh với **trung vị** đối thủ (kèm số review còn thiếu).

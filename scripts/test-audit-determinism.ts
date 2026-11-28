@@ -18,7 +18,6 @@ import { parseNarrative, fallbackNarrative, generateNarrative } from '../lib/aud
 import { renderAuditText } from '../lib/audit-engine/render-text'
 import { isSafePublicUrl } from '../lib/audit-engine/check-website'
 import { classifierCacheKey } from '../lib/audit-engine/classifier-cache'
-import { getAuditEngineMode } from '../lib/audit-mode'
 import { parseAuditResult } from '../lib/audit-parse'
 
 const NOW = new Date('2026-11-14T00:00:00Z')
@@ -246,13 +245,6 @@ async function main() {
     assert.equal(isSafePublicUrl(bad), false, bad)
   for (const good of ['https://example.com', 'http://khachhang.vn/trang', 'https://sub.domain.co.uk:8443/a?b=1'])
     assert.equal(isSafePublicUrl(good), true, good)
-
-  // 10) Công tắc engine: mặc định v1, giá trị lạ => v1.
-  assert.equal(getAuditEngineMode(undefined), 'v1')
-  assert.equal(getAuditEngineMode(''), 'v1')
-  assert.equal(getAuditEngineMode('V2'), 'v2')
-  assert.equal(getAuditEngineMode(' shadow '), 'shadow')
-  assert.equal(getAuditEngineMode('bật'), 'v1')
 
   console.log('OK: audit v2 tất định + cache + so sánh cùng điều kiện + chống SSRF — tất cả kiểm tra đều qua')
 }

@@ -43,15 +43,8 @@ const LIMITS: Record<string, EndpointLimit> = {
   plan: { perUserMax: 5, perUserWindowMinutes: 10, perWorkspaceMax: 20, perWorkspaceWindowMinutes: 60 },
   content: { perUserMax: 10, perUserWindowMinutes: 10, perWorkspaceMax: 40, perWorkspaceWindowMinutes: 60 },
   'tasks-generate-from-plan': { perUserMax: 5, perUserWindowMinutes: 10, perWorkspaceMax: 15, perWorkspaceWindowMinutes: 60 },
-  // Route nội bộ để so sánh Audit Engine (Rule+AI theo từng check) với
-  // AUDIT_PROMPT hiện tại — KHÔNG phải endpoint khách hàng dùng, nên
-  // tách bucket riêng, không đụng tới quota 'audit' thật và không bị
-  // enforceClientAuditQuota (xem app/api/audit/v2-preview/route.ts).
-  // Giới hạn thấp vì mỗi lần gọi tốn tới 4 lượt gọi Claude (R01, R04,
-  // C03, C04) cộng dồn, không phải 1 lượt như route audit cũ.
   // Tìm doanh nghiệp để chọn khi tạo/sửa hồ sơ: mỗi lượt tốn 1 lần gọi Places/Outscraper nên cần trần; ghi nhận NGAY khi gọi (kể cả không có kết quả).
   'place-search': { perUserMax: 20, perUserWindowMinutes: 10, perWorkspaceMax: 60, perWorkspaceWindowMinutes: 60 },
-  'audit-v2-preview': { perUserMax: 8, perUserWindowMinutes: 10, perWorkspaceMax: 20, perWorkspaceWindowMinutes: 60 },
 }
 
 // Audit không phải việc làm liên tục — nó đánh dấu điểm bắt đầu (và

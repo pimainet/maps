@@ -191,7 +191,7 @@ function checkF06(input: AuditInput): CheckResult {
  * theo ngày) — chỉ kiểm tra có/không, không phân tích được chi tiết hơn.
  *
  * QUAN TRỌNG: khi trống, KHÔNG được kết luận "passed: false" một cách chắc
- * chắn (confidence 'verified') — đúng nguyên tắc đã có sẵn trong AUDIT_PROMPT
+ * chắn (confidence 'verified') — đúng nguyên tắc "không đọc được thì không kết luận thiếu"
  * ("Giờ mở cửa: Chưa đọc được trên lần quan sát này — không kết luận là
  * thiếu"), vì Browser Agent/Claude extract có thể chỉ trích xuất trượt lần
  * này, không hẳn hồ sơ thật sự thiếu. Trả 'insufficient' khi trống, chỉ

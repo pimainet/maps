@@ -10,14 +10,14 @@ import {
   runAudit,
   type AuditReport,
 } from '@/lib/audit-engine'
-import { fallbackNarrative, generateNarrative, type Narrative } from '@/lib/audit-engine/narrative'
+import { generateNarrative, type Narrative } from '@/lib/audit-engine/narrative'
 import { renderAuditText } from '@/lib/audit-engine/render-text'
 import type { GbpSnapshotPayload } from '@/lib/gbp-snapshot-types'
 
 export type AuditV2Output = {
   report: AuditReport
   narrative: Narrative
-  /** Văn bản theo khung 7 mục cũ — để lộ trình 30 ngày / trí nhớ khách hàng đọc như trước. */
+  /** Văn bản theo khung 7 mục (### 1. … ### 7.) — lộ trình 30 ngày / trí nhớ khách hàng / giao diện đọc văn bản này. */
   text: string
   meta: {
     competitors: { from: 'cache' | 'live' | 'none'; note: string | null; count: number }
@@ -39,8 +39,6 @@ export async function runAuditV2(args: {
   progressContext?: string
   outputLanguage?: string
   forceCompetitors?: boolean
-  /** false = bỏ bước AI viết lời (dùng lời dựng bằng code) — chế độ shadow không cần lời nên đỡ tốn. Mặc định true. */
-  withNarrative?: boolean
 }): Promise<AuditV2Output> {
   const { client, workspaceId, snapshot } = args
 
@@ -72,28 +70,22 @@ export async function runAuditV2(args: {
   )
 
   // Lời khuyên danh mục + mô tả mẫu: AI hỗ trợ nhưng bám dữ liệu và bị code kiểm lại (xem advice.ts); không tham gia chấm điểm.
-  // Chạy song song với phần viết nhận xét để không kéo dài thời gian audit; lỗi thì bỏ qua. Shadow (withNarrative=false) không cần.
-  const advicePromise =
-    args.withNarrative === false
-      ? Promise.resolve(undefined)
-      : buildAdvice({
-          input: { snapshot, declaredIndustry: client.industry || undefined, claimedBusinessName: client.name || undefined, competitors },
-          area: client.area,
-          ai,
-        }).catch((e: any) => {
-          console.error('audit advice failed (non-fatal):', e?.message)
-          return undefined
-        })
+  // Chạy song song với phần viết nhận xét để không kéo dài thời gian audit; lỗi thì bỏ qua.
+  const advicePromise = buildAdvice({
+    input: { snapshot, declaredIndustry: client.industry || undefined, claimedBusinessName: client.name || undefined, competitors },
+    area: client.area,
+    ai,
+  }).catch((e: any) => {
+    console.error('audit advice failed (non-fatal):', e?.message)
+    return undefined
+  })
 
-  const narrative =
-    args.withNarrative === false
-      ? fallbackNarrative(report)
-      : await generateNarrative(ai, {
-          report,
-          business: { name: client.name, industry: client.industry, area: client.area },
-          progressContext: args.progressContext,
-          outputLanguage: args.outputLanguage,
-        })
+  const narrative = await generateNarrative(ai, {
+    report,
+    business: { name: client.name, industry: client.industry, area: client.area },
+    progressContext: args.progressContext,
+    outputLanguage: args.outputLanguage,
+  })
 
   const advice = await advicePromise
   if (advice) report.advice = advice

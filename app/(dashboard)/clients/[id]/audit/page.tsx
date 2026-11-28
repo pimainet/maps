@@ -12,6 +12,7 @@ import { buildScoreOverride, type AuditComparison } from '@/components/dashboard
 import type { AuditReport } from '@/lib/audit-engine'
 import { LockedCard, UpgradeBanner } from '@/components/dashboard/upgrade-prompt'
 import type { SnapshotSummary } from '@/lib/gbp-audit-fields'
+import { formatAuditDate, legacyAuditNotice, storedAuditKind, type StoredAuditKind } from '@/lib/audit-legacy'
 
 type DataInfo = {
   origin: 'cache' | 'live' | 'stored_after_failure'
@@ -37,11 +38,13 @@ export default function ClientAuditPage() {
   const [error, setError] = useState('')
   const [result, setResult] = useState<string | null>(null)
   const [dataInfo, setDataInfo] = useState<DataInfo | null>(null)
-  // Có khi server chấm bằng engine v2 (AUDIT_ENGINE_MODE=v2); null = kết quả kiểu cũ (đọc điểm từ văn bản).
+  // Kết quả có cấu trúc của engine hiện tại; null khi đang xem audit kiểu cũ (chỉ có văn bản, điểm đọc từ văn bản).
   const [report, setReport] = useState<AuditReport | null>(null)
   const [comparison, setComparison] = useState<AuditComparison | null>(null)
   // Phần bị khoá theo gói (server tự cắt; đây chỉ để hiện thẻ "Mở khoá").
   const [locks, setLocks] = useState<{ plan: string; locked_actions: number; locked_secondary: number; locked_drafts: number } | null>(null)
+  // Audit đã lưu đang được xem (chưa bấm chạy lần mới): 'legacy' = audit kiểu cũ, chỉ đọc.
+  const [stored, setStored] = useState<{ kind: StoredAuditKind; createdAt: string | null } | null>(null)
   const [outputLanguage, setOutputLanguage] = useState('Tiếng Việt')
   const [note, setNote] = useState('')
 
@@ -54,6 +57,20 @@ export default function ClientAuditPage() {
         const found = (Array.isArray(data) ? data : []).find((c: any) => c.id === clientId)
         if (!found) throw new Error('Không tìm thấy doanh nghiệp này')
         setClient(found)
+        // Hiện lại audit gần nhất đã lưu (kể cả audit kiểu cũ), chỉ đọc. Lỗi ở đây không chặn việc chạy audit mới.
+        try {
+          const ar = await fetch(`/api/audit?client_id=${encodeURIComponent(clientId)}`)
+          const row = ar.ok ? await ar.json().catch(() => null) : null
+          const kind = storedAuditKind(row)
+          if (row && kind && typeof row.audit_result === 'string' && row.audit_result.trim()) {
+            setResult(row.audit_result)
+            setReport(kind === 'v2' ? row.checks_json : null)
+            setLocks(row.locks || null)
+            setStored({ kind, createdAt: row.created_at || null })
+          }
+        } catch {
+          /* bỏ qua */
+        }
       } catch (err: any) {
         setError(err.message || 'Có lỗi xảy ra')
       } finally {
@@ -71,6 +88,7 @@ export default function ClientAuditPage() {
     setDataInfo(null)
     setReport(null)
     setComparison(null)
+    setStored(null)
     try {
       const res = await fetch('/api/audit', {
         method: 'POST',
@@ -181,6 +199,13 @@ export default function ClientAuditPage() {
 
       {result && (
         <>
+          {stored && (
+            <div role="status" style={{ marginTop: 8, padding: 12, borderRadius: 8, background: 'var(--surface-muted, #f5f5f5)', fontSize: 13 }}>
+              {stored.kind === 'legacy'
+                ? legacyAuditNotice(stored.createdAt)
+                : `Kết quả kiểm tra gần nhất${stored.createdAt ? `, ngày ${formatAuditDate(stored.createdAt)}` : ''}. Bấm "Kiểm tra hồ sơ" để cập nhật.`}
+            </div>
+          )}
           <div className="section-head" style={{ marginTop: 8 }}>
             <div />
             <button className="primary-button" onClick={() => router.push(`/clients/${client.id}/plan?start=1`)}>

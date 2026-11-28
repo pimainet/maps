@@ -202,7 +202,7 @@ export async function saveAudit(input: {
   audit_result: string
   raw_input?: any
   score_overview?: number | null
-  /** Kết quả có cấu trúc của Audit Engine v2. Chỉ ghi cột này khi có, để luồng v1 không phụ thuộc cột checks_json. */
+  /** Kết quả có cấu trúc (AuditReport) của engine chấm điểm. Chỉ ghi cột này khi có (migration 012). */
   checks_json?: unknown
   workspace_id: string
 }) {
@@ -232,8 +232,9 @@ export async function getLatestAuditByClient(clientId: string, workspaceId?: str
     .from('audits')
     .select('*')
     .eq('client_id', clientId)
-    // Dòng preview/shadow của engine v2 (module_key='maps_seo_v2') chỉ có chữ giữ chỗ — không bao giờ được làm
-    // "audit mới nhất" cho lộ trình 30 ngày / trí nhớ khách hàng. Dòng cũ module_key NULL vẫn được lấy.
+    // Dòng preview của bản dựng cũ (module_key='maps_seo_v2') chỉ có chữ giữ chỗ — không bao giờ được làm "audit mới nhất"
+    // cho lộ trình 30 ngày / trí nhớ khách hàng. (Hiện DB không có dòng nào như vậy; giữ bộ lọc cho chắc.)
+    // Audit kiểu cũ (checks_json NULL, module_key 'maps_seo' hoặc NULL) vẫn được lấy để XEM.
     .or('module_key.is.null,module_key.neq.maps_seo_v2')
     .order('created_at', { ascending: false })
     .limit(1)
@@ -248,46 +249,8 @@ export async function getLatestAuditByClient(clientId: string, workspaceId?: str
 }
 
 /**
- * Lưu kết quả Audit Engine v2 (34 checks có cấu trúc) — TÁCH RIÊNG khỏi
- * saveAudit() ở trên (flow cũ, module_key='maps_seo', đang phục vụ khách
- * thật qua /api/audit). Dùng module_key='maps_seo_v2' để 2 luồng không bao
- * giờ lẫn vào nhau khi query theo module_key.
- *
- * audit_result không có text tự do ở v2 — lưu placeholder ngắn thay vì
- * null/chuỗi rỗng, phòng trường hợp cột có ràng buộc NOT NULL mà ta chưa
- * thấy migration gốc (bảng `audits` được tạo trước các migration trong repo
- * này — xem ghi chú khi review map.zip).
- */
-export async function saveAuditV2(input: {
-  client_id: string
-  checks_json: unknown
-  overall_score: number | null
-  raw_input?: any
-  workspace_id: string
-}) {
-  const supabase = await createSupabaseServerClient()
-  const { data, error } = await supabase
-    .from('audits')
-    .insert({
-      client_id: input.client_id,
-      audit_result: '[Audit Engine v2 — xem checks_json để biết chi tiết từng check]',
-      raw_input: input.raw_input ?? {},
-      score_overview: input.overall_score,
-      checks_json: input.checks_json,
-      module_key: 'maps_seo_v2',
-      status: 'finalized',
-      workspace_id: input.workspace_id,
-    })
-    .select()
-    .single()
-
-  if (error) throw error
-  return data
-}
-
-/**
- * Audit "chính thức" gần nhất để so sánh (module_key maps_seo hoặc NULL; bỏ dòng preview/shadow).
- * previous = dòng gần nhất CÓ checks_json (đã chấm bằng engine v2); hasLegacyOnly = có audit nhưng toàn bản cũ (v1).
+ * Audit gần nhất để so sánh (module_key maps_seo hoặc NULL; bỏ dòng preview cũ).
+ * previous = dòng gần nhất CÓ checks_json; hasLegacyOnly = có audit nhưng toàn bản kiểu cũ (không có checks_json).
  */
 export async function getPreviousComparableAudit(clientId: string, workspaceId: string) {
   const supabase = await createSupabaseServerClient()
@@ -323,22 +286,6 @@ export async function getReviewCountHistory(clientId: string, workspaceId: strin
     .limit(60)
   if (error) throw error
   return (data || []).map((r: any) => ({ capturedAt: String(r.captured_at), reviewCount: Number(r.review_count) }))
-}
-
-/** Lịch sử audit v2 của 1 client, mới nhất trước — dùng để so sánh/đo cải thiện. */
-export async function getAuditV2History(clientId: string, workspaceId: string, limit = 10) {
-  const supabase = await createSupabaseServerClient()
-  const { data, error } = await supabase
-    .from('audits')
-    .select('id, created_at, score_overview, checks_json')
-    .eq('client_id', clientId)
-    .eq('workspace_id', workspaceId)
-    .eq('module_key', 'maps_seo_v2')
-    .order('created_at', { ascending: false })
-    .limit(limit)
-
-  if (error) throw error
-  return data
 }
 
 // ── Google Connections (self-serve OAuth cho Business Profile API) ───
