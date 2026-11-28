@@ -13,7 +13,7 @@
 -- Phụ thuộc: 024_billing.sql (payments, subscriptions, apply_payment, roll_subscriptions), pg_trgm.
 -- ============================================================
 
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;   -- Supabase đã cài sẵn ở schema extensions (không tạo lại)
 
 -- 1) payments: hạn đơn, quá tiền, biên nhận, trạng thái 'partial', nhà cung cấp 'casso' -----------
 ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS expires_at      timestamptz;
@@ -395,7 +395,7 @@ END $$;
 CREATE OR REPLACE FUNCTION public.suggest_orders_for_transaction(p_tx uuid)
 RETURNS TABLE (order_code bigint, workspace_id uuid, workspace_name text, plan text, period_months integer,
                amount_vnd integer, status text, created_at timestamptz, score numeric, why text)
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, extensions, pg_temp AS $$   -- pg_trgm nằm ở schema extensions trên Supabase
   WITH t AS (
     SELECT amount_vnd AS amt, COALESCE(order_code::text, regexp_replace(COALESCE(content, ''), '\D', '', 'g')) AS digits
       FROM public.bank_transactions WHERE id = p_tx
